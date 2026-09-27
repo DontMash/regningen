@@ -3,17 +3,17 @@ import { z } from 'zod'
 
 export const env = createEnv({
   server: {
-    SERVER_URL: z.string().url().optional(),
+    SERVER_URL: z.url().optional(),
   },
 
   /**
    * The prefix that client-side variables must have. This is enforced both at
    * a type-level and at runtime.
    */
-  clientPrefix: 'VITE_',
+  clientPrefix: 'PUBLIC_',
 
   client: {
-    VITE_APP_TITLE: z.string().min(1).optional(),
+    PUBLIC_APP_TITLE: z.string().min(1).optional(),
   },
 
   /**

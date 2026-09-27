@@ -46,16 +46,22 @@ test('cycles and persists the selected theme mode', async ({ page }) => {
   const themeToggle = page.getByRole('button', {
     name: 'Darstellung umschalten',
   })
+  const bodyBackground = () =>
+    page
+      .locator('body')
+      .evaluate((body) => getComputedStyle(body).backgroundColor)
 
   await expect(themeToggle).toHaveText('System')
 
   await themeToggle.click()
   await expect(themeToggle).toHaveText('Hell')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  const lightBackground = await bodyBackground()
 
   await themeToggle.click()
   await expect(themeToggle).toHaveText('Dunkel')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect.poll(bodyBackground).not.toBe(lightBackground)
 
   await page.reload()
   await expect(
@@ -71,19 +77,18 @@ test('follows the operating-system theme in system mode', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: 'Darstellung umschalten' }),
   ).toHaveText('System')
-  await expect(page.locator('html')).toHaveClass(/dark/)
-  await expect(page.locator('html')).not.toHaveAttribute('data-theme', 'dark')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })
 
 test('updates when the operating-system theme changes in system mode', async ({
   page,
 }) => {
   await page.goto('/')
-  await expect(page.locator('html')).toHaveClass(/light/)
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 
   await page.emulateMedia({ colorScheme: 'dark' })
-  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 
   await page.emulateMedia({ colorScheme: 'light' })
-  await expect(page.locator('html')).toHaveClass(/light/)
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 })

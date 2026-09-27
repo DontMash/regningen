@@ -1,21 +1,19 @@
 {
-  "name": "invoice-generator",
+  "name": "regningen",
   "private": true,
   "type": "module",
-  "imports": {
-    "#/*": "./src/*"
-  },
   "scripts": {
     "dev": "vite dev --port 3000",
-    "generate-routes": "tsr generate",
     "build": "vite build",
+    "build:routes": "tsr generate",
     "preview": "vite preview",
     "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "format": "prettier --write . && eslint --fix",
-    "check": "prettier --check ."
+    "format": "prettier --check .",
+    "format:fix": "prettier --write ."
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
