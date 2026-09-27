@@ -1,0 +1,25 @@
+{
+  "projectName": "invoice-generator",
+  "mode": "file-router",
+  "typescript": true,
+  "packageManager": "pnpm",
+  "includeExamples": true,
+  "tailwind": true,
+  "projectPreset": "default",
+  "addOnOptions": {},
+  "git": true,
+  "install": true,
+  "intent": true,
+  "routerOnly": false,
+  "version": 1,
+  "framework": "react",
+  "chosenAddOns": [
+    "eslint",
+    "nitro",
+    "compiler",
+    "form",
+    "t3env",
+    "store",
+    "tanstack-query"
+  ]
+}
