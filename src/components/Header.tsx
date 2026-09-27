@@ -14,7 +14,21 @@ export default function Header() {
         >
           regningen
         </Link>
-        <ThemeToggle />
+        <div className="flex items-center gap-3">
+          <Link
+            to="/invoice"
+            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Rechnung
+          </Link>
+          <Link
+            to="/business-profile"
+            className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Unternehmensprofil
+          </Link>
+          <ThemeToggle />
+        </div>
       </nav>
     </header>
   )

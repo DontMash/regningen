@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('shows the German, blank Regningen shell without starter content', async ({
+test('shows the German Regningen shell and opens first-time profile setup', async ({
   page,
 }) => {
   await page.goto('/')
@@ -18,26 +18,14 @@ test('shows the German, blank Regningen shell without starter content', async ({
   expect(headerBorder.actual).toBe(headerBorder.expected)
   await expect(page.locator('body')).toHaveCSS('font-family', /Inter Variable/)
   await expect(brand).toHaveCSS('font-family', /Lora Variable/)
-  await expect(page.locator('main')).toBeEmpty()
+  await expect(page).toHaveURL(/\/business-profile$/)
+  await expect(
+    page.getByRole('heading', { name: 'Unternehmensprofil einrichten' }),
+  ).toBeVisible()
   await expect(page.getByRole('contentinfo')).toHaveCount(0)
   await expect(
     page.getByText(/TanStack Start Base Template|Demos|About This Starter/i),
   ).toHaveCount(0)
-})
-
-test('does not serve the removed demo routes', async ({ page }) => {
-  for (const route of [
-    '/demo/form/simple',
-    '/demo/form/address',
-    '/demo/store',
-    '/demo/tanstack-query',
-  ]) {
-    const response = await page.goto(route)
-    expect(response?.status()).toBe(404)
-    await expect(
-      page.getByRole('heading', { name: 'Seite nicht gefunden' }),
-    ).toBeVisible()
-  }
 })
 
 test('cycles and persists the selected theme mode', async ({ page }) => {
