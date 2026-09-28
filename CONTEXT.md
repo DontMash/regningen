@@ -20,6 +20,10 @@ _Avoid_: Invoice details
 A document from the business to a recipient listing goods or services and an amount due.
 _Avoid_: Draft (when referring to an issued invoice)
 
+**Invoice Position**:
+A charge for a good or service on one invoice, with a description and gross amount. It is not a reusable catalogue entry.
+_Avoid_: Product (when referring to a charge on an invoice)
+
 **Recipient**:
 The person or organization to whom an invoice is addressed.
 _Avoid_: Business (when referring to the issuer)

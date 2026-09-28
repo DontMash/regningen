@@ -7,14 +7,14 @@ export function createEmptyInvoiceDraft(): InvoiceDraft {
   return {
     number: '',
     date: '',
-    subject: 'Speisen',
+    subject: '',
     company: '',
     name: '',
     street: '',
     postalCode: '',
     town: '',
     rate: 7,
-    items: [{ description: '', amount: '' }],
+    items: [],
   }
 }
 

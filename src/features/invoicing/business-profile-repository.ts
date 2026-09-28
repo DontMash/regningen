@@ -6,6 +6,8 @@ export const BUSINESS_PROFILE_STORAGE_KEY = 'regningen.business-profile'
 const BACKUP_FORMAT = 'regningen-business-profile'
 const BACKUP_VERSION = 1
 
+export class InvalidBusinessProfileBackupError extends Error {}
+
 export type BusinessProfileStorage = Pick<
   Storage,
   'getItem' | 'setItem' | 'removeItem'
@@ -33,12 +35,16 @@ function readBackup(text: string) {
   try {
     decoded = JSON.parse(text)
   } catch {
-    throw new Error('Die Profilsicherung enthält kein gültiges JSON.')
+    throw new InvalidBusinessProfileBackupError(
+      'Die Profilsicherung enthält kein gültiges JSON.',
+    )
   }
 
   const result = backupSchema.safeParse(decoded)
   if (!result.success) {
-    throw new Error('Die Profilsicherung hat ein ungültiges Format.')
+    throw new InvalidBusinessProfileBackupError(
+      'Die Profilsicherung hat ein ungültiges Format.',
+    )
   }
 
   return result.data

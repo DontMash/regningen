@@ -1,8 +1,18 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { useSelector } from '@tanstack/react-store'
 import { useNavigate } from '@tanstack/react-router'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { FieldHint } from '@/components/FieldHint'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -13,12 +23,12 @@ import {
 } from '@/components/ui/card'
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { toast } from '@/components/ui/toast'
 import { businessProfileSchema, emptyBusinessProfile } from './business-profile'
 import type { BusinessProfileDraft } from './business-profile'
 import { createBrowserBusinessProfileRepository } from './business-profile-repository'
@@ -30,6 +40,14 @@ import {
   useSaveBusinessProfile,
 } from './business-profile-query'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
+import {
+  IconDeviceFloppy,
+  IconDownload,
+  IconReload,
+  IconReplace,
+  IconTrash,
+  IconUpload,
+} from '@tabler/icons-react'
 
 type ProfileFieldName = keyof BusinessProfileDraft
 
@@ -42,7 +60,7 @@ function ProfileInput({
   error,
   required = false,
   type = 'text',
-  description,
+  hint,
   autoComplete,
   maxLength,
 }: {
@@ -54,16 +72,24 @@ function ProfileInput({
   error?: string
   required?: boolean
   type?: string
-  description?: string
+  hint?: string
   autoComplete?: string
   maxLength?: number
 }) {
   return (
     <Field data-invalid={Boolean(error)}>
-      <FieldLabel htmlFor={id}>
-        {label}
-        {required && <span aria-hidden="true"> *</span>}
-      </FieldLabel>
+      <div className="flex items-center gap-1">
+        <FieldLabel htmlFor={id}>
+          {label}
+          {required && <span aria-hidden="true"> *</span>}
+        </FieldLabel>
+        {(maxLength || hint) && (
+          <FieldHint label={label}>
+            {hint ? `${hint} ` : ''}
+            {maxLength ? `Maximal ${maxLength} Zeichen.` : ''}
+          </FieldHint>
+        )}
+      </div>
       <Input
         id={id}
         name={id}
@@ -73,11 +99,11 @@ function ProfileInput({
         maxLength={maxLength}
         autoComplete={autoComplete}
         aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : undefined}
         onBlur={onBlur}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
-      {description && <FieldDescription>{description}</FieldDescription>}
-      {error && <FieldError>{error}</FieldError>}
+      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
     </Field>
   )
 }
@@ -105,27 +131,39 @@ function downloadBackup(contents: string) {
 }
 
 export default function BusinessProfilePage() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const profileQuery = useBusinessProfile()
 
-  if (profileQuery.isPending) {
+  if (!mounted || profileQuery.isPending) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-12">
+      <div className="mx-auto max-w-3xl px-4 py-12" aria-live="polite">
         Unternehmensprofil wird lokal geladen …
-      </main>
+      </div>
     )
   }
 
   if (profileQuery.isError) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-12">
-        <Alert variant="destructive">
-          <AlertTitle>Unternehmensprofil nicht verfügbar</AlertTitle>
-          <AlertDescription>
-            Der Browser kann das Profil nicht lesen. Prüfe die lokalen
-            Speichereinstellungen und lade die Seite erneut.
-          </AlertDescription>
-        </Alert>
-      </main>
+      <AlertDialog defaultOpen>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Unternehmensprofil nicht verfügbar
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Der Browser kann das Profil nicht lesen. Prüfe die lokalen
+              Speichereinstellungen und lade die Seite erneut.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Schließen</AlertDialogCancel>
+            <AlertDialogAction onClick={() => window.location.reload()}>
+              Erneut laden
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     )
   }
 
@@ -141,47 +179,59 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
     businessProfileStorageStatus,
     (state) => state.error,
   )
-  const [errors, setErrors] = useState<
-    Partial<Record<ProfileFieldName, string>>
-  >({})
-  const [message, setMessage] = useState('')
   const [storageConflict, setStorageConflict] = useState(false)
-  const validProfile = businessProfileSchema.safeParse(profile).success
+  const [storageDialogOpen, setStorageDialogOpen] = useState(false)
+  const [pendingImport, setPendingImport] = useState<File | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const handleExternalChange = useCallback(() => {
     setStorageConflict(true)
+    setStorageDialogOpen(true)
   }, [])
   useProfileStorageSync(handleExternalChange)
+
+  useEffect(() => {
+    if (storageError) setStorageDialogOpen(true)
+  }, [storageError])
 
   const form = useForm({
     defaultValues: profile,
     onSubmit: async ({ value }) => {
-      const nextErrors = getProfileErrors(value)
-      setErrors(nextErrors)
-      setMessage('')
-      if (Object.keys(nextErrors).length > 0) return
+      if (
+        storageConflict ||
+        storageError ||
+        !businessProfileSchema.safeParse(value).success
+      )
+        return
 
       try {
         await saveMutation.mutateAsync(value)
-        await navigate({ to: '/invoice' })
       } catch {
-        setMessage(
-          'Das Profil konnte nicht auf diesem Gerät gespeichert werden.',
-        )
+        toast.add({
+          title: 'Profil konnte nicht gespeichert werden.',
+          type: 'error',
+        })
+        return
       }
+
+      toast.add({ title: 'Profil gespeichert.', type: 'success' })
+      await navigate({ to: '/invoice' })
     },
   })
 
-  const save = (nextProfile: BusinessProfileDraft) => {
-    setMessage('')
-    saveMutation.mutate(nextProfile)
-  }
-  const clearErrors = () => setErrors({})
   const changeProfileField = (name: ProfileFieldName, value: string) => {
     const nextProfile = { ...form.state.values, [name]: value }
     form.setFieldValue(name, value)
-    clearErrors()
-    if (!storageConflict) save(nextProfile)
+    if (!storageConflict && !storageError) {
+      saveMutation.mutate(nextProfile, {
+        onError: () => {
+          toast.add({
+            title: 'Profil konnte nicht gespeichert werden.',
+            type: 'error',
+          })
+        },
+      })
+    }
   }
 
   async function exportProfile() {
@@ -189,73 +239,58 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
       const contents =
         await createBrowserBusinessProfileRepository().exportProfile()
       downloadBackup(contents)
-      setMessage(
-        'Sicherung erstellt. Die Datei enthält sensible, unverschlüsselte Daten.',
-      )
+      toast.add({
+        title: 'Sicherung erstellt.',
+        description: 'Die Datei enthält sensible, unverschlüsselte Daten.',
+        type: 'success',
+      })
     } catch {
-      setMessage('Die Profilsicherung konnte nicht erstellt werden.')
+      toast.add({
+        title: 'Die Profilsicherung konnte nicht erstellt werden.',
+        type: 'error',
+      })
     }
   }
 
-  async function importProfile(file: File | undefined) {
-    if (!file) return
-    setMessage('')
-
-    if (
-      Object.values(profile).some((value) => value.trim()) &&
-      !window.confirm('Das vorhandene Unternehmensprofil ersetzen?')
-    ) {
-      return
-    }
-
+  async function importProfile(file: File) {
     try {
       const imported = await importMutation.mutateAsync(await file.text())
       form.reset(imported)
-      setErrors({})
-      setMessage('Profilsicherung auf diesem Gerät wiederhergestellt.')
+      toast.add({
+        title: 'Profilsicherung wiederhergestellt.',
+        type: 'success',
+      })
     } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : 'Die Profilsicherung konnte nicht importiert werden.',
-      )
+      toast.add({
+        title: 'Die Profilsicherung konnte nicht importiert werden.',
+        description: error instanceof Error ? error.message : undefined,
+        type: 'error',
+      })
     }
   }
 
   async function deleteProfile() {
-    if (
-      !window.confirm(
-        'Unternehmensprofil löschen? Heruntergeladene PDFs bleiben erhalten.',
-      )
-    ) {
-      return
-    }
-
     try {
       await deleteMutation.mutateAsync()
       form.reset(emptyBusinessProfile)
-      setErrors({})
-      setMessage(
-        'Profil gelöscht. Die Rechnungseingaben bleiben in diesem Tab erhalten.',
-      )
+      toast.add({
+        title: 'Profil gelöscht.',
+        description: 'Die Rechnungseingaben bleiben in diesem Tab erhalten.',
+        type: 'success',
+      })
     } catch {
-      setMessage('Das Profil konnte nicht aus diesem Browser gelöscht werden.')
+      toast.add({
+        title: 'Das Profil konnte nicht aus diesem Browser gelöscht werden.',
+        type: 'error',
+      })
     }
   }
 
-  const mutationError =
-    saveMutation.isError || importMutation.isError || deleteMutation.isError
-
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-10 sm:py-14">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-10 sm:py-14">
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-muted-foreground">
-          regningen · Unternehmensprofil
-        </p>
         <h1 className="font-serif text-3xl font-semibold">
-          {validProfile
-            ? 'Unternehmensprofil'
-            : 'Unternehmensprofil einrichten'}
+          Unternehmensprofil
         </h1>
         <p className="max-w-2xl text-muted-foreground">
           Die Angaben werden nur in diesem Browser gespeichert und für deine
@@ -263,25 +298,6 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
           Rechnungsablage.
         </p>
       </div>
-
-      {storageConflict && (
-        <Alert variant="destructive">
-          <AlertTitle>Profil in einem anderen Tab geändert</AlertTitle>
-          <AlertDescription className="flex flex-col gap-3">
-            Lade das Profil neu, bevor du hier weiterarbeitest. Noch nicht
-            gespeicherte Änderungen in diesem Formular gehen beim Neuladen
-            verloren.
-            <Button
-              className="w-fit"
-              type="button"
-              variant="outline"
-              onClick={() => window.location.reload()}
-            >
-              Profil neu laden
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
 
       <Card>
         <CardHeader>
@@ -301,231 +317,268 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
               void form.handleSubmit()
             }}
           >
-            <fieldset disabled={storageConflict} className="min-w-0">
-              <FieldGroup className="grid gap-5 md:grid-cols-2">
-                <form.Field name="businessName">
-                  {(field) => (
-                    <ProfileInput
-                      id="businessName"
-                      label="Unternehmensname"
-                      value={field.state.value}
-                      required
-                      maxLength={70}
-                      autoComplete="organization"
-                      error={errors.businessName}
-                      onBlur={field.handleBlur}
-                      onChange={(value) =>
-                        changeProfileField('businessName', value)
-                      }
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="serviceDescription">
-                  {(field) => (
-                    <ProfileInput
-                      id="serviceDescription"
-                      label="Leistungsbeschreibung"
-                      value={field.state.value}
-                      maxLength={70}
-                      autoComplete="off"
-                      error={errors.serviceDescription}
-                      onBlur={field.handleBlur}
-                      onChange={(value) =>
-                        changeProfileField('serviceDescription', value)
-                      }
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="ownerName">
-                  {(field) => (
-                    <ProfileInput
-                      id="ownerName"
-                      label="Inhaber/in"
-                      value={field.state.value}
-                      required
-                      maxLength={70}
-                      autoComplete="name"
-                      error={errors.ownerName}
-                      onBlur={field.handleBlur}
-                      onChange={(value) =>
-                        changeProfileField('ownerName', value)
-                      }
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="street">
-                  {(field) => (
-                    <ProfileInput
-                      id="street"
-                      label="Straße und Hausnummer"
-                      value={field.state.value}
-                      required
-                      maxLength={85}
-                      autoComplete="street-address"
-                      error={errors.street}
-                      onBlur={field.handleBlur}
-                      onChange={(value) => changeProfileField('street', value)}
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="postalCode">
-                  {(field) => (
-                    <ProfileInput
-                      id="postalCode"
-                      label="Postleitzahl"
-                      value={field.state.value}
-                      required
-                      maxLength={20}
-                      autoComplete="postal-code"
-                      error={errors.postalCode}
-                      onBlur={field.handleBlur}
-                      onChange={(value) =>
-                        changeProfileField('postalCode', value)
-                      }
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="town">
-                  {(field) => (
-                    <ProfileInput
-                      id="town"
-                      label="Ort"
-                      value={field.state.value}
-                      required
-                      maxLength={50}
-                      autoComplete="address-level2"
-                      error={errors.town}
-                      onBlur={field.handleBlur}
-                      onChange={(value) => changeProfileField('town', value)}
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="phone">
-                  {(field) => (
-                    <ProfileInput
-                      id="phone"
-                      label="Telefon"
-                      value={field.state.value}
-                      type="tel"
-                      maxLength={40}
-                      autoComplete="tel"
-                      error={errors.phone}
-                      onBlur={field.handleBlur}
-                      onChange={(value) => changeProfileField('phone', value)}
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="mobile">
-                  {(field) => (
-                    <ProfileInput
-                      id="mobile"
-                      label="Mobiltelefon"
-                      value={field.state.value}
-                      type="tel"
-                      maxLength={40}
-                      autoComplete="tel-national"
-                      error={errors.mobile}
-                      onBlur={field.handleBlur}
-                      onChange={(value) => changeProfileField('mobile', value)}
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="iban">
-                  {(field) => (
-                    <ProfileInput
-                      id="iban"
-                      label="IBAN"
-                      value={field.state.value}
-                      maxLength={42}
-                      required
-                      autoComplete="off"
-                      error={errors.iban}
-                      onBlur={field.handleBlur}
-                      onChange={(value) => changeProfileField('iban', value)}
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="vatId">
-                  {(field) => (
-                    <ProfileInput
-                      id="vatId"
-                      label="USt-IdNr."
-                      value={field.state.value}
-                      maxLength={14}
-                      autoComplete="off"
-                      description="Optional, wenn eine Steuernummer angegeben wird."
-                      error={errors.vatId}
-                      onBlur={field.handleBlur}
-                      onChange={(value) => changeProfileField('vatId', value)}
-                    />
-                  )}
-                </form.Field>
-                <form.Field name="taxNumber">
-                  {(field) => (
-                    <ProfileInput
-                      id="taxNumber"
-                      label="Steuernummer"
-                      value={field.state.value}
-                      autoComplete="off"
-                      description="Optional, wenn eine USt-IdNr. angegeben wird."
-                      maxLength={30}
-                      error={errors.taxNumber}
-                      onBlur={field.handleBlur}
-                      onChange={(value) =>
-                        changeProfileField('taxNumber', value)
-                      }
-                    />
-                  )}
-                </form.Field>
-              </FieldGroup>
+            <fieldset
+              disabled={storageConflict || Boolean(storageError)}
+              className="min-w-0"
+            >
+              <form.Subscribe
+                selector={(state) => getProfileErrors(state.values)}
+              >
+                {(errors) => (
+                  <FieldGroup className="grid gap-5 md:grid-cols-2">
+                    <form.Field name="businessName">
+                      {(field) => (
+                        <ProfileInput
+                          id="businessName"
+                          label="Unternehmensname"
+                          value={field.state.value}
+                          required
+                          maxLength={70}
+                          autoComplete="organization"
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.businessName
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('businessName', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="serviceDescription">
+                      {(field) => (
+                        <ProfileInput
+                          id="serviceDescription"
+                          label="Leistungsbeschreibung"
+                          value={field.state.value}
+                          maxLength={70}
+                          autoComplete="off"
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.serviceDescription
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('serviceDescription', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="ownerName">
+                      {(field) => (
+                        <ProfileInput
+                          id="ownerName"
+                          label="Inhaber/in"
+                          value={field.state.value}
+                          required
+                          maxLength={70}
+                          autoComplete="name"
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.ownerName
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('ownerName', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="street">
+                      {(field) => (
+                        <ProfileInput
+                          id="street"
+                          label="Straße und Hausnummer"
+                          value={field.state.value}
+                          required
+                          maxLength={85}
+                          autoComplete="street-address"
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.street
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('street', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="postalCode">
+                      {(field) => (
+                        <ProfileInput
+                          id="postalCode"
+                          label="Postleitzahl"
+                          value={field.state.value}
+                          required
+                          maxLength={20}
+                          autoComplete="postal-code"
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.postalCode
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('postalCode', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="town">
+                      {(field) => (
+                        <ProfileInput
+                          id="town"
+                          label="Ort"
+                          value={field.state.value}
+                          required
+                          maxLength={50}
+                          autoComplete="address-level2"
+                          error={
+                            field.state.meta.isTouched ? errors.town : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('town', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="phone">
+                      {(field) => (
+                        <ProfileInput
+                          id="phone"
+                          label="Telefon"
+                          value={field.state.value}
+                          type="tel"
+                          maxLength={40}
+                          autoComplete="tel"
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.phone
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('phone', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="mobile">
+                      {(field) => (
+                        <ProfileInput
+                          id="mobile"
+                          label="Mobiltelefon"
+                          value={field.state.value}
+                          type="tel"
+                          maxLength={40}
+                          autoComplete="tel-national"
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.mobile
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('mobile', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="iban">
+                      {(field) => (
+                        <ProfileInput
+                          id="iban"
+                          label="IBAN"
+                          value={field.state.value}
+                          maxLength={42}
+                          required
+                          autoComplete="off"
+                          hint="Die IBAN muss gültig sein. Leerzeichen sind erlaubt."
+                          error={
+                            field.state.meta.isTouched ? errors.iban : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('iban', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="vatId">
+                      {(field) => (
+                        <ProfileInput
+                          id="vatId"
+                          label="USt-IdNr."
+                          value={field.state.value}
+                          maxLength={14}
+                          autoComplete="off"
+                          hint="Eine deutsche USt-IdNr. besteht aus DE und neun Ziffern. Alternativ kannst du eine Steuernummer angeben."
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.vatId
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('vatId', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                    <form.Field name="taxNumber">
+                      {(field) => (
+                        <ProfileInput
+                          id="taxNumber"
+                          label="Steuernummer"
+                          value={field.state.value}
+                          autoComplete="off"
+                          hint="Optional, wenn eine USt-IdNr. angegeben wird."
+                          maxLength={30}
+                          error={
+                            field.state.meta.isTouched
+                              ? errors.taxNumber
+                              : undefined
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(value) =>
+                            changeProfileField('taxNumber', value)
+                          }
+                        />
+                      )}
+                    </form.Field>
+                  </FieldGroup>
+                )}
+              </form.Subscribe>
             </fieldset>
 
-            {storageError && (
-              <Alert className="mt-4" variant="destructive">
-                <AlertTitle>Profil konnte nicht gespeichert werden</AlertTitle>
-                <AlertDescription>
-                  {storageError} Prüfe die Speichereinstellungen des Browsers.
-                </AlertDescription>
-              </Alert>
-            )}
-            {message && (
-              <p
-                className="mt-4 text-sm"
-                role={mutationError ? 'alert' : 'status'}
-              >
-                {message}
-              </p>
-            )}
-            {saveMutation.isPending && (
-              <p className="mt-4 text-sm text-muted-foreground" role="status">
-                Änderungen werden auf diesem Gerät gespeichert …
-              </p>
-            )}
-            {Object.values(profile).some((value) => value.trim()) &&
-              !saveMutation.isPending &&
-              !mutationError && (
-                <p className="mt-4 text-sm text-muted-foreground" role="status">
-                  Änderungen werden automatisch auf diesem Gerät gespeichert.
-                </p>
-              )}
-
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button
-                type="submit"
-                disabled={storageConflict || saveMutation.isPending}
+              <form.Subscribe
+                selector={(state) =>
+                  businessProfileSchema.safeParse(state.values).success
+                }
               >
-                Profil speichern und Rechnung erstellen
-              </Button>
-              {validProfile && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={storageConflict}
-                  onClick={() => void navigate({ to: '/invoice' })}
-                >
-                  Zur Rechnung
-                </Button>
-              )}
+                {(valid) => (
+                  <Button
+                    type="submit"
+                    disabled={
+                      !valid ||
+                      storageConflict ||
+                      Boolean(storageError) ||
+                      saveMutation.isPending
+                    }
+                  >
+                    <IconDeviceFloppy data-icon="inline-start" />
+                    Profil speichern
+                  </Button>
+                )}
+              </form.Subscribe>
             </div>
           </form>
         </CardContent>
@@ -545,24 +598,36 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
             variant="outline"
             disabled={
               !Object.values(profile).some((value) => value.trim()) ||
-              storageConflict
+              storageConflict ||
+              Boolean(storageError)
             }
             onClick={() => void exportProfile()}
           >
+            <IconDownload data-icon="inline-start" />
             Sicherung exportieren
           </Button>
           <Field className="max-w-sm">
             <FieldLabel htmlFor="profile-import">
+              <IconUpload data-icon="inline-start" />
               Sicherung importieren
             </FieldLabel>
             <Input
               id="profile-import"
               type="file"
               accept="application/json,.json"
-              disabled={storageConflict}
+              disabled={storageConflict || Boolean(storageError)}
               onChange={(event) => {
-                void importProfile(event.currentTarget.files?.[0])
+                const file = event.currentTarget.files?.[0]
                 event.currentTarget.value = ''
+                if (!file) return
+                if (
+                  Object.values(profile).some((value) => value.trim()) ||
+                  Object.values(form.state.values).some((value) => value.trim())
+                ) {
+                  setPendingImport(file)
+                } else {
+                  void importProfile(file)
+                }
               }}
             />
           </Field>
@@ -581,14 +646,107 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
             <Button
               type="button"
               variant="destructive"
-              disabled={storageConflict}
-              onClick={() => void deleteProfile()}
+              disabled={storageConflict || Boolean(storageError)}
+              onClick={() => setDeleteDialogOpen(true)}
             >
+              <IconTrash data-icon="inline-start" />
               Profil löschen
             </Button>
           </CardContent>
         </Card>
       )}
-    </main>
+
+      <AlertDialog
+        open={pendingImport !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingImport(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unternehmensprofil ersetzen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Die importierte Sicherung überschreibt das vorhandene Profil auf
+              diesem Gerät.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              disabled={
+                storageConflict ||
+                Boolean(storageError) ||
+                importMutation.isPending
+              }
+              onClick={() => {
+                if (pendingImport) void importProfile(pendingImport)
+                setPendingImport(null)
+              }}
+            >
+              <IconReplace data-icon="inline-start" />
+              Profil ersetzen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unternehmensprofil löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Heruntergeladene PDFs bleiben erhalten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              disabled={
+                storageConflict ||
+                Boolean(storageError) ||
+                deleteMutation.isPending
+              }
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                void deleteProfile()
+              }}
+            >
+              <IconTrash data-icon="inline-start" />
+              Profil löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={storageDialogOpen} onOpenChange={setStorageDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {storageConflict
+                ? 'Profil in einem anderen Tab geändert'
+                : 'Profil konnte nicht gespeichert werden'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {storageConflict
+                ? 'Lade das Profil neu, bevor du hier weiterarbeitest. Noch nicht gespeicherte Änderungen in diesem Formular gehen beim Neuladen verloren.'
+                : `${storageError} Prüfe die Speichereinstellungen des Browsers und lade die Seite erneut.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Schließen</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => window.location.reload()}
+            >
+              <IconReload data-icon="inline-start" />
+              Profil neu laden
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   )
 }

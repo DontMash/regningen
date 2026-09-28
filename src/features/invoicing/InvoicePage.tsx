@@ -1,9 +1,37 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { useTable } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
+import { de } from 'date-fns/locale'
 import { useSelector } from '@tanstack/react-store'
 import { useForm } from '@tanstack/react-form'
 import { Link } from '@tanstack/react-router'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { FieldHint } from '@/components/FieldHint'
+import { Calendar } from '@/components/ui/calendar'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { toast } from '@/components/ui/toast'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -37,6 +65,12 @@ import {
   parseEuroAmount,
 } from './invoice'
 import { createInvoicePdf } from './pdf'
+import {
+  IconCalendar,
+  IconEdit,
+  IconPlus,
+  IconTrash,
+} from '@tabler/icons-react'
 
 type InvoiceFieldName = keyof InvoiceDraft
 type InvoiceErrors = Record<string, string>
@@ -50,6 +84,7 @@ function localDate() {
 function hasInvoiceData(invoice: InvoiceDraft) {
   return Boolean(
     invoice.number.trim() ||
+    invoice.subject.trim() ||
     invoice.company.trim() ||
     invoice.name.trim() ||
     invoice.street.trim() ||
@@ -97,6 +132,9 @@ function InvoiceInput({
   value,
   onChange,
   error,
+  hint,
+  hideLabel = false,
+  onBlur,
   type = 'text',
   required = false,
   maxLength,
@@ -107,6 +145,9 @@ function InvoiceInput({
   value: string
   onChange: (value: string) => void
   error?: string
+  hint?: string
+  hideLabel?: boolean
+  onBlur?: () => void
   type?: string
   required?: boolean
   maxLength?: number
@@ -114,10 +155,19 @@ function InvoiceInput({
 }) {
   return (
     <Field data-invalid={Boolean(error)}>
-      <FieldLabel htmlFor={id}>
-        {label}
-        {required && <span aria-hidden="true"> *</span>}
-      </FieldLabel>
+      {hideLabel ? (
+        <FieldLabel htmlFor={id} className="sr-only">
+          {label}
+        </FieldLabel>
+      ) : (
+        <div className="flex items-center gap-1">
+          <FieldLabel htmlFor={id}>
+            {label}
+            {required && <span aria-hidden="true"> *</span>}
+          </FieldLabel>
+          {hint && <FieldHint label={label}>{hint}</FieldHint>}
+        </div>
+      )}
       <Input
         id={id}
         name={id}
@@ -127,14 +177,186 @@ function InvoiceInput({
         maxLength={maxLength}
         autoComplete={autoComplete}
         aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : undefined}
+        onBlur={onBlur}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
-      {error && <FieldError>{error}</FieldError>}
+      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
+    </Field>
+  )
+}
+
+type InvoicePositionEditor = {
+  updateItem: (
+    index: number,
+    name: keyof InvoiceLineDraft,
+    value: string,
+  ) => void
+  touch: (name: string) => void
+  removeItem: (index: number) => void
+  errors: InvoiceErrors
+}
+
+const InvoicePositionEditorContext =
+  createContext<InvoicePositionEditor | null>(null)
+
+function useInvoicePositionEditor() {
+  const editor = useContext(InvoicePositionEditorContext)
+  if (!editor) throw new Error('Rechnungspositionen benötigen einen Editor.')
+  return editor
+}
+
+function DescriptionCell({
+  index,
+  item,
+}: {
+  index: number
+  item: InvoiceLineDraft
+}) {
+  const { updateItem, touch, errors } = useInvoicePositionEditor()
+  return (
+    <InvoiceInput
+      id={`item-description-${index}`}
+      label={`Beschreibung Position ${index + 1}`}
+      hideLabel
+      value={item.description}
+      onChange={(value) => updateItem(index, 'description', value)}
+      onBlur={() => touch(`items.${index}.description`)}
+      error={errors[`items.${index}.description`]}
+      maxLength={85}
+    />
+  )
+}
+
+function AmountCell({
+  index,
+  item,
+}: {
+  index: number
+  item: InvoiceLineDraft
+}) {
+  const { updateItem, touch, errors } = useInvoicePositionEditor()
+  return (
+    <InvoiceInput
+      id={`item-amount-${index}`}
+      label={`Brutto in Euro Position ${index + 1}`}
+      hideLabel
+      value={item.amount}
+      onChange={(value) => updateItem(index, 'amount', value)}
+      onBlur={() => touch(`items.${index}.amount`)}
+      error={errors[`items.${index}.amount`]}
+    />
+  )
+}
+
+function RemoveCell({ index }: { index: number }) {
+  const { removeItem } = useInvoicePositionEditor()
+  return (
+    <Button
+      type="button"
+      variant="destructive"
+      size="icon"
+      aria-label={`Position ${index + 1} entfernen`}
+      onClick={() => removeItem(index)}
+    >
+      <IconTrash aria-hidden="true" data-icon="inline-start" />
+    </Button>
+  )
+}
+
+const invoicePositionColumns: ColumnDef<{}, InvoiceLineDraft>[] = [
+  { id: 'position', header: 'Nr.', cell: ({ row }) => row.index + 1 },
+  {
+    accessorKey: 'description',
+    header: 'Beschreibung',
+    cell: ({ row }) => (
+      <DescriptionCell index={row.index} item={row.original} />
+    ),
+  },
+  {
+    accessorKey: 'amount',
+    header: () => (
+      <div className="flex items-center gap-1">
+        Brutto in Euro{' '}
+        <FieldHint label="Brutto in Euro">
+          Positiver Bruttopreis in Euro, z. B. 107,00.
+        </FieldHint>
+      </div>
+    ),
+    cell: ({ row }) => <AmountCell index={row.index} item={row.original} />,
+  },
+  {
+    id: 'actions',
+    header: 'Aktion',
+    cell: ({ row }) => <RemoveCell index={row.index} />,
+  },
+]
+
+function InvoiceDateField({
+  value,
+  onChange,
+  onBlur,
+  error,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onBlur: () => void
+  error?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [year, month, day] = value.split('-').map(Number)
+  const selected =
+    year && month && day ? new Date(year, month - 1, day) : undefined
+
+  return (
+    <Field data-invalid={Boolean(error)}>
+      <FieldLabel id="invoice-date-label">Datum *</FieldLabel>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              aria-labelledby="invoice-date-label"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? 'invoice-date-error' : undefined}
+            />
+          }
+        >
+          <IconCalendar aria-hidden="true" data-icon="inline-start" />
+          {selected
+            ? new Intl.DateTimeFormat('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+              }).format(selected)
+            : 'Datum auswählen'}
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            locale={de}
+            selected={selected}
+            defaultMonth={selected}
+            onSelect={(date) => {
+              if (!date) return
+              onChange(
+                `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+              )
+              onBlur()
+              setOpen(false)
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+      {error && <FieldError id="invoice-date-error">{error}</FieldError>}
     </Field>
   )
 }
 
 function InvoicePage() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const profileQuery = useBusinessProfile()
   const invoice = useSelector(invoiceDraftStore, (state) => state)
   const storageError = useSelector(
@@ -154,42 +376,51 @@ function InvoicePage() {
     if (!profileQuery.isFetching && profileChanged) setProfileChanged(false)
   }, [profileChanged, profileQuery.data, profileQuery.isFetching])
 
-  if (profileQuery.isPending) {
+  if (!mounted || profileQuery.isPending) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-12" aria-live="polite">
-        Unternehmensprofil wird lokal geladen …
-      </main>
+      <div className="mx-auto max-w-4xl px-4 py-12">
+        <p className="text-center" aria-live="polite">
+          Unternehmensprofil wird lokal geladen …
+        </p>
+      </div>
     )
   }
 
   if (profileQuery.isError) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-12">
-        <Alert variant="destructive">
-          <AlertTitle>Rechnungen sind gesperrt</AlertTitle>
-          <AlertDescription>
-            Das Unternehmensprofil kann nicht aus dem Browser gelesen werden.
-            Prüfe die lokalen Speichereinstellungen.
-          </AlertDescription>
-        </Alert>
-      </main>
+      <div className="mx-auto max-w-4xl px-4 py-12">
+        <AlertDialog defaultOpen>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rechnungen sind gesperrt</AlertDialogTitle>
+              <AlertDialogDescription>
+                Das Unternehmensprofil kann nicht aus dem Browser gelesen
+                werden. Prüfe die lokalen Speichereinstellungen.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Schließen</AlertDialogCancel>
+              <AlertDialogAction onClick={() => window.location.reload()}>
+                Erneut laden
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     )
   }
 
   if (!validProfile && !hasInvoiceData(invoice)) {
     return (
-      <main className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-12">
+      <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-12">
         <h1 className="font-serif text-3xl font-semibold">
           Unternehmensprofil vervollständigen
         </h1>
         <p>Richte dein Profil ein, bevor du die erste Rechnung ausfüllst.</p>
-        <Link
-          to="/business-profile"
-          className="text-primary underline underline-offset-4"
-        >
+        <Link to="/business-profile" className={buttonVariants()}>
           Unternehmensprofil öffnen
         </Link>
-      </main>
+      </div>
     )
   }
 
@@ -212,55 +443,59 @@ function InvoiceEditor({
   storageError: string | null
 }) {
   const draft = useSelector(invoiceDraftStore, (state) => state)
-  const [errors, setErrors] = useState<InvoiceErrors>({})
-  const [generalError, setGeneralError] = useState('')
+  const [touched, setTouched] = useState<Set<string>>(() => new Set())
+  const [newItem, setNewItem] = useState<InvoiceLineDraft>({
+    description: '',
+    amount: '',
+  })
+  const [newItemTouched, setNewItemTouched] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [isGenerating, setIsGenerating] = useState(false)
-  const [successMessage, setSuccessMessage] = useState('')
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [blocker, setBlocker] = useState<
+    'profile' | 'storage' | 'changed' | null
+  >(!profile ? 'profile' : storageError ? 'storage' : null)
   const form = useForm({
     defaultValues: draft,
     onSubmit: async ({ value }) => {
-      const nextErrors = getInvoiceErrors(value)
-      setErrors(nextErrors)
-      setGeneralError('')
-      setSuccessMessage('')
-
-      if (Object.keys(nextErrors).length > 0) {
-        setGeneralError('Bitte prüfe die markierten Rechnungsangaben.')
+      if (
+        Object.keys(getInvoiceErrors(value)).length ||
+        !profile ||
+        storageError ||
+        profileChanged
+      )
         return
-      }
-      if (!profile || !businessProfileSchema.safeParse(profile).success) {
-        setGeneralError(
-          'Das Unternehmensprofil ist unvollständig. Deine Rechnungseingaben bleiben erhalten.',
-        )
-        return
-      }
-      if (storageError) {
-        setGeneralError(storageError)
-        return
-      }
-      if (profileChanged) {
-        setGeneralError(
-          'Das Unternehmensprofil wird gerade in einem anderen Tab aktualisiert. Bitte warte kurz und prüfe es erneut.',
-        )
-        return
-      }
 
       setIsGenerating(true)
       try {
         const bytes = await createInvoicePdf(profile, value)
         savePdf(bytes, value)
-        setSuccessMessage('Das PDF wurde erstellt und heruntergeladen.')
+        toast.add({
+          title: 'PDF wurde erstellt',
+          description: 'Das PDF wurde heruntergeladen.',
+          type: 'success',
+        })
       } catch (error) {
-        setGeneralError(
-          error instanceof Error
-            ? error.message
-            : 'Das PDF konnte nicht erstellt werden. Bitte prüfe die Eingaben.',
-        )
+        toast.add({
+          title: 'PDF konnte nicht erstellt werden',
+          description:
+            error instanceof Error
+              ? error.message
+              : 'Bitte prüfe die Eingaben.',
+          type: 'error',
+        })
       } finally {
         setIsGenerating(false)
       }
     },
   })
+
+  useEffect(() => {
+    if (storageError) setBlocker('storage')
+    else if (profileChanged) setBlocker('changed')
+    else if (!profile) setBlocker('profile')
+  }, [profile, profileChanged, storageError])
 
   useEffect(() => {
     if (form.state.values.date) return
@@ -269,6 +504,9 @@ function InvoiceEditor({
     invoiceDraftStore.setState(() => initial)
   }, [form])
 
+  const touch = (name: string) =>
+    setTouched((current) => new Set(current).add(name))
+
   function updateField<TName extends InvoiceFieldName>(
     name: TName,
     value: InvoiceDraft[TName],
@@ -276,9 +514,6 @@ function InvoiceEditor({
     const next = { ...form.state.values, [name]: value }
     form.setFieldValue(name, value as never)
     invoiceDraftStore.setState(() => next)
-    setErrors({})
-    setGeneralError('')
-    setSuccessMessage('')
   }
 
   function updateItem(
@@ -287,51 +522,90 @@ function InvoiceEditor({
     value: string,
   ) {
     const items = [...form.state.values.items]
-    const item = items[index]
-    items[index] = { ...item, [name]: value }
+    items[index] = { ...items[index], [name]: value }
     form.setFieldValue('items', items)
     invoiceDraftStore.setState((current) => ({ ...current, items }))
-    setErrors({})
-    setGeneralError('')
-    setSuccessMessage('')
   }
 
   function addItem() {
-    if (form.state.values.items.length >= 16) return
-    const items = [...form.state.values.items, { description: '', amount: '' }]
+    setNewItemTouched(new Set(['description', 'amount']))
+    if (
+      form.state.values.items.length >= 16 ||
+      Boolean(newItemErrors.description || newItemErrors.amount)
+    )
+      return
+    const items = [...form.state.values.items, { ...newItem }]
     form.setFieldValue('items', items)
     invoiceDraftStore.setState((current) => ({ ...current, items }))
+    setNewItem({ description: '', amount: '' })
+    setNewItemTouched(new Set())
   }
 
   function removeItem(index: number) {
-    if (form.state.values.items.length <= 1) return
     const items = form.state.values.items.filter(
       (_, itemIndex) => itemIndex !== index,
     )
     form.setFieldValue('items', items)
     invoiceDraftStore.setState((current) => ({ ...current, items }))
-    setErrors({})
+    setTouched(
+      (current) =>
+        new Set(
+          [...current].flatMap((name) => {
+            const match = /^items\.(\d+)\.(description|amount)$/.exec(name)
+            if (!match) return [name]
+            const row = Number(match[1])
+            if (row === index) return []
+            return [row > index ? `items.${row - 1}.${match[2]}` : name]
+          }),
+        ),
+    )
   }
 
   function startNewInvoice() {
     if (
-      hasInvoiceData(form.state.values) &&
-      !window.confirm(
-        'Neue Rechnung beginnen? Die aktuellen Eingaben werden verworfen.',
-      )
+      hasInvoiceData(form.state.values) ||
+      form.state.values.date !== localDate() ||
+      form.state.values.rate !== createEmptyInvoiceDraft().rate ||
+      newItem.description.trim() ||
+      newItem.amount.trim()
     ) {
+      setConfirmReset(true)
       return
     }
+    resetInvoice()
+  }
 
+  function resetInvoice() {
     const freshInvoice = { ...createEmptyInvoiceDraft(), date: localDate() }
     form.reset(freshInvoice)
     invoiceDraftStore.setState(() => freshInvoice)
-    setErrors({})
-    setGeneralError('')
-    setSuccessMessage('')
+    setTouched(new Set())
+    setNewItem({ description: '', amount: '' })
+    setNewItemTouched(new Set())
+    setConfirmReset(false)
   }
 
-  const currentValues = form.state.values
+  const currentValues = draft
+  const validationErrors = getInvoiceErrors(currentValues)
+  const errors = Object.fromEntries(
+    Object.entries(validationErrors).filter(([name]) => touched.has(name)),
+  )
+  const validInvoice = Object.keys(validationErrors).length === 0
+  const newAmount = parseEuroAmount(newItem.amount)
+  const newItemErrors = {
+    description: !newItem.description.trim()
+      ? 'Positionsbeschreibung fehlt.'
+      : '',
+    amount:
+      newAmount === null || newAmount <= 0
+        ? 'Einen positiven Bruttopreis eingeben.'
+        : '',
+  }
+  const table = useTable({
+    features: {},
+    data: currentValues.items,
+    columns: invoicePositionColumns,
+  })
   const amounts = currentValues.items
     .filter((item) => item.description.trim() || item.amount.trim())
     .map((item) => parseEuroAmount(item.amount))
@@ -341,13 +615,10 @@ function InvoiceEditor({
       : null
 
   return (
-    <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-12">
+    <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-12">
       <div className="flex min-w-0 flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              {profile?.businessName ?? 'regningen'} · Rechnung
-            </p>
             <h1 className="font-serif text-3xl font-semibold">
               Rechnung erstellen
             </h1>
@@ -356,57 +627,64 @@ function InvoiceEditor({
             </p>
           </div>
           <Button type="button" variant="outline" onClick={startNewInvoice}>
+            <IconEdit data-icon="inline-start" />
             Neue Rechnung
           </Button>
         </div>
 
-        {!profile && (
-          <Alert variant="destructive">
-            <AlertTitle>
-              Profil vervollständigen, um das PDF zu erstellen
-            </AlertTitle>
-            <AlertDescription>
-              Die Rechnungseingaben bleiben in diesem Tab erhalten. Ergänze oder
-              korrigiere das Profil und erstelle danach das PDF.
-              <Link
-                to="/business-profile"
-                className="ml-1 font-medium underline underline-offset-4"
-              >
-                Unternehmensprofil öffnen
-              </Link>
-            </AlertDescription>
-          </Alert>
-        )}
-        {storageError && (
-          <Alert variant="destructive">
-            <AlertTitle>Profil konnte nicht gespeichert werden</AlertTitle>
-            <AlertDescription>
-              {storageError} Rechnungen bleiben gesperrt, bis die lokale
-              Speicherung wieder funktioniert.
-            </AlertDescription>
-          </Alert>
-        )}
-        {profileChanged && (
-          <Alert>
-            <AlertTitle>Unternehmensprofil wird aktualisiert</AlertTitle>
-            <AlertDescription>
-              Die PDF-Erstellung ist kurzzeitig gesperrt, bis das geänderte
-              Profil aus diesem Browser geladen wurde.
-            </AlertDescription>
-          </Alert>
-        )}
-        {generalError && (
-          <Alert variant="destructive">
-            <AlertTitle>Rechnung konnte nicht erstellt werden</AlertTitle>
-            <AlertDescription>{generalError}</AlertDescription>
-          </Alert>
-        )}
-        {successMessage && (
-          <Alert>
-            <AlertTitle>PDF erstellt</AlertTitle>
-            <AlertDescription>{successMessage}</AlertDescription>
-          </Alert>
-        )}
+        <AlertDialog
+          open={blocker !== null}
+          onOpenChange={(open) => {
+            if (!open) setBlocker(null)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {blocker === 'storage'
+                  ? 'Profil konnte nicht gespeichert werden'
+                  : blocker === 'changed'
+                    ? 'Unternehmensprofil wird aktualisiert'
+                    : 'Profil vervollständigen, um das PDF zu erstellen'}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {blocker === 'storage'
+                  ? `${storageError} Rechnungen bleiben gesperrt, bis die lokale Speicherung wieder funktioniert.`
+                  : blocker === 'changed'
+                    ? 'Die PDF-Erstellung ist gesperrt, bis das geänderte Profil geladen wurde.'
+                    : 'Die Rechnungseingaben bleiben in diesem Tab erhalten. Ergänze oder korrigiere das Unternehmensprofil.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Schließen</AlertDialogCancel>
+              {blocker === 'profile' ? (
+                <Link to="/business-profile" className={buttonVariants()}>
+                  Unternehmensprofil öffnen
+                </Link>
+              ) : blocker === 'storage' ? (
+                <AlertDialogAction onClick={() => window.location.reload()}>
+                  Erneut laden
+                </AlertDialogAction>
+              ) : null}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Neue Rechnung beginnen?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Die aktuellen Eingaben werden verworfen.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+              <AlertDialogAction onClick={resetInvoice}>
+                Neue Rechnung beginnen
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <form
           noValidate
@@ -429,17 +707,15 @@ function InvoiceEditor({
                   value={currentValues.number}
                   onChange={(value) => updateField('number', value)}
                   error={errors.number}
+                  onBlur={() => touch('number')}
                   required
                   maxLength={40}
                 />
-                <InvoiceInput
-                  id="invoice-date"
-                  label="Datum"
+                <InvoiceDateField
                   value={currentValues.date}
                   onChange={(value) => updateField('date', value)}
+                  onBlur={() => touch('date')}
                   error={errors.date}
-                  required
-                  type="date"
                 />
                 <div className="md:col-span-2">
                   <InvoiceInput
@@ -448,6 +724,7 @@ function InvoiceEditor({
                     value={currentValues.subject}
                     onChange={(value) => updateField('subject', value)}
                     error={errors.subject}
+                    onBlur={() => touch('subject')}
                     maxLength={100}
                   />
                 </div>
@@ -470,6 +747,7 @@ function InvoiceEditor({
                   value={currentValues.company}
                   onChange={(value) => updateField('company', value)}
                   error={errors.company}
+                  onBlur={() => touch('company')}
                   maxLength={70}
                   autoComplete="organization"
                 />
@@ -479,6 +757,7 @@ function InvoiceEditor({
                   value={currentValues.name}
                   onChange={(value) => updateField('name', value)}
                   error={errors.name}
+                  onBlur={() => touch('name')}
                   maxLength={70}
                   autoComplete="name"
                 />
@@ -488,6 +767,7 @@ function InvoiceEditor({
                   value={currentValues.street}
                   onChange={(value) => updateField('street', value)}
                   error={errors.street}
+                  onBlur={() => touch('street')}
                   required
                   maxLength={85}
                   autoComplete="street-address"
@@ -498,6 +778,7 @@ function InvoiceEditor({
                   value={currentValues.postalCode}
                   onChange={(value) => updateField('postalCode', value)}
                   error={errors.postalCode}
+                  onBlur={() => touch('postalCode')}
                   required
                   maxLength={85}
                   autoComplete="postal-code"
@@ -508,6 +789,7 @@ function InvoiceEditor({
                   value={currentValues.town}
                   onChange={(value) => updateField('town', value)}
                   error={errors.town}
+                  onBlur={() => touch('town')}
                   required
                   maxLength={85}
                   autoComplete="address-level2"
@@ -523,53 +805,99 @@ function InvoiceEditor({
                 Preise einschließlich MwSt. eingeben. Maximal 16 Positionen.
               </CardDescription>
             </CardHeader>
-            <CardContent className="gap-5">
-              <FieldGroup className="flex flex-col gap-5">
-                {currentValues.items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="grid items-end gap-4 border-b pb-4 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_12rem_auto]"
-                  >
-                    <InvoiceInput
-                      id={`item-description-${index}`}
-                      label={`Beschreibung Position ${index + 1}`}
-                      value={item.description}
-                      onChange={(value) =>
-                        updateItem(index, 'description', value)
-                      }
-                      error={errors[`items.${index}.description`]}
-                      maxLength={85}
-                    />
-                    <InvoiceInput
-                      id={`item-amount-${index}`}
-                      label={`Brutto in Euro Position ${index + 1}`}
-                      value={item.amount}
-                      onChange={(value) => updateItem(index, 'amount', value)}
-                      error={errors[`items.${index}.amount`]}
-                      type="text"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={currentValues.items.length <= 1}
-                      aria-label={`Position ${index + 1} entfernen`}
-                      onClick={() => removeItem(index)}
-                    >
-                      Entfernen
-                    </Button>
-                  </div>
-                ))}
-              </FieldGroup>
-              {errors.items && <FieldError>{errors.items}</FieldError>}
-              <Button
-                type="button"
-                variant="outline"
-                disabled={currentValues.items.length >= 16}
-                onClick={addItem}
+            <CardContent className="flex flex-col gap-5">
+              <InvoicePositionEditorContext.Provider
+                value={{ updateItem, touch, removeItem, errors }}
               >
-                + Position hinzufügen
-              </Button>
-
+                <FieldGroup className="gap-0">
+                  <Table aria-label="Rechnungspositionen">
+                    <TableHeader>
+                      {table.getHeaderGroups().map((group) => (
+                        <TableRow key={group.id}>
+                          {group.headers.map((header) => (
+                            <TableHead key={header.id}>
+                              {!header.isPlaceholder && (
+                                <table.FlexRender header={header} />
+                              )}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableHeader>
+                    <TableBody>
+                      {table.getRowModel().rows.length ? (
+                        table.getRowModel().rows.map((row) => (
+                          <TableRow key={row.id}>
+                            {row.getAllCells().map((cell) => (
+                              <TableCell key={cell.id} className="align-top">
+                                <table.FlexRender cell={cell} />
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell
+                            colSpan={4}
+                            className="py-8 text-center text-muted-foreground"
+                          >
+                            Noch keine Positionen hinzugefügt.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </FieldGroup>
+              </InvoicePositionEditorContext.Provider>
+              <FieldGroup className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-end">
+                <InvoiceInput
+                  id="new-item-description"
+                  label="Beschreibung"
+                  value={newItem.description}
+                  maxLength={85}
+                  onChange={(description) =>
+                    setNewItem((current) => ({ ...current, description }))
+                  }
+                  onBlur={() =>
+                    setNewItemTouched((current) =>
+                      new Set(current).add('description'),
+                    )
+                  }
+                  error={
+                    newItemTouched.has('description')
+                      ? newItemErrors.description
+                      : undefined
+                  }
+                />
+                <InvoiceInput
+                  id="new-item-amount"
+                  label="Brutto in Euro"
+                  hint="Positiver Bruttopreis in Euro, z. B. 107,00."
+                  value={newItem.amount}
+                  onChange={(amount) =>
+                    setNewItem((current) => ({ ...current, amount }))
+                  }
+                  onBlur={() =>
+                    setNewItemTouched((current) =>
+                      new Set(current).add('amount'),
+                    )
+                  }
+                  error={
+                    newItemTouched.has('amount')
+                      ? newItemErrors.amount
+                      : undefined
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={currentValues.items.length >= 16}
+                  onClick={addItem}
+                >
+                  <IconPlus data-icon="inline-start" />
+                  Position hinzufügen
+                </Button>
+              </FieldGroup>
               <Field data-invalid={Boolean(errors.rate)}>
                 <FieldLabel id="vat-rate-label">MwSt.-Satz</FieldLabel>
                 <ToggleGroup
@@ -592,6 +920,7 @@ function InvoiceEditor({
           <Button
             type="submit"
             disabled={
+              !validInvoice ||
               isGenerating ||
               profileChanged ||
               !profile ||
@@ -612,14 +941,10 @@ function InvoiceEditor({
           <CardHeader>
             <CardTitle>Rechnungsübersicht</CardTitle>
             <CardDescription>
-              {currentValues.number.trim() || 'Neue Rechnung'}
+              {currentValues.number.trim() || '—'}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex justify-between gap-4">
-              <span>Brutto</span>
-              <strong>{totals ? formattedEuro(totals.gross) : '—'}</strong>
-            </div>
             <div className="flex justify-between gap-4">
               <span>Netto</span>
               <strong>{totals ? formattedEuro(totals.net) : '—'}</strong>
@@ -628,6 +953,10 @@ function InvoiceEditor({
               <span>{currentValues.rate} % MwSt.</span>
               <strong>{totals ? formattedEuro(totals.tax) : '—'}</strong>
             </div>
+            <div className="flex justify-between gap-4">
+              <span>Brutto</span>
+              <strong>{totals ? formattedEuro(totals.gross) : '—'}</strong>
+            </div>
             <p className="text-sm text-muted-foreground">
               Geschäftsangaben werden aus dem lokalen Unternehmensprofil
               übernommen.
@@ -635,7 +964,7 @@ function InvoiceEditor({
           </CardContent>
         </Card>
       </aside>
-    </main>
+    </div>
   )
 }
 

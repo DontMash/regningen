@@ -2,6 +2,22 @@ import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+async function addInvoicePosition(
+  page: Page,
+  description: string,
+  amount: string,
+) {
+  await page
+    .getByRole('textbox', { name: 'Beschreibung', exact: true })
+    .fill(description)
+  await page
+    .getByRole('textbox', { name: 'Brutto in Euro', exact: true })
+    .fill(amount)
+  await page
+    .getByRole('button', { name: 'Position hinzufügen', exact: true })
+    .click()
+}
+
 async function installCompleteBusinessProfile(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -40,12 +56,22 @@ test('shows an error instead of claiming the profile was saved when storage fail
     }
   })
   await page.goto('/')
-  await page.getByLabel('Unternehmensname').fill('Lokaler Betrieb')
+  await page
+    .getByRole('textbox', { name: 'Unternehmensname' })
+    .fill('Lokaler Betrieb')
 
   await expect(
-    page.getByText('Profil konnte nicht gespeichert werden'),
+    page.getByRole('alertdialog', {
+      name: 'Profil konnte nicht gespeichert werden',
+    }),
   ).toBeVisible()
-  await expect(page.getByText(/Rechnungen sind gesperrt/)).toBeVisible()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Schließen' })
+    .click()
+  await expect(
+    page.getByRole('button', { name: 'Profil speichern' }),
+  ).toBeDisabled()
 })
 
 test('keeps invoicing blocked after an existing profile fails to save', async ({
@@ -81,15 +107,29 @@ test('keeps invoicing blocked after an existing profile fails to save', async ({
     }
   })
   await page.goto('/business-profile')
-  await page.getByLabel('Unternehmensname').fill('Nicht gespeicherter Name')
+  await page
+    .getByRole('textbox', { name: 'Unternehmensname' })
+    .fill('Nicht gespeicherter Name')
   await expect(
-    page.getByText('Profil konnte nicht gespeichert werden'),
+    page.getByRole('alertdialog', {
+      name: 'Profil konnte nicht gespeichert werden',
+    }),
   ).toBeVisible()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Schließen' })
+    .click()
   await page.getByRole('link', { name: 'Rechnung', exact: true }).click()
 
   await expect(
-    page.getByText('Profil konnte nicht gespeichert werden'),
+    page.getByRole('alertdialog', {
+      name: 'Profil konnte nicht gespeichert werden',
+    }),
   ).toBeVisible()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Schließen' })
+    .click()
   await expect(
     page.getByRole('button', { name: 'PDF erstellen' }),
   ).toBeDisabled()
@@ -114,19 +154,42 @@ test('sets up a local business profile before opening invoices', async ({
   await page.goto('/')
   await expect(page).toHaveURL(/\/business-profile$/)
   await expect(
-    page.getByRole('heading', { name: 'Unternehmensprofil einrichten' }),
+    page.getByRole('heading', { name: 'Unternehmensprofil', exact: true }),
   ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Profil speichern' }),
+  ).toBeDisabled()
+  await page.getByRole('button', { name: 'Hinweis zu IBAN' }).click()
+  await expect(
+    page.getByText('Die IBAN muss gültig sein. Leerzeichen sind erlaubt.'),
+  ).toBeVisible()
+  await page.keyboard.press('Escape')
 
-  await page.getByLabel('Unternehmensname').fill('Nordlicht Catering')
-  await page.getByLabel('Inhaber/in').fill('Erika Beispiel')
-  await page.getByLabel('Straße und Hausnummer').fill('Hauptstraße 12')
-  await page.getByLabel('Postleitzahl').fill('20095')
-  await page.getByRole('textbox', { name: /^Ort/ }).fill('Hamburg')
-  await page.getByLabel('IBAN').fill('DE89 3704 0044 0532 0130 00')
-  await page.getByLabel('USt-IdNr.').fill('DE123456789')
   await page
-    .getByRole('button', { name: 'Profil speichern und Rechnung erstellen' })
-    .click()
+    .getByRole('textbox', { name: 'Unternehmensname' })
+    .fill('Nordlicht Catering')
+  await page.getByRole('textbox', { name: 'Inhaber/in' }).fill('Erika Beispiel')
+  await page
+    .getByRole('textbox', { name: 'Straße und Hausnummer' })
+    .fill('Hauptstraße 12')
+  await page.getByRole('textbox', { name: 'Postleitzahl' }).fill('20095')
+  await page.getByRole('textbox', { name: 'Ort' }).fill('Hamburg')
+  await page.getByRole('textbox', { name: 'IBAN' }).fill('ungültig')
+  await page.getByRole('textbox', { name: 'IBAN' }).blur()
+  await expect(
+    page.getByText('Bitte eine gültige IBAN eingeben.'),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Profil speichern' }),
+  ).toBeDisabled()
+  await page
+    .getByRole('textbox', { name: 'IBAN' })
+    .fill('DE89 3704 0044 0532 0130 00')
+  await page.getByRole('textbox', { name: 'USt-IdNr.' }).fill('DE123456789')
+  await expect(page.getByText('Bitte eine gültige IBAN eingeben.')).toHaveCount(
+    0,
+  )
+  await page.getByRole('button', { name: 'Profil speichern' }).click()
 
   await expect(page).toHaveURL(/\/invoice$/)
   await expect(
@@ -163,15 +226,34 @@ test('creates and downloads a one-page invoice PDF in the browser', async ({
 }) => {
   await installCompleteBusinessProfile(page)
   await page.goto('/invoice')
+  await expect(
+    page.getByRole('button', { name: 'PDF erstellen' }),
+  ).toBeDisabled()
 
   await page.getByLabel('Rechnungsnummer').fill('2026-001')
-  await page.getByLabel('Datum').fill('2026-04-01')
+  const date = await page.getByRole('button', { name: 'Datum' }).textContent()
+  expect(date).toMatch(/\d{2}\.\d{2}\.\d{4}/)
   await page.getByLabel('Unternehmen des Empfängers').fill('Muster GmbH')
   await page.getByLabel('Straße und Hausnummer').fill('Musterstraße 1')
   await page.getByRole('textbox', { name: /^PLZ/ }).fill('20095')
   await page.getByRole('textbox', { name: /^Ort/ }).fill('Hamburg')
-  await page.getByLabel('Beschreibung Position 1').fill('Catering')
-  await page.getByLabel('Brutto in Euro Position 1').fill('107,00')
+  await expect(
+    page.getByRole('button', { name: 'PDF erstellen' }),
+  ).toBeDisabled()
+  await addInvoicePosition(page, 'Catering', '107,00')
+  await page.getByRole('textbox', { name: 'Beschreibung Position 1' }).click()
+  await page
+    .getByRole('textbox', { name: 'Beschreibung Position 1' })
+    .press('End')
+  await page
+    .getByRole('textbox', { name: 'Beschreibung Position 1' })
+    .pressSequentially(' & Service')
+  await expect(
+    page.getByRole('textbox', { name: 'Beschreibung Position 1' }),
+  ).toHaveValue('Catering & Service')
+  await expect(
+    page.getByRole('button', { name: 'PDF erstellen' }),
+  ).toBeEnabled()
 
   await expect(page.getByText('107,00 €')).toBeVisible()
   await expect(page.getByText('100,00 €')).toBeVisible()
@@ -184,7 +266,12 @@ test('creates and downloads a one-page invoice PDF in the browser', async ({
   await page.getByRole('button', { name: 'PDF erstellen' }).click()
   const download = await downloadPromise
 
-  expect(download.suggestedFilename()).toBe('Rechnung_2026-001_2026-04-01.pdf')
+  expect(download.suggestedFilename()).toMatch(
+    /^Rechnung_2026-001_\d{4}-\d{2}-\d{2}\.pdf$/,
+  )
+  await expect(
+    page.getByRole('heading', { name: 'PDF wurde erstellt' }),
+  ).toBeVisible()
 })
 
 test('caps invoices at 16 line items and confirms starting a new invoice', async ({
@@ -192,22 +279,62 @@ test('caps invoices at 16 line items and confirms starting a new invoice', async
 }) => {
   await installCompleteBusinessProfile(page)
   await page.goto('/invoice')
-  const addItem = page.getByRole('button', { name: '+ Position hinzufügen' })
+  const addItem = page.getByRole('button', {
+    name: 'Position hinzufügen',
+    exact: true,
+  })
 
-  for (let index = 1; index < 16; index++) {
-    await addItem.click()
+  for (let index = 1; index <= 16; index++) {
+    await addInvoicePosition(page, `Position ${index}`, '10,00')
   }
   await expect(page.getByLabel('Beschreibung Position 16')).toBeVisible()
   await expect(addItem).toBeDisabled()
 
+  await page
+    .getByRole('textbox', { name: 'Brutto in Euro Position 3' })
+    .fill('abc')
+  await page.getByRole('textbox', { name: 'Brutto in Euro Position 3' }).blur()
+  await expect(
+    page.getByText('Einen positiven Bruttopreis eingeben.'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Position 1 entfernen' }).click()
+  await expect(
+    page.getByRole('textbox', { name: 'Brutto in Euro Position 2' }),
+  ).toHaveValue('abc')
+  await expect(
+    page.getByText('Einen positiven Bruttopreis eingeben.'),
+  ).toBeVisible()
+
   await page.getByLabel('Rechnungsnummer').fill('2026-001')
-  page.once('dialog', (dialog) => dialog.accept())
-  await page.getByRole('button', { name: 'Neue Rechnung' }).click()
+  await page.getByRole('button', { name: 'Neue Rechnung', exact: true }).click()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Neue Rechnung beginnen' })
+    .click()
 
   await expect(page.getByLabel('Rechnungsnummer')).toHaveValue('')
-  await expect(page.getByLabel('Beschreibung Position 1')).toHaveValue('')
-  await expect(page.getByLabel('Beschreibung Position 2')).toHaveCount(0)
-  await expect(page.getByLabel('Datum')).not.toHaveValue('')
+  await expect(page.getByLabel('Beschreibung Position 1')).toHaveCount(0)
+  await expect(
+    page.getByRole('table', { name: 'Rechnungspositionen' }),
+  ).toContainText('Noch keine Positionen')
+  await expect(page.getByRole('button', { name: 'Datum' })).toContainText(
+    /\d{2}\.\d{2}\.\d{4}/,
+  )
+
+  await page
+    .getByRole('textbox', { name: 'Beschreibung', exact: true })
+    .fill('Unfertig')
+  await page.getByRole('button', { name: 'Neue Rechnung', exact: true }).click()
+  await expect(
+    page.getByRole('alertdialog', { name: 'Neue Rechnung beginnen?' }),
+  ).toBeVisible()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Neue Rechnung beginnen' })
+    .click()
+  await expect(
+    page.getByRole('textbox', { name: 'Beschreibung', exact: true }),
+  ).toHaveValue('')
 })
 
 test('updates invoice details from another tab without discarding its entries', async ({
@@ -216,22 +343,22 @@ test('updates invoice details from another tab without discarding its entries', 
   await installCompleteBusinessProfile(page)
   await page.goto('/invoice')
   await page.getByLabel('Rechnungsnummer').fill('tab-2026-001')
-  await page.getByLabel('Beschreibung Position 1').fill('Catering')
+  await addInvoicePosition(page, 'Catering', '107,00')
 
   const profileTab = await page.context().newPage()
   await profileTab.goto('/business-profile')
-  await profileTab.getByLabel('Unternehmensname').fill('Nordlicht Partyservice')
+  await profileTab
+    .getByRole('textbox', { name: 'Unternehmensname' })
+    .fill('Nordlicht Partyservice')
 
-  await expect(
-    page.getByText('Nordlicht Partyservice · Rechnung'),
-  ).toBeVisible()
+  await expect(page.getByText('Nordlicht Partyservice')).toBeVisible()
   await expect(page.getByLabel('Rechnungsnummer')).toHaveValue('tab-2026-001')
   await expect(page.getByLabel('Beschreibung Position 1')).toHaveValue(
     'Catering',
   )
 })
 
-test('exports and restores an unencrypted local profile backup', async ({
+test('rejects invalid backups without locking the profile and restores a valid backup', async ({
   page,
 }) => {
   await installCompleteBusinessProfile(page)
@@ -246,17 +373,41 @@ test('exports and restores an unencrypted local profile backup', async ({
   expect(backupPath).not.toBeNull()
   const backup = await readFile(backupPath)
 
-  await page.getByLabel('Unternehmensname').fill('Geänderter Name')
-  page.once('dialog', (dialog) => dialog.accept())
+  await page
+    .getByRole('textbox', { name: 'Unternehmensname' })
+    .fill('Geänderter Name')
+  await page.getByLabel('Sicherung importieren').setInputFiles({
+    name: 'invalid.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('kein JSON'),
+  })
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Profil ersetzen' })
+    .click()
+  await expect(
+    page.getByText('Die Profilsicherung enthält kein gültiges JSON.'),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('textbox', { name: 'Unternehmensname' }),
+  ).toBeEnabled()
+  await expect(
+    page.getByRole('textbox', { name: 'Unternehmensname' }),
+  ).toHaveValue('Geänderter Name')
+
   await page.getByLabel('Sicherung importieren').setInputFiles({
     name: 'business-profile.json',
     mimeType: 'application/json',
     buffer: backup,
   })
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Profil ersetzen' })
+    .click()
 
-  await expect(page.getByLabel('Unternehmensname')).toHaveValue(
-    'Nordlicht Catering',
-  )
+  await expect(
+    page.getByRole('textbox', { name: 'Unternehmensname' }),
+  ).toHaveValue('Nordlicht Catering')
 })
 
 test('keeps invoice entries while the profile is deleted and set up again', async ({
@@ -265,17 +416,27 @@ test('keeps invoice entries while the profile is deleted and set up again', asyn
   await installCompleteBusinessProfile(page)
   await page.goto('/invoice')
   await page.getByLabel('Rechnungsnummer').fill('preserved-001')
-  await page.getByLabel('Beschreibung Position 1').fill('Catering')
+  await addInvoicePosition(page, 'Catering', '107,00')
 
-  await page
-    .getByRole('link', { name: 'Unternehmensprofil', exact: true })
-    .click()
-  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('link', { name: 'Profile', exact: true }).click()
   await page.getByRole('button', { name: 'Profil löschen' }).click()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Profil löschen' })
+    .click()
   await expect(page.getByText(/Profil gelöscht/)).toBeVisible()
 
   await page.getByRole('link', { name: 'Rechnung', exact: true }).click()
   await expect(page.getByLabel('Rechnungsnummer')).toHaveValue('preserved-001')
+  await expect(
+    page.getByRole('alertdialog', {
+      name: 'Profil vervollständigen, um das PDF zu erstellen',
+    }),
+  ).toBeVisible()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Schließen' })
+    .click()
   await expect(page.getByLabel('Beschreibung Position 1')).toHaveValue(
     'Catering',
   )
@@ -283,19 +444,21 @@ test('keeps invoice entries while the profile is deleted and set up again', asyn
     page.getByRole('button', { name: 'PDF erstellen' }),
   ).toBeDisabled()
 
+  await page.getByRole('link', { name: 'Profile', exact: true }).click()
   await page
-    .getByRole('link', { name: 'Unternehmensprofil', exact: true })
-    .click()
-  await page.getByLabel('Unternehmensname').fill('Neu eingerichteter Betrieb')
-  await page.getByLabel('Inhaber/in').fill('Erika Beispiel')
-  await page.getByLabel('Straße und Hausnummer').fill('Hauptstraße 12')
-  await page.getByLabel('Postleitzahl').fill('20095')
-  await page.getByRole('textbox', { name: /^Ort/ }).fill('Hamburg')
-  await page.getByLabel('IBAN').fill('DE89 3704 0044 0532 0130 00')
-  await page.getByLabel('USt-IdNr.').fill('DE123456789')
+    .getByRole('textbox', { name: 'Unternehmensname' })
+    .fill('Neu eingerichteter Betrieb')
+  await page.getByRole('textbox', { name: 'Inhaber/in' }).fill('Erika Beispiel')
   await page
-    .getByRole('button', { name: 'Profil speichern und Rechnung erstellen' })
-    .click()
+    .getByRole('textbox', { name: 'Straße und Hausnummer' })
+    .fill('Hauptstraße 12')
+  await page.getByRole('textbox', { name: 'Postleitzahl' }).fill('20095')
+  await page.getByRole('textbox', { name: 'Ort' }).fill('Hamburg')
+  await page
+    .getByRole('textbox', { name: 'IBAN' })
+    .fill('DE89 3704 0044 0532 0130 00')
+  await page.getByRole('textbox', { name: 'USt-IdNr.' }).fill('DE123456789')
+  await page.getByRole('button', { name: 'Profil speichern' }).click()
 
   await expect(page.getByLabel('Rechnungsnummer')).toHaveValue('preserved-001')
   await expect(page.getByLabel('Beschreibung Position 1')).toHaveValue(
@@ -312,11 +475,17 @@ test('warns a profile editor when another tab changes the profile', async ({
   const otherProfileTab = await page.context().newPage()
   await otherProfileTab.goto('/business-profile')
   await otherProfileTab
-    .getByLabel('Unternehmensname')
+    .getByRole('textbox', { name: 'Unternehmensname' })
     .fill('Aktualisierte Firma')
 
   await expect(
     page.getByText('Profil in einem anderen Tab geändert', { exact: true }),
   ).toBeVisible()
-  await expect(page.getByLabel('Unternehmensname')).toBeDisabled()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Schließen' })
+    .click()
+  await expect(
+    page.getByRole('textbox', { name: 'Unternehmensname' }),
+  ).toBeDisabled()
 })

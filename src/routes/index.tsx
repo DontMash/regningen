@@ -2,6 +2,16 @@ import { useEffect } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useBusinessProfile } from '@/features/invoicing/business-profile-query'
 import { businessProfileSchema } from '@/features/invoicing/business-profile'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 export const Route = createFileRoute('/')({ component: Home })
 
@@ -24,20 +34,32 @@ function Home() {
 
   if (profileQuery.isError) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-12" role="alert">
-        Das Unternehmensprofil konnte nicht aus diesem Browser geladen werden.
-        Rechnungen sind gesperrt.
-      </main>
+      <AlertDialog defaultOpen>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rechnungen sind gesperrt</AlertDialogTitle>
+            <AlertDialogDescription>
+              Das Unternehmensprofil konnte nicht aus diesem Browser geladen
+              werden. Prüfe die lokalen Speichereinstellungen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Schließen</AlertDialogCancel>
+            <AlertDialogAction onClick={() => window.location.reload()}>
+              Erneut laden
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     )
   }
 
   return (
-    <main
-      aria-label="Hauptinhalt"
+    <div
       className="min-h-[calc(100dvh-4rem)] px-4 py-12 text-center text-muted-foreground"
       aria-live="polite"
     >
       Unternehmensprofil wird lokal geladen …
-    </main>
+    </div>
   )
 }

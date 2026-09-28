@@ -7,6 +7,7 @@ test('shows the German Regningen shell and opens first-time profile setup', asyn
 
   await expect(page).toHaveTitle('regningen')
   await expect(page.locator('html')).toHaveAttribute('lang', 'de')
+  await expect(page.locator('main')).toHaveCount(1)
   const brand = page.getByRole('link', { name: 'regningen' })
   await expect(brand).toBeVisible()
   const headerBorder = await page.locator('header').evaluate((header) => ({
@@ -20,7 +21,7 @@ test('shows the German Regningen shell and opens first-time profile setup', asyn
   await expect(brand).toHaveCSS('font-family', /Lora Variable/)
   await expect(page).toHaveURL(/\/business-profile$/)
   await expect(
-    page.getByRole('heading', { name: 'Unternehmensprofil einrichten' }),
+    page.getByRole('heading', { name: 'Unternehmensprofil', exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('contentinfo')).toHaveCount(0)
   await expect(
@@ -39,22 +40,22 @@ test('cycles and persists the selected theme mode', async ({ page }) => {
       .locator('body')
       .evaluate((body) => getComputedStyle(body).backgroundColor)
 
-  await expect(themeToggle).toHaveText('System')
+  await expect(themeToggle).toHaveAttribute('title', 'Darstellung: System')
 
   await themeToggle.click()
-  await expect(themeToggle).toHaveText('Hell')
+  await expect(themeToggle).toHaveAttribute('title', 'Darstellung: Hell')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   const lightBackground = await bodyBackground()
 
   await themeToggle.click()
-  await expect(themeToggle).toHaveText('Dunkel')
+  await expect(themeToggle).toHaveAttribute('title', 'Darstellung: Dunkel')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect.poll(bodyBackground).not.toBe(lightBackground)
 
   await page.reload()
   await expect(
     page.getByRole('button', { name: 'Darstellung umschalten' }),
-  ).toHaveText('Dunkel')
+  ).toHaveAttribute('title', 'Darstellung: Dunkel')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })
 
@@ -64,7 +65,7 @@ test('follows the operating-system theme in system mode', async ({ page }) => {
 
   await expect(
     page.getByRole('button', { name: 'Darstellung umschalten' }),
-  ).toHaveText('System')
+  ).toHaveAttribute('title', 'Darstellung: System')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })
 

@@ -213,9 +213,9 @@ export async function createInvoicePdf(
     )
     rightText(formattedEuro(amount), y, 9)
 
-    const rowHeight = Math.max(14, descriptionLines.length * 11 + 4)
+    const rowHeight = Math.max(16, descriptionLines.length * 11 + 5)
     y -= rowHeight
-    line(y + 4)
+    line(y + 9.5)
   }
 
   if (y < 285) {
@@ -228,27 +228,78 @@ export async function createInvoicePdf(
     amounts.filter((amount): amount is number => amount !== null),
     invoice.rate,
   )
-  y -= 15
-  rightText(`Netto:  ${formattedEuro(totals.net)}`, y, 9)
-  y -= 17
-  rightText(`${invoice.rate} % MwSt.:  ${formattedEuro(totals.tax)}`, y, 9)
-  y -= 18
-  rightText(`Brutto:  ${formattedEuro(totals.gross)}`, y, 10, bold)
+  const totalRows = [
+    { label: 'Netto:', value: formattedEuro(totals.net), size: 9, face: font },
+    {
+      label: `${invoice.rate} % MwSt.:`,
+      value: formattedEuro(totals.tax),
+      size: 9,
+      face: font,
+    },
+    {
+      label: 'Brutto:',
+      value: formattedEuro(totals.gross),
+      size: 10,
+      face: bold,
+    },
+  ]
+  const labelWidth = Math.max(
+    ...totalRows.map(({ label, size, face }) =>
+      face.widthOfTextAtSize(label, size),
+    ),
+  )
+  const valueWidth = Math.max(
+    ...totalRows.map(({ value, size, face }) =>
+      face.widthOfTextAtSize(value, size),
+    ),
+  )
+  const totalLabelX = RIGHT - valueWidth - 12 - labelWidth
+  for (const [index, { label, value, size, face }] of totalRows.entries()) {
+    y -= index === 0 ? 15 : index === 1 ? 17 : 18
+    write(label, totalLabelX, y, size, face)
+    rightText(value, y, size, face)
+  }
 
   if (y < 165) {
     throw new Error('Die Rechnungsdaten sind zu umfangreich für eine Seite.')
   }
 
-  write('IBAN:', LEFT, 126, 9, font, MUTED)
-  write(profile.iban, LEFT + 62, 126, 9)
-  if (profile.vatId) {
-    write('USt-IdNr.:', LEFT, 110, 9, font, MUTED)
-    write(profile.vatId, LEFT + 62, 110, 9)
+  const bankDetails = [
+    { label: 'IBAN:', value: profile.iban, y: 126 },
+    ...(profile.vatId
+      ? [{ label: 'USt-IdNr.:', value: profile.vatId, y: 110 }]
+      : []),
+    ...(profile.taxNumber
+      ? [
+          {
+            label: 'Steuernummer:',
+            value: profile.taxNumber,
+            y: profile.vatId ? 94 : 110,
+          },
+        ]
+      : []),
+  ]
+  const bankValueX =
+    LEFT +
+    Math.max(
+      ...bankDetails.map(({ label }) => font.widthOfTextAtSize(label, 9)),
+    ) +
+    12
+  for (const { label, value, y: rowY } of bankDetails) {
+    write(label, LEFT, rowY, 9, font, MUTED)
+    write(value, bankValueX, rowY, 9)
   }
-  if (profile.taxNumber) {
-    write('Steuernummer:', LEFT, profile.vatId ? 94 : 110, 9, font, MUTED)
-    write(profile.taxNumber, LEFT + 62, profile.vatId ? 94 : 110, 9)
-  }
+
+  const signatureWidth = Math.max(
+    140,
+    font.widthOfTextAtSize(profile.ownerName, 9),
+  )
+  page.drawLine({
+    start: { x: RIGHT - signatureWidth, y: 64 },
+    end: { x: RIGHT, y: 64 },
+    thickness: 0.6,
+    color: RULE,
+  })
   rightText(profile.ownerName, 43, 9, font)
 
   return pdf.save()

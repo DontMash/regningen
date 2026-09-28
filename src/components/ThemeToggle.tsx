@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { IconSun, IconMoon, IconDeviceDesktop } from '@tabler/icons-react'
 import { useSelector } from '@tanstack/react-store'
 import type { ThemeMode } from '@/lib/theme-store'
 import { themeModeLabels, themeStore } from '@/lib/theme-store'
@@ -41,13 +42,16 @@ export default function ThemeToggle() {
   return (
     <Button
       variant="outline"
+      size="icon"
       type="button"
       disabled={!isHydrated}
       onClick={toggleMode}
       aria-label="Darstellung umschalten"
       title={`Darstellung: ${themeModeLabels[mode]}`}
     >
-      {themeModeLabels[mode]}
+      {mode === 'light' && <IconSun data-icon="inline-start" />}
+      {mode === 'dark' && <IconMoon data-icon="inline-start" />}
+      {mode === 'auto' && <IconDeviceDesktop data-icon="inline-start" />}
     </Button>
   )
 }

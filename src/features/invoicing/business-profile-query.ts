@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BusinessProfileDraft } from './business-profile'
 import {
   BUSINESS_PROFILE_STORAGE_KEY,
+  InvalidBusinessProfileBackupError,
   createBrowserBusinessProfileRepository,
 } from './business-profile-repository'
 import {
@@ -12,7 +13,17 @@ import {
 
 export const BUSINESS_PROFILE_QUERY_KEY = ['business-profile'] as const
 
+const subscribeToHydration = () => () => {}
+const browserReady = () => true
+const serverReady = () => false
+
 export function useBusinessProfile() {
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    browserReady,
+    serverReady,
+  )
+
   return useQuery<BusinessProfileDraft | null>({
     queryKey: BUSINESS_PROFILE_QUERY_KEY,
     queryFn: async () => {
@@ -26,7 +37,7 @@ export function useBusinessProfile() {
         throw error
       }
     },
-    enabled: typeof window !== 'undefined',
+    enabled: hydrated,
     staleTime: Infinity,
     retry: false,
   })
@@ -58,7 +69,11 @@ export function useImportBusinessProfile() {
       clearBusinessProfileStorageFailure()
       queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, profile)
     },
-    onError: markBusinessProfileStorageFailure,
+    onError: (error) => {
+      if (!(error instanceof InvalidBusinessProfileBackupError)) {
+        markBusinessProfileStorageFailure()
+      }
+    },
   })
 }
 

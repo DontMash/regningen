@@ -7,6 +7,7 @@ import {
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import Header from '../components/Header'
+import { Toaster } from '@/components/ui/toast'
 import StoreDevtools from '../lib/theme-store-devtools'
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 import appCss from '../styles.css?url'
@@ -47,14 +48,14 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function NotFound() {
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-12">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-12">
       <h1 className="font-serif text-2xl font-semibold">
         Seite nicht gefunden
       </h1>
       <Link to="/" className="text-primary underline underline-offset-4">
         Zur Startseite
       </Link>
-    </main>
+    </div>
   )
 }
 
@@ -67,7 +68,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="min-h-screen antialiased">
         <Header />
-        {children}
+        <main id="hauptinhalt">{children}</main>
+        <Toaster />
         <TanStackDevtools
           config={{
             position: 'bottom-right',
