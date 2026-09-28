@@ -413,10 +413,10 @@ function InvoicePage() {
   if (!validProfile && !hasInvoiceData(invoice)) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-12">
-        <h1 className="font-serif text-3xl font-semibold">
-          Unternehmensprofil vervollständigen
-        </h1>
-        <p>Richte dein Profil ein, bevor du die erste Rechnung ausfüllst.</p>
+        <h1 className="heading-1">Unternehmensprofil vervollständigen</h1>
+        <p className="paragraph">
+          Richte dein Profil ein, bevor du die erste Rechnung ausfüllst.
+        </p>
         <Link to="/business-profile" className={buttonVariants()}>
           Unternehmensprofil öffnen
         </Link>
@@ -619,10 +619,8 @@ function InvoiceEditor({
       <div className="flex min-w-0 flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <h1 className="font-serif text-3xl font-semibold">
-              Rechnung erstellen
-            </h1>
-            <p className="text-muted-foreground">
+            <h1 className="heading-1">Rechnung erstellen</h1>
+            <p className="paragraph-large text-muted-foreground">
               Angaben eintragen, Beträge prüfen und das fertige PDF sichern.
             </p>
           </div>
@@ -929,7 +927,7 @@ function InvoiceEditor({
           >
             {isGenerating ? 'PDF wird erstellt …' : 'PDF erstellen'}
           </Button>
-          <p className="text-sm text-muted-foreground">
+          <p className="paragraph-small text-muted-foreground">
             Das PDF enthält das gewählte Datum fest. Eine neue Rechnung beginnt
             mit leeren Eingaben. Rechnungseingaben werden nicht gespeichert.
           </p>
@@ -957,7 +955,7 @@ function InvoiceEditor({
               <span>Brutto</span>
               <strong>{totals ? formattedEuro(totals.gross) : '—'}</strong>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="paragraph-small text-muted-foreground">
               Geschäftsangaben werden aus dem lokalen Unternehmensprofil
               übernommen.
             </p>

@@ -21,13 +21,13 @@ export default function Header() {
         <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/"
-            className="shrink-0 font-serif text-lg font-semibold text-foreground no-underline"
+            className="wordmark shrink-0 text-foreground no-underline"
           >
             regningen
           </Link>
           {businessName && (
             <span
-              className="max-w-24 truncate text-sm text-muted-foreground sm:max-w-48"
+              className="paragraph-small max-w-24 truncate text-muted-foreground sm:max-w-48"
               title={businessName}
             >
               {businessName}

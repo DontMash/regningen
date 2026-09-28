@@ -289,10 +289,8 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-10 sm:py-14">
       <div className="flex flex-col gap-2">
-        <h1 className="font-serif text-3xl font-semibold">
-          Unternehmensprofil
-        </h1>
-        <p className="max-w-2xl text-muted-foreground">
+        <h1 className="heading-1">Unternehmensprofil</h1>
+        <p className="paragraph-large max-w-2xl text-muted-foreground">
           Die Angaben werden nur in diesem Browser gespeichert und für deine
           Rechnungen verwendet. Es gibt kein Benutzerkonto und keine
           Rechnungsablage.

@@ -59,10 +59,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 function NotFound() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-12">
-      <h1 className="font-serif text-2xl font-semibold">
-        Seite nicht gefunden
-      </h1>
-      <Link to="/" className="text-primary underline underline-offset-4">
+      <h1 className="heading-1">Seite nicht gefunden</h1>
+      <Link
+        to="/"
+        className="paragraph text-primary underline underline-offset-4"
+      >
         Zur Startseite
       </Link>
     </div>

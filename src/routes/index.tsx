@@ -56,7 +56,7 @@ function Home() {
 
   return (
     <div
-      className="min-h-[calc(100dvh-4rem)] px-4 py-12 text-center text-muted-foreground"
+      className="paragraph min-h-[calc(100dvh-4rem)] px-4 py-12 text-center text-muted-foreground"
       aria-live="polite"
     >
       Unternehmensprofil wird lokal geladen …
