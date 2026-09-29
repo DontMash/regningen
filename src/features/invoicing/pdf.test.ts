@@ -69,4 +69,62 @@ describe('invoice PDF generation', () => {
       'Bitte Beschreibungen kürzen',
     )
   })
+
+  it('omits absent optional profile and invoice details', async () => {
+    const bytes = await createInvoicePdf(
+      {
+        ...profile,
+        serviceDescription: '',
+        phone: '',
+        mobile: '',
+        vatId: '',
+        taxNumber: '12/345/67890',
+      },
+      { ...invoice, company: '', name: 'Max Mustermann', subject: '' },
+    )
+    const pdf = await PDFDocument.load(bytes)
+
+    expect(pdf.getPageCount()).toBe(1)
+    expect(pdf.getAuthor()).toBe(profile.businessName)
+  })
+
+  it('reports oversized business names, service descriptions, addresses, subjects, and positions', async () => {
+    await expect(
+      createInvoicePdf({ ...profile, businessName: 'B'.repeat(300) }, invoice),
+    ).rejects.toThrow('Unternehmensname ist zu lang')
+
+    await expect(
+      createInvoicePdf(
+        { ...profile, serviceDescription: 'Leistung '.repeat(30) },
+        invoice,
+      ),
+    ).rejects.toThrow('Leistungsbeschreibung ist zu lang')
+
+    await expect(
+      createInvoicePdf(
+        { ...profile, street: 'Issuer street '.repeat(80) },
+        { ...invoice, street: 'Recipient street '.repeat(80) },
+      ),
+    ).rejects.toThrow('Anschriften sind zu umfangreich')
+
+    await expect(
+      createInvoicePdf(profile, { ...invoice, subject: 'Betreff '.repeat(80) }),
+    ).rejects.toThrow('Betreff ist zu lang')
+
+    await expect(
+      createInvoicePdf(profile, {
+        ...invoice,
+        items: [{ description: 'Beschreibung'.repeat(40), amount: '10,00' }],
+      }),
+    ).rejects.toThrow('Positionsbeschreibung ist zu lang')
+  })
+
+  it('rejects line items without a positive gross price', async () => {
+    await expect(
+      createInvoicePdf(profile, {
+        ...invoice,
+        items: [{ description: 'Catering', amount: '0' }],
+      }),
+    ).rejects.toThrow('alle Positionsbeschreibungen und Bruttopreise')
+  })
 })

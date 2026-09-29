@@ -108,6 +108,14 @@ test('cycles and persists the selected theme mode', async ({ page }) => {
     page.getByRole('button', { name: 'Darstellung umschalten' }),
   ).toHaveAttribute('title', 'Darstellung: Dunkel')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+
+  await page.getByRole('button', { name: 'Darstellung umschalten' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Darstellung umschalten' }),
+  ).toHaveAttribute('title', 'Darstellung: System')
+  expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('auto')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })
 
 test('follows the operating-system theme in system mode', async ({ page }) => {
@@ -118,6 +126,20 @@ test('follows the operating-system theme in system mode', async ({ page }) => {
     page.getByRole('button', { name: 'Darstellung umschalten' }),
   ).toHaveAttribute('title', 'Darstellung: System')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
+test('recovers from an unknown route to first-time profile setup', async ({
+  page,
+}) => {
+  await page.goto('/not-a-route')
+  await expect(
+    page.getByRole('heading', { name: 'Seite nicht gefunden' }),
+  ).toBeVisible()
+  await page.getByRole('link', { name: 'Zur Startseite' }).click()
+  await expect(page).toHaveURL(/\/business-profile$/)
+  await expect(
+    page.getByRole('heading', { name: 'Unternehmensprofil' }),
+  ).toBeVisible()
 })
 
 test('updates when the operating-system theme changes in system mode', async ({

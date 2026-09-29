@@ -1,3 +1,14 @@
+## Verification
+
+After any code-related changes, run these package scripts and require each to pass before considering the work complete:
+
+- `pnpm format`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm build`
+- `pnpm test:coverage`
+- `pnpm test:e2e`
+
 ## Agent skills
 
 ### Issue tracker
