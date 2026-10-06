@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import type { ComponentProps } from 'react'
+import { cn } from 'cn'
 import { useTable } from '@tanstack/react-table'
 import type { ColumnDef } from '@tanstack/react-table'
 import { de } from 'date-fns/locale'
@@ -39,13 +41,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+  FormErrorSlot,
+  FormInput,
+  RequiredAlternativeFields,
+  RequiredMark,
+} from './FormFields'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { businessProfileSchema } from './business-profile'
 import type { BusinessProfileDraft } from './business-profile'
@@ -81,6 +83,10 @@ function localDate() {
   return local.toISOString().slice(0, 10)
 }
 
+function hasInvoicePositionData(position: InvoiceLineDraft) {
+  return Boolean(position.description.trim() || position.amount.trim())
+}
+
 function hasInvoiceData(invoice: InvoiceDraft) {
   return Boolean(
     invoice.number.trim() ||
@@ -90,7 +96,7 @@ function hasInvoiceData(invoice: InvoiceDraft) {
     invoice.street.trim() ||
     invoice.postalCode.trim() ||
     invoice.town.trim() ||
-    invoice.items.some((item) => item.description.trim() || item.amount.trim()),
+    invoice.items.some(hasInvoicePositionData),
   )
 }
 
@@ -126,64 +132,8 @@ function savePdf(bytes: Uint8Array, invoice: InvoiceDraft) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
-function InvoiceInput({
-  id,
-  label,
-  value,
-  onChange,
-  error,
-  hint,
-  hideLabel = false,
-  onBlur,
-  type = 'text',
-  required = false,
-  maxLength,
-  autoComplete,
-}: {
-  id: string
-  label: string
-  value: string
-  onChange: (value: string) => void
-  error?: string
-  hint?: string
-  hideLabel?: boolean
-  onBlur?: () => void
-  type?: string
-  required?: boolean
-  maxLength?: number
-  autoComplete?: string
-}) {
-  return (
-    <Field data-invalid={Boolean(error)}>
-      {hideLabel ? (
-        <FieldLabel htmlFor={id} className="sr-only">
-          {label}
-        </FieldLabel>
-      ) : (
-        <div className="flex items-center gap-1">
-          <FieldLabel htmlFor={id}>
-            {label}
-            {required && <span aria-hidden="true"> *</span>}
-          </FieldLabel>
-          {hint && <FieldHint label={label}>{hint}</FieldHint>}
-        </div>
-      )}
-      <Input
-        id={id}
-        name={id}
-        type={type}
-        value={value}
-        required={required}
-        maxLength={maxLength}
-        autoComplete={autoComplete}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? `${id}-error` : undefined}
-        onBlur={onBlur}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      />
-      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
-    </Field>
-  )
+function InvoiceInput(props: ComponentProps<typeof FormInput>) {
+  return <FormInput form="invoice-form" {...props} />
 }
 
 type InvoicePositionEditor = {
@@ -219,6 +169,7 @@ function DescriptionCell({
       id={`item-description-${index}`}
       label={`Beschreibung Position ${index + 1}`}
       hideLabel
+      required={hasInvoicePositionData(item)}
       value={item.description}
       onChange={(value) => updateItem(index, 'description', value)}
       onBlur={() => touch(`items.${index}.description`)}
@@ -241,6 +192,7 @@ function AmountCell({
       id={`item-amount-${index}`}
       label={`Brutto in Euro Position ${index + 1}`}
       hideLabel
+      required={hasInvoicePositionData(item)}
       value={item.amount}
       onChange={(value) => updateItem(index, 'amount', value)}
       onBlur={() => touch(`items.${index}.amount`)}
@@ -268,7 +220,12 @@ const invoicePositionColumns: ColumnDef<{}, InvoiceLineDraft>[] = [
   { id: 'position', header: 'Nr.', cell: ({ row }) => row.index + 1 },
   {
     accessorKey: 'description',
-    header: 'Beschreibung',
+    header: () => (
+      <>
+        Beschreibung
+        <RequiredMark />
+      </>
+    ),
     cell: ({ row }) => (
       <DescriptionCell index={row.index} item={row.original} />
     ),
@@ -277,7 +234,8 @@ const invoicePositionColumns: ColumnDef<{}, InvoiceLineDraft>[] = [
     accessorKey: 'amount',
     header: () => (
       <div className="flex items-center gap-1">
-        Brutto in Euro{' '}
+        Brutto in Euro
+        <RequiredMark />
         <FieldHint label="Brutto in Euro">
           Positiver Bruttopreis in Euro, z. B. 107,00.
         </FieldHint>
@@ -310,17 +268,23 @@ function InvoiceDateField({
 
   return (
     <Field data-invalid={Boolean(error)}>
-      <FieldLabel id="invoice-date-label">Datum *</FieldLabel>
+      <FieldLabel id="invoice-date-label" className="min-h-6">
+        Datum
+        <RequiredMark />
+      </FieldLabel>
+      <span id="invoice-date-required" className="sr-only">
+        Pflichtangabe.
+      </span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
-          render={
-            <Button
-              type="button"
-              variant="outline"
-              aria-labelledby="invoice-date-label"
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? 'invoice-date-error' : undefined}
-            />
+          type="button"
+          className="form-input-trigger"
+          aria-labelledby="invoice-date-label"
+          aria-invalid={Boolean(error)}
+          aria-describedby={
+            error
+              ? 'invoice-date-required invoice-date-error'
+              : 'invoice-date-required'
           }
         >
           <IconCalendar aria-hidden="true" data-icon="inline-start" />
@@ -349,7 +313,7 @@ function InvoiceDateField({
           />
         </PopoverContent>
       </Popover>
-      {error && <FieldError id="invoice-date-error">{error}</FieldError>}
+      <FormErrorSlot id="invoice-date-error" error={error} />
     </Field>
   )
 }
@@ -448,9 +412,7 @@ function InvoiceEditor({
     description: '',
     amount: '',
   })
-  const [newItemTouched, setNewItemTouched] = useState<Set<string>>(
-    () => new Set(),
-  )
+  const [newItemSubmitted, setNewItemSubmitted] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [blocker, setBlocker] = useState<
@@ -528,7 +490,7 @@ function InvoiceEditor({
   }
 
   function addItem() {
-    setNewItemTouched(new Set(['description', 'amount']))
+    setNewItemSubmitted(true)
     if (
       form.state.values.items.length >= 16 ||
       Boolean(newItemErrors.description || newItemErrors.amount)
@@ -538,7 +500,7 @@ function InvoiceEditor({
     form.setFieldValue('items', items)
     invoiceDraftStore.setState((current) => ({ ...current, items }))
     setNewItem({ description: '', amount: '' })
-    setNewItemTouched(new Set())
+    setNewItemSubmitted(false)
   }
 
   function removeItem(index: number) {
@@ -581,7 +543,7 @@ function InvoiceEditor({
     invoiceDraftStore.setState(() => freshInvoice)
     setTouched(new Set())
     setNewItem({ description: '', amount: '' })
-    setNewItemTouched(new Set())
+    setNewItemSubmitted(false)
     setConfirmReset(false)
   }
 
@@ -590,6 +552,12 @@ function InvoiceEditor({
   const errors = Object.fromEntries(
     Object.entries(validationErrors).filter(([name]) => touched.has(name)),
   )
+  const recipientMissing =
+    !currentValues.company.trim() && !currentValues.name.trim()
+  const recipientError =
+    recipientMissing && (touched.has('company') || touched.has('name'))
+      ? validationErrors.company
+      : undefined
   const validInvoice = Object.keys(validationErrors).length === 0
   const newAmount = parseEuroAmount(newItem.amount)
   const newItemErrors = {
@@ -607,7 +575,7 @@ function InvoiceEditor({
     columns: invoicePositionColumns,
   })
   const amounts = currentValues.items
-    .filter((item) => item.description.trim() || item.amount.trim())
+    .filter(hasInvoicePositionData)
     .map((item) => parseEuroAmount(item.amount))
   const totals =
     amounts.length && amounts.every((amount) => amount !== null)
@@ -684,18 +652,13 @@ function InvoiceEditor({
           </AlertDialogContent>
         </AlertDialog>
 
-        <form
-          noValidate
-          className="flex flex-col gap-5"
-          onSubmit={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            void form.handleSubmit()
-          }}
-        >
+        <div className="flex flex-col gap-5">
           <Card>
             <CardHeader>
               <CardTitle>Rechnungsangaben</CardTitle>
+              <CardDescription>
+                Pflichtangaben sind mit * markiert.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <FieldGroup className="grid gap-5 md:grid-cols-2">
@@ -739,26 +702,32 @@ function InvoiceEditor({
             </CardHeader>
             <CardContent>
               <FieldGroup className="grid gap-5 md:grid-cols-2">
-                <InvoiceInput
-                  id="recipient-company"
-                  label="Unternehmen des Empfängers"
-                  value={currentValues.company}
-                  onChange={(value) => updateField('company', value)}
-                  error={errors.company}
-                  onBlur={() => touch('company')}
-                  maxLength={70}
-                  autoComplete="organization"
-                />
-                <InvoiceInput
-                  id="recipient-name"
-                  label="Name / z. Hd."
-                  value={currentValues.name}
-                  onChange={(value) => updateField('name', value)}
-                  error={errors.name}
-                  onBlur={() => touch('name')}
-                  maxLength={70}
-                  autoComplete="name"
-                />
+                <RequiredAlternativeFields
+                  id="recipient-identity"
+                  label="Unternehmen oder Name"
+                  error={recipientError}
+                >
+                  <InvoiceInput
+                    id="recipient-company"
+                    label="Unternehmen des Empfängers"
+                    value={currentValues.company}
+                    onChange={(value) => updateField('company', value)}
+                    error={recipientMissing ? undefined : errors.company}
+                    onBlur={() => touch('company')}
+                    maxLength={70}
+                    autoComplete="organization"
+                  />
+                  <InvoiceInput
+                    id="recipient-name"
+                    label="Name / z. Hd."
+                    value={currentValues.name}
+                    onChange={(value) => updateField('name', value)}
+                    error={errors.name}
+                    onBlur={() => touch('name')}
+                    maxLength={70}
+                    autoComplete="name"
+                  />
+                </RequiredAlternativeFields>
                 <InvoiceInput
                   id="recipient-street"
                   label="Straße und Hausnummer"
@@ -798,9 +767,14 @@ function InvoiceEditor({
 
           <Card>
             <CardHeader>
-              <CardTitle>Waren & Dienstleistungen</CardTitle>
+              <CardTitle>
+                Waren & Dienstleistungen
+                <RequiredMark />
+              </CardTitle>
               <CardDescription>
                 Preise einschließlich MwSt. eingeben. Maximal 16 Positionen.
+                Mindestens eine vollständige Position erforderlich. * gilt pro
+                Position; leere Zeilen werden nicht berücksichtigt.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
@@ -808,12 +782,22 @@ function InvoiceEditor({
                 value={{ updateItem, touch, removeItem, errors }}
               >
                 <FieldGroup className="gap-0">
-                  <Table aria-label="Rechnungspositionen">
+                  <Table
+                    aria-label="Rechnungspositionen"
+                    className="min-w-[34rem] table-fixed"
+                  >
                     <TableHeader>
                       {table.getHeaderGroups().map((group) => (
                         <TableRow key={group.id}>
                           {group.headers.map((header) => (
-                            <TableHead key={header.id}>
+                            <TableHead
+                              key={header.id}
+                              className={cn(
+                                header.column.id === 'position' && 'w-12',
+                                header.column.id === 'amount' && 'w-48',
+                                header.column.id === 'actions' && 'w-20',
+                              )}
+                            >
                               {!header.isPlaceholder && (
                                 <table.FlexRender header={header} />
                               )}
@@ -847,60 +831,72 @@ function InvoiceEditor({
                   </Table>
                 </FieldGroup>
               </InvoicePositionEditorContext.Provider>
-              <FieldGroup className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-end">
-                <InvoiceInput
-                  id="new-item-description"
-                  label="Beschreibung"
-                  value={newItem.description}
-                  maxLength={85}
-                  onChange={(description) =>
-                    setNewItem((current) => ({ ...current, description }))
-                  }
-                  onBlur={() =>
-                    setNewItemTouched((current) =>
-                      new Set(current).add('description'),
-                    )
-                  }
-                  error={
-                    newItemTouched.has('description')
-                      ? newItemErrors.description
-                      : undefined
-                  }
-                />
-                <InvoiceInput
-                  id="new-item-amount"
-                  label="Brutto in Euro"
-                  hint="Positiver Bruttopreis in Euro, z. B. 107,00."
-                  value={newItem.amount}
-                  onChange={(amount) =>
-                    setNewItem((current) => ({ ...current, amount }))
-                  }
-                  onBlur={() =>
-                    setNewItemTouched((current) =>
-                      new Set(current).add('amount'),
-                    )
-                  }
-                  error={
-                    newItemTouched.has('amount')
-                      ? newItemErrors.amount
-                      : undefined
-                  }
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={currentValues.items.length >= 16}
-                  onClick={addItem}
-                >
-                  <IconPlus data-icon="inline-start" />
-                  Position hinzufügen
-                </Button>
-              </FieldGroup>
+              <form
+                id="new-position-form"
+                aria-label="Position hinzufügen"
+                noValidate
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  addItem()
+                }}
+              >
+                <FieldGroup className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-start">
+                  <InvoiceInput
+                    id="new-item-description"
+                    label="Beschreibung"
+                    required
+                    value={newItem.description}
+                    maxLength={85}
+                    form="new-position-form"
+                    onChange={(description) =>
+                      setNewItem((current) => ({ ...current, description }))
+                    }
+                    error={
+                      newItemSubmitted ? newItemErrors.description : undefined
+                    }
+                  />
+                  <InvoiceInput
+                    id="new-item-amount"
+                    label="Brutto in Euro"
+                    required
+                    hint="Positiver Bruttopreis in Euro, z. B. 107,00."
+                    value={newItem.amount}
+                    form="new-position-form"
+                    onChange={(amount) =>
+                      setNewItem((current) => ({ ...current, amount }))
+                    }
+                    error={newItemSubmitted ? newItemErrors.amount : undefined}
+                  />
+                  <Button
+                    type="submit"
+                    form="new-position-form"
+                    className="md:mt-9"
+                    variant="outline"
+                    disabled={currentValues.items.length >= 16}
+                  >
+                    <IconPlus data-icon="inline-start" />
+                    Position hinzufügen
+                  </Button>
+                </FieldGroup>
+              </form>
               <Field data-invalid={Boolean(errors.rate)}>
-                <FieldLabel id="vat-rate-label">MwSt.-Satz</FieldLabel>
+                <FieldLabel id="vat-rate-label">
+                  MwSt.-Satz
+                  <RequiredMark />
+                </FieldLabel>
+                <span id="vat-rate-required" className="sr-only">
+                  Pflichtangabe.
+                </span>
                 <ToggleGroup
                   value={[String(currentValues.rate)]}
                   aria-labelledby="vat-rate-label"
+                  aria-describedby={
+                    errors.rate
+                      ? 'vat-rate-required vat-rate-error'
+                      : 'vat-rate-required'
+                  }
+                  aria-invalid={Boolean(errors.rate)}
                   onValueChange={(selected) => {
                     const value = selected[0]
                     if (value === '7' || value === '19') {
@@ -911,27 +907,40 @@ function InvoiceEditor({
                   <ToggleGroupItem value="7">7 %</ToggleGroupItem>
                   <ToggleGroupItem value="19">19 %</ToggleGroupItem>
                 </ToggleGroup>
+                <FormErrorSlot id="vat-rate-error" error={errors.rate} />
               </Field>
             </CardContent>
           </Card>
 
-          <Button
-            type="submit"
-            disabled={
-              !validInvoice ||
-              isGenerating ||
-              profileChanged ||
-              !profile ||
-              Boolean(storageError)
-            }
+          <form
+            id="invoice-form"
+            noValidate
+            className="flex flex-col gap-5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void form.handleSubmit()
+            }}
           >
-            {isGenerating ? 'PDF wird erstellt …' : 'PDF erstellen'}
-          </Button>
-          <p className="paragraph-small text-muted-foreground">
-            Das PDF enthält das gewählte Datum fest. Eine neue Rechnung beginnt
-            mit leeren Eingaben. Rechnungseingaben werden nicht gespeichert.
-          </p>
-        </form>
+            <Button
+              type="submit"
+              disabled={
+                !validInvoice ||
+                isGenerating ||
+                profileChanged ||
+                !profile ||
+                Boolean(storageError)
+              }
+            >
+              {isGenerating ? 'PDF wird erstellt …' : 'PDF erstellen'}
+            </Button>
+            <p className="paragraph-small text-muted-foreground">
+              Das PDF enthält das gewählte Datum fest. Eine neue Rechnung
+              beginnt mit leeren Eingaben. Rechnungseingaben werden nicht
+              gespeichert.
+            </p>
+          </form>
+        </div>
       </div>
 
       <aside className="lg:sticky lg:top-6 lg:self-start">

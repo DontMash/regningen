@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 const standardFontDataUrl = `${resolve('node_modules/pdfjs-dist/standard_fonts')}/`
 
@@ -47,6 +47,284 @@ async function installCompleteBusinessProfile(page: Page) {
     )
   })
 }
+
+async function documentBox(locator: Locator) {
+  return locator.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    let x = box.x + window.scrollX
+    let y = box.y + window.scrollY
+    // Compare layout, not scrolling caused by focusing off-screen table inputs.
+    for (
+      let parent = element.parentElement;
+      parent;
+      parent = parent.parentElement
+    ) {
+      if (parent === document.scrollingElement) continue
+      x += parent.scrollLeft
+      y += parent.scrollTop
+    }
+    return { x, y, width: box.width, height: box.height }
+  })
+}
+
+for (const width of [320, 768, 1024, 1440]) {
+  test(`keeps form controls and position rows stable while errors change at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await installCompleteBusinessProfile(page)
+    await page.goto('/invoice')
+    await expect(
+      page.getByRole('heading', { name: 'Rechnung erstellen' }),
+    ).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    const subject = page.getByRole('textbox', { name: 'Betreff', exact: true })
+    const subjectBox = await documentBox(subject)
+    await page.getByLabel('Rechnungsnummer').focus()
+    await page.getByLabel('Rechnungsnummer').blur()
+    await expect(page.getByText('Rechnungsnummer fehlt.')).toBeVisible()
+    expect(await documentBox(subject)).toEqual(subjectBox)
+    await page.getByLabel('Rechnungsnummer').fill('layout-001')
+    expect(await documentBox(subject)).toEqual(subjectBox)
+
+    const street = page.getByRole('textbox', {
+      name: 'Straße und Hausnummer',
+      exact: true,
+    })
+    const streetBox = await documentBox(street)
+    await page.getByLabel('Name / z. Hd.').focus()
+    await page.getByLabel('Name / z. Hd.').blur()
+    await expect(
+      page.getByText('Unternehmen oder Name des Empfängers angeben.'),
+    ).toBeVisible()
+    expect(await documentBox(street)).toEqual(streetBox)
+    await page.getByLabel('Name / z. Hd.').fill('Max Mustermann')
+    expect(await documentBox(street)).toEqual(streetBox)
+
+    const description = page.getByRole('textbox', {
+      name: 'Beschreibung',
+      exact: true,
+    })
+    const amount = page.getByRole('textbox', {
+      name: 'Brutto in Euro',
+      exact: true,
+    })
+    const addButton = page.getByRole('button', {
+      name: 'Position hinzufügen',
+      exact: true,
+    })
+    const before = await Promise.all(
+      [description, amount, addButton].map(documentBox),
+    )
+    await addButton.click()
+    await expect(
+      page.getByText('Einen positiven Bruttopreis eingeben.'),
+    ).toBeVisible()
+    expect(
+      await Promise.all([description, amount, addButton].map(documentBox)),
+    ).toEqual(before)
+    if (width >= 768) {
+      expect(before[0].y).toBe(before[1].y)
+      expect(before[1].y).toBe(before[2].y)
+    }
+    await addInvoicePosition(page, 'Catering', '107,00')
+    await addInvoicePosition(page, 'Reinigung', '50,00')
+    const firstAmount = page.getByRole('textbox', {
+      name: 'Brutto in Euro Position 1',
+    })
+    const secondDescription = page.getByRole('textbox', {
+      name: 'Beschreibung Position 2',
+    })
+    const rowBefore = await Promise.all(
+      [firstAmount, secondDescription, addButton].map(documentBox),
+    )
+    await firstAmount.fill('invalid')
+    await firstAmount.blur()
+    await expect(
+      page.getByText('Einen positiven Bruttopreis eingeben.'),
+    ).toBeVisible()
+    expect(
+      await Promise.all(
+        [firstAmount, secondDescription, addButton].map(documentBox),
+      ),
+    ).toEqual(rowBefore)
+    await firstAmount.fill('107,00')
+    expect(
+      await Promise.all(
+        [firstAmount, secondDescription, addButton].map(documentBox),
+      ),
+    ).toEqual(rowBefore)
+
+    await page.goto('/business-profile')
+    await expect(
+      page.getByRole('heading', { name: 'Unternehmensprofil', exact: true }),
+    ).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    const owner = page.getByRole('textbox', { name: 'Inhaber/in' })
+    const saveButton = page.getByRole('button', { name: 'Profil speichern' })
+    const profileBefore = await Promise.all(
+      [owner, saveButton].map(documentBox),
+    )
+    await owner.fill('')
+    await owner.blur()
+    await expect(
+      page.getByText('Name der Inhaberin oder des Inhabers fehlt.'),
+    ).toBeVisible()
+    expect(await Promise.all([owner, saveButton].map(documentBox))).toEqual(
+      profileBefore,
+    )
+    await owner.fill('Erika Beispiel')
+    expect(await Promise.all([owner, saveButton].map(documentBox))).toEqual(
+      profileBefore,
+    )
+    const taxNumber = page.getByRole('textbox', { name: 'Steuernummer' })
+    const taxBefore = await Promise.all(
+      [taxNumber, saveButton].map(documentBox),
+    )
+    await page.getByRole('textbox', { name: 'USt-IdNr.' }).fill('DE123')
+    await expect(
+      page.getByText(
+        'Eine deutsche Umsatzsteuer-ID beginnt mit DE und hat neun Ziffern.',
+      ),
+    ).toBeVisible()
+    expect(await Promise.all([taxNumber, saveButton].map(documentBox))).toEqual(
+      taxBefore,
+    )
+    await page.getByRole('textbox', { name: 'USt-IdNr.' }).fill('')
+    await expect(
+      page.getByText('Umsatzsteuer-ID oder Steuernummer angeben.'),
+    ).toBeVisible()
+    expect(await Promise.all([taxNumber, saveButton].map(documentBox))).toEqual(
+      taxBefore,
+    )
+    await taxNumber.fill('12/345/67890')
+    expect(await Promise.all([taxNumber, saveButton].map(documentBox))).toEqual(
+      taxBefore,
+    )
+  })
+}
+
+for (const width of [375, 1024]) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`styles the date picker like an input in ${theme} mode at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.emulateMedia({ colorScheme: theme })
+      await installCompleteBusinessProfile(page)
+      await page.goto('/invoice')
+      const number = page.getByRole('textbox', {
+        name: 'Rechnungsnummer',
+        exact: true,
+      })
+      const date = page.getByRole('button', { name: /^Datum/ })
+      await expect(number).toBeVisible()
+      await page.evaluate(() => document.fonts.ready)
+      const appearance = (locator: Locator) =>
+        locator.evaluate((element) => {
+          const style = getComputedStyle(element)
+          return Object.fromEntries(
+            [
+              'backgroundColor',
+              'borderColor',
+              'borderRadius',
+              'borderWidth',
+              'height',
+              'paddingLeft',
+              'paddingRight',
+              'paddingTop',
+              'paddingBottom',
+              'fontFamily',
+              'fontSize',
+              'fontWeight',
+              'lineHeight',
+              'textAlign',
+              'boxShadow',
+            ].map((property) => [
+              property,
+              style[property as keyof CSSStyleDeclaration],
+            ]),
+          )
+        })
+      expect(await appearance(date)).toEqual(await appearance(number))
+      if (width >= 768)
+        expect((await documentBox(date)).y).toBe((await documentBox(number)).y)
+      await date.click()
+      const calendar = page.getByRole('grid')
+      await expect(calendar).toBeVisible()
+      await expect(
+        calendar.getByRole('button', { name: /\d/ }).first(),
+      ).toBeVisible()
+    })
+  }
+}
+
+test('submits new positions with Enter without downloading or validating the invoice form', async ({
+  page,
+}) => {
+  await installCompleteBusinessProfile(page)
+  await page.goto('/invoice')
+  await page.getByLabel('Rechnungsnummer').fill('keyboard-001')
+  await page.getByLabel('Name / z. Hd.').fill('Max Mustermann')
+  await page.getByLabel('Straße und Hausnummer').fill('Musterstraße 1')
+  await page.getByRole('textbox', { name: 'PLZ', exact: true }).fill('20095')
+  await page.getByRole('textbox', { name: 'Ort', exact: true }).fill('Hamburg')
+  await addInvoicePosition(page, 'Catering', '107,00')
+  const pdfButton = page.getByRole('button', { name: 'PDF erstellen' })
+  await expect(pdfButton).toBeEnabled()
+  const downloads: string[] = []
+  page.on('download', (download) =>
+    downloads.push(download.suggestedFilename()),
+  )
+  const description = page.getByRole('textbox', {
+    name: 'Beschreibung',
+    exact: true,
+  })
+  const amount = page.getByRole('textbox', {
+    name: 'Brutto in Euro',
+    exact: true,
+  })
+
+  await amount.fill('invalid')
+  await amount.blur()
+  await expect(
+    page.getByText('Einen positiven Bruttopreis eingeben.'),
+  ).toHaveCount(0)
+  await amount.press('Enter')
+  await expect(page.getByText('Positionsbeschreibung fehlt.')).toBeVisible()
+  await expect(
+    page.getByText('Einen positiven Bruttopreis eingeben.'),
+  ).toBeVisible()
+  await expect(pdfButton).toBeEnabled()
+  await description.fill('Reinigung')
+  await amount.fill('50,00')
+  await amount.press('Enter')
+  await expect(page.getByLabel('Beschreibung Position 2')).toHaveValue(
+    'Reinigung',
+  )
+  await expect(description).toHaveValue('')
+  await expect(amount).toHaveValue('')
+  await description.fill('Service')
+  await amount.fill('25,00')
+  await description.press('Enter')
+  await expect(page.getByLabel('Beschreibung Position 3')).toHaveValue(
+    'Service',
+  )
+  await expect(page.getByText('Positionsbeschreibung fehlt.')).toHaveCount(0)
+  await expect(
+    page.getByText('Einen positiven Bruttopreis eingeben.'),
+  ).toHaveCount(0)
+  expect(downloads).toEqual([])
+
+  await amount.fill('invalid')
+  const downloadPromise = page.waitForEvent('download')
+  await pdfButton.click()
+  await downloadPromise
+  expect(downloads).toHaveLength(1)
+  await expect(
+    page.getByText('Einen positiven Bruttopreis eingeben.'),
+  ).toHaveCount(0)
+})
 
 test('shows an error instead of claiming the profile was saved when storage fails', async ({
   page,
@@ -625,6 +903,12 @@ test('shows validation feedback for a missing recipient and an invalid line amou
   await page
     .getByRole('textbox', { name: 'Brutto in Euro', exact: true })
     .blur()
+  await expect(
+    page.getByText('Einen positiven Bruttopreis eingeben.'),
+  ).toHaveCount(0)
+  await page
+    .getByRole('button', { name: 'Position hinzufügen', exact: true })
+    .click()
   await expect(
     page.getByText('Einen positiven Bruttopreis eingeben.'),
   ).toBeVisible()

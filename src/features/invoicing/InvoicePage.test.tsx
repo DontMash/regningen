@@ -201,6 +201,142 @@ describe('invoice editor', () => {
     ).toBeVisible()
   })
 
+  it('validates new positions only on their own submission and resets feedback after adding', async () => {
+    const user = userEvent.setup()
+    saveBusinessProfile(completeBusinessProfile)
+    await renderAtRoute('/invoice', InvoicePage)
+    await screen.findByRole('heading', { name: 'Rechnung erstellen' })
+    const description = screen.getByRole('textbox', { name: /^Beschreibung$/ })
+    const amount = screen.getByRole('textbox', { name: /^Brutto in Euro$/ })
+
+    await user.click(description)
+    await user.tab()
+    await user.type(amount, 'invalid')
+    await user.tab()
+    expect(
+      screen.queryByText('Positionsbeschreibung fehlt.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Einen positiven Bruttopreis eingeben.'),
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Position hinzufügen' }),
+    )
+    expect(screen.getByText('Positionsbeschreibung fehlt.')).toBeVisible()
+    expect(
+      screen.getByText('Einen positiven Bruttopreis eingeben.'),
+    ).toBeVisible()
+    await user.type(description, 'Catering')
+    expect(
+      screen.queryByText('Positionsbeschreibung fehlt.'),
+    ).not.toBeInTheDocument()
+    await user.clear(amount)
+    await user.type(amount, '107,00')
+    expect(
+      screen.queryByText('Einen positiven Bruttopreis eingeben.'),
+    ).not.toBeInTheDocument()
+    await user.keyboard('{Enter}')
+
+    expect(
+      screen.getByRole('textbox', { name: 'Beschreibung Position 1' }),
+    ).toHaveValue('Catering')
+    expect(description).toHaveValue('')
+    expect(amount).toHaveValue('')
+    await user.click(description)
+    await user.tab()
+    expect(
+      screen.queryByText('Positionsbeschreibung fehlt.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Einen positiven Bruttopreis eingeben.'),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('PDF wurde erstellt')).not.toBeInTheDocument()
+  })
+
+  it('marks recipient identity as an either/or requirement and shows feedback after touching either input', async () => {
+    const user = userEvent.setup()
+    saveBusinessProfile(completeBusinessProfile)
+    await renderAtRoute('/invoice', InvoicePage)
+    await screen.findByRole('heading', { name: 'Rechnung erstellen' })
+    const identity = screen.getByRole('group', {
+      name: /Unternehmen oder Name.*mindestens eine Angabe/,
+    })
+    const company = within(identity).getByRole('textbox', {
+      name: 'Unternehmen des Empfängers',
+    })
+    const name = within(identity).getByRole('textbox', {
+      name: 'Name / z. Hd.',
+    })
+    expect(company).not.toBeRequired()
+    expect(name).not.toBeRequired()
+    expect(within(identity).queryByRole('alert')).not.toBeInTheDocument()
+
+    await user.click(name)
+    await user.tab()
+    const message = 'Unternehmen oder Name des Empfängers angeben.'
+    expect(within(identity).getByText(message)).toBeVisible()
+    expect(company).toHaveAccessibleDescription(message)
+    expect(name).toHaveAccessibleDescription(message)
+    expect(company).toHaveAttribute('aria-invalid', 'true')
+    expect(name).toHaveAttribute('aria-invalid', 'true')
+    await user.type(name, 'Max Mustermann')
+    expect(within(identity).queryByRole('alert')).not.toBeInTheDocument()
+    expect(company).toHaveAttribute('aria-invalid', 'false')
+  })
+
+  it('marks mandatory invoice and position controls without marking optional fields required', async () => {
+    const user = userEvent.setup()
+    saveBusinessProfile(completeBusinessProfile)
+    await renderAtRoute('/invoice', InvoicePage)
+    await screen.findByRole('heading', { name: 'Rechnung erstellen' })
+    for (const label of [
+      'Rechnungsnummer',
+      'Straße und Hausnummer',
+      'PLZ',
+      'Ort',
+      'Beschreibung',
+      'Brutto in Euro',
+    ]) {
+      expect(screen.getByRole('textbox', { name: label })).toBeRequired()
+      expect(screen.getByText(label, { selector: 'label' })).toHaveTextContent(
+        /\*/,
+      )
+    }
+    for (const label of [
+      'Betreff',
+      'Unternehmen des Empfängers',
+      'Name / z. Hd.',
+    ]) {
+      expect(screen.getByRole('textbox', { name: label })).not.toBeRequired()
+      expect(
+        screen.getByText(label, { selector: 'label' }),
+      ).not.toHaveTextContent(/\*/)
+    }
+    expect(
+      screen.getByRole('button', { name: 'Datum' }),
+    ).toHaveAccessibleDescription('Pflichtangabe.')
+    expect(
+      screen.getByRole('group', { name: 'MwSt.-Satz' }),
+    ).toHaveAccessibleDescription('Pflichtangabe.')
+    expect(
+      screen.getByText('MwSt.-Satz', { selector: 'label' }),
+    ).toHaveTextContent(/\*/)
+    expect(
+      screen.getByRole('columnheader', { name: 'Beschreibung' }),
+    ).toHaveTextContent(/\*/)
+    expect(
+      screen.getByRole('columnheader', { name: 'Brutto in Euro' }),
+    ).toHaveTextContent(/\*/)
+    await addItem(user, 'Catering', '107,00')
+    expect(
+      screen.getByRole('textbox', { name: 'Beschreibung Position 1' }),
+    ).toBeRequired()
+    expect(
+      screen.getByRole('textbox', { name: 'Brutto in Euro Position 1' }),
+    ).toBeRequired()
+  })
+
   it('selects a date from the calendar and cancels resetting invoice data', async () => {
     const user = userEvent.setup()
     saveBusinessProfile(completeBusinessProfile)

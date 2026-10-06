@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { ComponentProps } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { useSelector } from '@tanstack/react-store'
 import { useNavigate } from '@tanstack/react-router'
@@ -12,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { FieldHint } from '@/components/FieldHint'
+import { FormInput, RequiredAlternativeFields } from './FormFields'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -21,12 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
 import { businessProfileSchema, emptyBusinessProfile } from './business-profile'
@@ -52,59 +48,18 @@ import {
 type ProfileFieldName = keyof BusinessProfileDraft
 
 function ProfileInput({
-  id,
-  label,
-  value,
-  onChange,
-  onBlur,
-  error,
-  required = false,
-  type = 'text',
   hint,
-  autoComplete,
   maxLength,
-}: {
-  id: ProfileFieldName
-  label: string
-  value: string
-  onChange: (value: string) => void
-  onBlur: () => void
-  error?: string
-  required?: boolean
-  type?: string
-  hint?: string
-  autoComplete?: string
-  maxLength?: number
-}) {
+  ...props
+}: Omit<ComponentProps<typeof FormInput>, 'id'> & { id: ProfileFieldName }) {
+  const inputHint = [
+    hint,
+    maxLength ? `Maximal ${maxLength} Zeichen.` : undefined,
+  ]
+    .filter(Boolean)
+    .join(' ')
   return (
-    <Field data-invalid={Boolean(error)}>
-      <div className="flex items-center gap-1">
-        <FieldLabel htmlFor={id}>
-          {label}
-          {required && <span aria-hidden="true"> *</span>}
-        </FieldLabel>
-        {(maxLength || hint) && (
-          <FieldHint label={label}>
-            {hint ? `${hint} ` : ''}
-            {maxLength ? `Maximal ${maxLength} Zeichen.` : ''}
-          </FieldHint>
-        )}
-      </div>
-      <Input
-        id={id}
-        name={id}
-        type={type}
-        value={value}
-        required={required}
-        maxLength={maxLength}
-        autoComplete={autoComplete}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? `${id}-error` : undefined}
-        onBlur={onBlur}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      />
-      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
-    </Field>
+    <FormInput {...props} maxLength={maxLength} hint={inputHint || undefined} />
   )
 }
 
@@ -320,9 +275,18 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
               className="min-w-0"
             >
               <form.Subscribe
-                selector={(state) => getProfileErrors(state.values)}
+                selector={(state) => ({
+                  errors: getProfileErrors(state.values),
+                  taxIdentifiersMissing:
+                    !state.values.vatId.trim() &&
+                    !state.values.taxNumber.trim(),
+                  taxIdentifiersTouched: Boolean(
+                    state.fieldMeta.vatId?.isTouched ||
+                    state.fieldMeta.taxNumber?.isTouched,
+                  ),
+                })}
               >
-                {(errors) => (
+                {({ errors, taxIdentifiersMissing, taxIdentifiersTouched }) => (
                   <FieldGroup className="grid gap-5 md:grid-cols-2">
                     <form.Field name="businessName">
                       {(field) => (
@@ -509,48 +473,59 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
                         />
                       )}
                     </form.Field>
-                    <form.Field name="vatId">
-                      {(field) => (
-                        <ProfileInput
-                          id="vatId"
-                          label="USt-IdNr."
-                          value={field.state.value}
-                          maxLength={14}
-                          autoComplete="off"
-                          hint="Eine deutsche USt-IdNr. besteht aus DE und neun Ziffern. Alternativ kannst du eine Steuernummer angeben."
-                          error={
-                            field.state.meta.isTouched
-                              ? errors.vatId
-                              : undefined
-                          }
-                          onBlur={field.handleBlur}
-                          onChange={(value) =>
-                            changeProfileField('vatId', value)
-                          }
-                        />
-                      )}
-                    </form.Field>
-                    <form.Field name="taxNumber">
-                      {(field) => (
-                        <ProfileInput
-                          id="taxNumber"
-                          label="Steuernummer"
-                          value={field.state.value}
-                          autoComplete="off"
-                          hint="Optional, wenn eine USt-IdNr. angegeben wird."
-                          maxLength={30}
-                          error={
-                            field.state.meta.isTouched
-                              ? errors.taxNumber
-                              : undefined
-                          }
-                          onBlur={field.handleBlur}
-                          onChange={(value) =>
-                            changeProfileField('taxNumber', value)
-                          }
-                        />
-                      )}
-                    </form.Field>
+                    <RequiredAlternativeFields
+                      id="profile-tax-identifiers"
+                      label="USt-IdNr. oder Steuernummer"
+                      error={
+                        taxIdentifiersMissing && taxIdentifiersTouched
+                          ? errors.vatId
+                          : undefined
+                      }
+                    >
+                      <form.Field name="vatId">
+                        {(field) => (
+                          <ProfileInput
+                            id="vatId"
+                            label="USt-IdNr."
+                            value={field.state.value}
+                            maxLength={14}
+                            autoComplete="off"
+                            hint="Eine deutsche USt-IdNr. besteht aus DE und neun Ziffern. Alternativ kannst du eine Steuernummer angeben."
+                            error={
+                              !taxIdentifiersMissing &&
+                              field.state.meta.isTouched
+                                ? errors.vatId
+                                : undefined
+                            }
+                            onBlur={field.handleBlur}
+                            onChange={(value) =>
+                              changeProfileField('vatId', value)
+                            }
+                          />
+                        )}
+                      </form.Field>
+                      <form.Field name="taxNumber">
+                        {(field) => (
+                          <ProfileInput
+                            id="taxNumber"
+                            label="Steuernummer"
+                            value={field.state.value}
+                            autoComplete="off"
+                            hint="Optional, wenn eine USt-IdNr. angegeben wird."
+                            maxLength={30}
+                            error={
+                              field.state.meta.isTouched
+                                ? errors.taxNumber
+                                : undefined
+                            }
+                            onBlur={field.handleBlur}
+                            onChange={(value) =>
+                              changeProfileField('taxNumber', value)
+                            }
+                          />
+                        )}
+                      </form.Field>
+                    </RequiredAlternativeFields>
                   </FieldGroup>
                 )}
               </form.Subscribe>

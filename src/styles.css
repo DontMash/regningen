@@ -72,6 +72,13 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.923 0.003 48.717);
   --input: oklch(0.923 0.003 48.717);
+  --form-control-background: transparent;
+  --form-control-invalid-border: var(--destructive);
+  --form-control-invalid-ring: color-mix(
+    in oklab,
+    var(--destructive) 20%,
+    transparent
+  );
   --ring: oklch(0.709 0.01 56.259);
   --chart-1: oklch(0.869 0.005 56.366);
   --chart-2: oklch(0.553 0.013 58.071);
@@ -107,6 +114,17 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
+  --form-control-background: color-mix(in oklab, var(--input) 30%, transparent);
+  --form-control-invalid-border: color-mix(
+    in oklab,
+    var(--destructive) 50%,
+    transparent
+  );
+  --form-control-invalid-ring: color-mix(
+    in oklab,
+    var(--destructive) 40%,
+    transparent
+  );
   --ring: oklch(0.553 0.013 58.071);
   --chart-1: oklch(0.869 0.005 56.366);
   --chart-2: oklch(0.553 0.013 58.071);
@@ -139,6 +157,31 @@
   button:not(:disabled),
   [role='button']:not(:disabled) {
     cursor: pointer;
+  }
+}
+
+/* Reserve three lines for the current inline validation messages, including
+   wrapped messages on narrow screens. Never clip longer feedback. */
+@layer components {
+  /* An input-like calendar trigger, without changing the Button/Input primitives. */
+  .form-input-trigger {
+    @apply flex h-9 w-full min-w-0 items-center justify-start gap-2 rounded-md border border-input px-2.5 py-1 text-start text-base font-normal shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm;
+    background-color: var(--form-control-background);
+
+    &[aria-invalid='true'] {
+      @apply ring-3;
+      border-color: var(--form-control-invalid-border);
+      --tw-ring-color: var(--form-control-invalid-ring);
+    }
+
+    svg {
+      @apply pointer-events-none size-4 shrink-0;
+    }
+  }
+
+  .form-error-slot {
+    @apply min-w-0 wrap-anywhere whitespace-normal;
+    min-block-size: 3.75rem;
   }
 }
 

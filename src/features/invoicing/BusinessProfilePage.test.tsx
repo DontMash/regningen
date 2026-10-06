@@ -30,40 +30,21 @@ async function fillRequiredFields(
   user: ReturnType<typeof userEvent.setup>,
   includeVatId = true,
 ) {
-  await user.type(
-    screen.getByRole('textbox', { name: 'Unternehmensname' }),
-    'Nordlicht Catering',
-  )
-  await user.type(
-    screen.getByRole('textbox', { name: 'Leistungsbeschreibung' }),
-    'Party-Service',
-  )
-  await user.type(
-    screen.getByRole('textbox', { name: 'Inhaber/in' }),
-    'Erika Beispiel',
-  )
-  await user.type(
-    screen.getByRole('textbox', { name: 'Straße und Hausnummer' }),
-    'Hauptstraße 12',
-  )
-  await user.type(
-    screen.getByRole('textbox', { name: 'Postleitzahl' }),
-    '20095',
-  )
-  await user.type(screen.getByRole('textbox', { name: 'Ort' }), 'Hamburg')
-  await user.type(
-    screen.getByRole('textbox', { name: 'Telefon' }),
-    '040 123456',
-  )
-  await user.type(
-    screen.getByRole('textbox', { name: 'IBAN' }),
-    'DE89370400440532013000',
-  )
-  if (includeVatId) {
-    await user.type(
-      screen.getByRole('textbox', { name: 'USt-IdNr.' }),
-      'DE123456789',
-    )
+  const values: Array<[string, string]> = [
+    ['Unternehmensname', 'Nordlicht Catering'],
+    ['Leistungsbeschreibung', 'Party-Service'],
+    ['Inhaber/in', 'Erika Beispiel'],
+    ['Straße und Hausnummer', 'Hauptstraße 12'],
+    ['Postleitzahl', '20095'],
+    ['Ort', 'Hamburg'],
+    ['Telefon', '040 123456'],
+    ['IBAN', 'DE89370400440532013000'],
+  ]
+  if (includeVatId) values.push(['USt-IdNr.', 'DE123456789'])
+  // Fixture entry needn't simulate every keystroke under coverage instrumentation.
+  for (const [label, value] of values) {
+    await user.click(screen.getByRole('textbox', { name: label }))
+    await user.paste(value)
   }
 }
 
@@ -135,6 +116,60 @@ describe('business profile settings', () => {
         screen.getByRole('button', { name: 'Profil speichern' }),
       ).toBeEnabled(),
     )
+  })
+
+  it('marks tax identifiers as an either/or requirement and shows feedback after touching either input', async () => {
+    const user = userEvent.setup()
+    await renderAtRoute('/business-profile', BusinessProfilePage)
+    await screen.findByRole('heading', { name: 'Unternehmensprofil' })
+    for (const label of [
+      'Unternehmensname',
+      'Inhaber/in',
+      'Straße und Hausnummer',
+      'Postleitzahl',
+      'Ort',
+      'IBAN',
+    ]) {
+      expect(screen.getByRole('textbox', { name: label })).toBeRequired()
+      expect(screen.getByText(label, { selector: 'label' })).toHaveTextContent(
+        /\*/,
+      )
+    }
+    for (const label of ['Leistungsbeschreibung', 'Telefon', 'Mobiltelefon']) {
+      expect(screen.getByRole('textbox', { name: label })).not.toBeRequired()
+      expect(
+        screen.getByText(label, { selector: 'label' }),
+      ).not.toHaveTextContent(/\*/)
+    }
+    const identifiers = screen.getByRole('group', {
+      name: /USt-IdNr. oder Steuernummer.*mindestens eine Angabe/,
+    })
+    const vatId = within(identifiers).getByRole('textbox', {
+      name: 'USt-IdNr.',
+    })
+    const taxNumber = within(identifiers).getByRole('textbox', {
+      name: 'Steuernummer',
+    })
+    expect(vatId).not.toBeRequired()
+    expect(taxNumber).not.toBeRequired()
+    expect(within(identifiers).queryByRole('alert')).not.toBeInTheDocument()
+
+    await user.click(taxNumber)
+    await user.tab()
+    const message = 'Umsatzsteuer-ID oder Steuernummer angeben.'
+    expect(within(identifiers).getByText(message)).toBeVisible()
+    expect(vatId).toHaveAccessibleDescription(message)
+    expect(taxNumber).toHaveAccessibleDescription(message)
+    await user.type(taxNumber, '12/345/67890')
+    expect(within(identifiers).queryByRole('alert')).not.toBeInTheDocument()
+    await user.type(vatId, 'DE123')
+    await user.tab()
+    expect(
+      within(identifiers).getByText(
+        'Eine deutsche Umsatzsteuer-ID beginnt mit DE und hat neun Ziffern.',
+      ),
+    ).toBeVisible()
+    expect(taxNumber).toHaveAttribute('aria-invalid', 'false')
   })
 
   it('exports a backup and leaves the current profile unchanged when import is cancelled', async () => {
