@@ -1,24 +1,29 @@
 import { expect, test as base } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { ApplicationShellRobot } from '../../robots/playwright/application-shell'
-import { ArtifactSupport } from './artifacts'
+import { AppShellRobot } from '../../robots/playwright/app-shell'
 import { BusinessProfileRobot } from '../../robots/playwright/business-profile'
+import { FooterRobot } from '../../robots/playwright/footer'
 import { InvoiceRobot } from '../../robots/playwright/invoice'
+import { LanguageRobot } from '../../robots/playwright/language'
+import { ReleaseNotesRobot } from '../../robots/playwright/release-notes'
+import { ThemeRobot } from '../../robots/playwright/theme'
+import { ArtifactSupport } from './artifacts'
 import { BrowserControls } from './browser'
 import { LayoutMeasurements } from './layout'
 import { RequestObserver } from './requests'
 import { StorageFaults } from './storage-faults'
 
 export type PlaywrightRobots = {
-  application: ApplicationShellRobot
+  appShell: AppShellRobot
   businessProfile: BusinessProfileRobot
+  footer: FooterRobot
   invoice: InvoiceRobot
+  language: LanguageRobot
+  releaseNotes: ReleaseNotesRobot
+  theme: ThemeRobot
 }
 
-export type TestFixtures = {
-  application: ApplicationShellRobot
-  businessProfile: BusinessProfileRobot
-  invoice: InvoiceRobot
+export type TestFixtures = PlaywrightRobots & {
   harness: BrowserControls
   artifacts: ArtifactSupport
   layout: LayoutMeasurements
@@ -28,14 +33,26 @@ export type TestFixtures = {
 }
 
 export const test = base.extend<TestFixtures>({
-  application: async ({ page }, use) => {
-    await use(new ApplicationShellRobot(page))
+  appShell: async ({ page }, use) => {
+    await use(new AppShellRobot(page))
   },
   businessProfile: async ({ page }, use) => {
     await use(new BusinessProfileRobot(page))
   },
+  footer: async ({ page }, use) => {
+    await use(new FooterRobot(page))
+  },
   invoice: async ({ page }, use) => {
     await use(new InvoiceRobot(page))
+  },
+  language: async ({ page }, use) => {
+    await use(new LanguageRobot(page))
+  },
+  releaseNotes: async ({ page }, use) => {
+    await use(new ReleaseNotesRobot(page))
+  },
+  theme: async ({ page }, use) => {
+    await use(new ThemeRobot(page))
   },
   harness: async ({ page, context }, use) => {
     await use(new BrowserControls(page, context))
@@ -54,9 +71,13 @@ export const test = base.extend<TestFixtures>({
   },
   robotsForPage: async ({ page }, use) => {
     await use((robotPage = page) => ({
-      application: new ApplicationShellRobot(robotPage),
+      appShell: new AppShellRobot(robotPage),
       businessProfile: new BusinessProfileRobot(robotPage),
+      footer: new FooterRobot(robotPage),
       invoice: new InvoiceRobot(robotPage),
+      language: new LanguageRobot(robotPage),
+      releaseNotes: new ReleaseNotesRobot(robotPage),
+      theme: new ThemeRobot(robotPage),
     }))
   },
 })

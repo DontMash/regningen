@@ -18,6 +18,10 @@ export type InvoiceMeasurementControl =
 export class LayoutMeasurements {
   constructor(private readonly page: Page) {}
 
+  async pageScrollPosition() {
+    return this.page.evaluate(() => window.scrollY)
+  }
+
   async mainContentHeight() {
     const box = await this.page.getByRole('main').boundingBox()
     if (!box) throw new Error('The main content is not visible.')
