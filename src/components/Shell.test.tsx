@@ -8,7 +8,10 @@ import Header from './Header'
 import ThemeToggle from './ThemeToggle'
 import { themeStore } from '@/lib/theme-store'
 import { BUSINESS_PROFILE_STORAGE_KEY } from '@/features/invoicing/business-profile-repository'
-import { disposeTestRouters, renderAtRoute } from '../../tests/helpers/render'
+import {
+  disposeTestRouters,
+  renderAtRoute,
+} from '../../tests/support/vitest/render'
 
 function profileBackup(businessName: string) {
   return JSON.stringify({

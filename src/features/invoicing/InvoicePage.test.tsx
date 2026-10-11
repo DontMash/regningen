@@ -14,11 +14,11 @@ import { businessProfileStorageStatus } from './business-profile-storage-status'
 import {
   completeBusinessProfile,
   saveBusinessProfile,
-} from '../../../tests/helpers/business-profile'
+} from '../../../tests/support/vitest/business-profile'
 import {
   disposeTestRouters,
   renderAtRoute,
-} from '../../../tests/helpers/render'
+} from '../../../tests/support/vitest/render'
 
 async function addItem(
   user: ReturnType<typeof userEvent.setup>,

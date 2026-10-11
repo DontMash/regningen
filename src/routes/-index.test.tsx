@@ -3,11 +3,14 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderAtRoute, disposeTestRouters } from '../../tests/helpers/render'
+import {
+  renderAtRoute,
+  disposeTestRouters,
+} from '../../tests/support/vitest/render'
 import {
   completeBusinessProfile,
   saveBusinessProfile,
-} from '../../tests/helpers/business-profile'
+} from '../../tests/support/vitest/business-profile'
 import { businessProfileStorageStatus } from '@/features/invoicing/business-profile-storage-status'
 import { Route } from './index'
 

@@ -1,4 +1,4 @@
-import { expect, test } from '../support/playwright'
+import { expect, test } from '../support/playwright/playwright'
 
 test('shows the German Regningen shell and opens first-time Business Profile setup', async ({
   application,

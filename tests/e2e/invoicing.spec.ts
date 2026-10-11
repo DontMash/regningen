@@ -2,9 +2,9 @@ import type { BusinessProfileScenarioInput } from '../scenarios/business-profile
 import { createBusinessProfileScenario } from '../scenarios/business-profile'
 import type { InvoiceScenario } from '../scenarios/invoice'
 import { createInvoiceScenario } from '../scenarios/invoice'
-import type { BrowserControls } from '../support/browser'
-import { expect, test } from '../support/playwright'
-import type { PlaywrightRobots } from '../support/playwright'
+import type { BrowserControls } from '../support/playwright/browser'
+import { expect, test } from '../support/playwright/playwright'
+import type { PlaywrightRobots } from '../support/playwright/playwright'
 
 async function establishBusinessProfile(
   harness: BrowserControls,
