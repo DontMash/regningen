@@ -24,6 +24,7 @@ export function FieldHint({
             variant="ghost"
             size="icon-xs"
             aria-label={`Hinweis zu ${label}`}
+            tabIndex={-1}
           />
         }
       >
