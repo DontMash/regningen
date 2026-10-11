@@ -42,6 +42,27 @@ export default function Footer() {
                   Profile
                 </Link>
               </li>
+              <li>
+                <a
+                  href="https://www.soren.codes/de/impressum"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="paragraph-small text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  Impressum
+                </a>
+              </li>
+              <li>
+                <a
+                  href="
+                  https://www.soren.codes/de/datenschutz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="paragraph-small text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  Datenschutz
+                </a>
+              </li>
             </ul>
           </nav>
         </div>

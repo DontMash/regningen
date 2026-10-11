@@ -205,7 +205,7 @@ export class ApplicationShellRobot {
     const features = footer.getByRole('navigation', {
       name: 'Funktionsnavigation',
     })
-    await expect(features.getByRole('link')).toHaveCount(2)
+    await expect(features.locator('a[href^="/"]')).toHaveCount(2)
     await expect(
       features.getByRole('link', { name: 'Rechnung' }),
     ).toHaveAttribute('href', '/invoice')
