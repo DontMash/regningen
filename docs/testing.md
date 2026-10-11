@@ -2,6 +2,18 @@
 
 This guide is the source of truth for test architecture and contribution. Package scripts and runner configuration remain the source of truth for commands and runner behavior.
 
+## Test intent and scope
+
+Classify tests by their boundary and purpose, not their runner. Vitest includes both unit tests and rendered-module integration tests; Playwright exercises browser-level integration/E2E journeys.
+
+- **Unit tests** may focus on individual function calls or isolated modules, checking results, errors, branches, and relevant collaborator calls. These focused tests support the coverage gate and need not each describe a user journey.
+- **Integration tests** must focus on user intent and feature requirements. Make the user's goal, relevant prerequisites or input variation, and selected observable outcomes clear from the test itself, without needing the originating spec to explain it. Exercise collaborating application parts at the chosen seam and assert the claimed outcome; internal-call assertions may support that proof but cannot replace it.
+- **Supporting checks** for validation, accessibility, persistence, failure handling, navigation, layout, and appearance are legitimate when they protect a named user outcome. A focused integration test may cover a partial workflow rather than a complete journey.
+
+Keep claims within the tested boundary. Test doubles outside the behavior being proved may support the chosen seam, subject to the setup rules below. For example, an intercepted download click proves initiation, not the downloaded artifact's filename or contents.
+
+Review integration tests for intent clarity, behavioral proof, and alignment with current documented requirements and this guide. Where a feature requirement is undocumented, flag that limitation rather than claim complete requirements coverage.
+
 ## Test roles and locations
 
 - **Scenarios** are runner-independent, deterministic user-input examples with test-owned types. Factories in `tests/scenarios/` return fresh data, accept focused overrides, and never run workflows, install state, or calculate application results. Keep invalid user input representable. Expected totals and artifact content are independently authored, not obtained from production code. The built-in Invoice PDF expectation assumes the built-in Business Profile scenario.
