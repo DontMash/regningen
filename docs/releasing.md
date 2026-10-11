@@ -1,18 +1,6 @@
 # Releasing
 
-## Initial baseline
-
-The manifest and generated changelog establish `1.0.0` as the initial baseline. Its notes come from the existing commit history; there are no invented earlier releases.
-
-After committing and verifying these prepared files, the maintainer records the first local release boundary manually:
-
-```bash
-git tag -a v1.0.0 -m v1.0.0
-```
-
-Do this once, before using the release command for subsequent releases. Changelogen cannot release `-r 1.0.0` when the manifest already has that version. No bootstrap script or automatic tag creation is provided.
-
-## Subsequent releases
+## Releases
 
 Prepare a local release from a clean working tree:
 

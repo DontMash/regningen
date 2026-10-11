@@ -13,6 +13,10 @@ After any code-related changes, run these package scripts and require each to pa
 
 Test architecture, contribution workflow, setup policy, and support-module locations: [docs/testing.md](docs/testing.md).
 
+## Releasing
+
+Release workflow, version overrides, and bundled release data: [docs/releasing.md](docs/releasing.md).
+
 ## Agent skills
 
 ### Issue tracker
