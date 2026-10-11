@@ -4,7 +4,7 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'tests/scenarios/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

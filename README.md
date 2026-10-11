@@ -13,6 +13,8 @@ pnpm dev
 
 The app is available at <http://localhost:3000>.
 
+See the [testing guide](docs/testing.md) for test architecture and E2E contribution conventions.
+
 ## Checks
 
 ```bash

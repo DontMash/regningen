@@ -9,6 +9,10 @@ After any code-related changes, run these package scripts and require each to pa
 - `pnpm test:coverage`
 - `pnpm test:e2e`
 
+## Testing
+
+Test architecture, E2E contribution workflow, setup policy, and support-module locations: [docs/testing.md](docs/testing.md).
+
 ## Agent skills
 
 ### Issue tracker
