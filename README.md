@@ -13,7 +13,7 @@ pnpm dev
 
 The app is available at <http://localhost:3000>.
 
-See the [testing guide](docs/testing.md) for test architecture and contribution conventions.
+See the [testing guide](docs/testing.md) for test architecture and contribution conventions, and the [release guide](docs/releasing.md) for preparing a local release.
 
 ## Checks
 
@@ -38,6 +38,8 @@ Build the application with `pnpm build`. To preview the production build locally
 ## Local data and invoices
 
 The app server delivers the generic application shell; business profile data is read and written only in the current browser's local storage. Recipient details and invoice entries are kept in memory for the current page session, and the PDF is generated in the browser and downloaded through the browser. Refreshing or closing the page loses invoice entries. Clearing site data removes the business profile.
+
+Release notes use TanStack Store for shared feature state and unstorage for browser acknowledgment persistence. This adoption is limited to release notes for now; the rest of the application's shared state and browser persistence still needs to adopt this approach. Invoice drafts remain memory-only, and Business Profile storage and backup formats are unchanged.
 
 The profile can be exported and imported as JSON. Backups are **not encrypted** and contain sensitive business information, so store them securely. Export a backup before clearing browser data or moving to another browser or device.
 

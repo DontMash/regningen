@@ -8,6 +8,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import Footer from '../components/Footer'
 import Header from '../components/Header'
+import { ReleaseNotesProvider } from '@/features/release-notes/ReleaseNotesProvider'
 import { Toaster } from '@/components/ui/toast'
 import StoreDevtools from '../lib/theme-store-devtools'
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
@@ -78,27 +79,29 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body className="min-h-screen antialiased">
-        <Header />
-        <main id="hauptinhalt" className="min-h-screen">
-          {children}
-        </main>
-        <Footer />
-        <Toaster />
-        <TanStackDevtools
-          config={{
-            position: 'bottom-right',
-          }}
-          plugins={[
-            {
-              name: 'Tanstack Router',
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-            StoreDevtools,
-            TanStackQueryDevtools,
-          ]}
-        />
-        <Scripts />
+      <body className="relative min-h-screen antialiased">
+        <ReleaseNotesProvider>
+          <Header />
+          <main id="hauptinhalt" className="min-h-screen">
+            {children}
+          </main>
+          <Footer />
+          <Toaster />
+          <TanStackDevtools
+            config={{
+              position: 'bottom-right',
+            }}
+            plugins={[
+              {
+                name: 'Tanstack Router',
+                render: <TanStackRouterDevtoolsPanel />,
+              },
+              StoreDevtools,
+              TanStackQueryDevtools,
+            ]}
+          />
+          <Scripts />
+        </ReleaseNotesProvider>
       </body>
     </html>
   )

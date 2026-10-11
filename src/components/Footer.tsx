@@ -3,8 +3,10 @@ import { Link } from '@tanstack/react-router'
 import { cn } from 'cn'
 import { buttonVariants } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { useReleaseNotes } from '@/features/release-notes/ReleaseNotesProvider'
 
 export default function Footer() {
+  const { applicationVersion, openReleaseNotes } = useReleaseNotes()
   return (
     <footer className="border-t bg-background">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:py-10">
@@ -45,24 +47,37 @@ export default function Footer() {
         </div>
 
         <Separator aria-hidden="true" className="mt-8" />
-        <div className="flex items-center justify-between gap-4 pt-6">
-          <p className="paragraph-small flex flex-wrap items-center gap-1 text-muted-foreground">
-            Made with{' '}
-            <IconHeartFilled
-              aria-hidden="true"
-              className="size-4 text-primary"
-            />
-            <span className="sr-only">love </span>
-            by{' '}
-            <a
-              href="https://www.soren.codes/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-6">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <p className="paragraph-small flex flex-wrap items-center gap-1 text-muted-foreground">
+              Made with{' '}
+              <IconHeartFilled
+                aria-hidden="true"
+                className="size-4 text-primary"
+              />
+              <span className="sr-only">love </span>
+              by{' '}
+              <a
+                href="https://www.soren.codes/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                soren
+              </a>
+            </p>
+            <button
+              type="button"
+              aria-label={`Versionshinweise zu Version v${applicationVersion} anzeigen`}
+              onClick={openReleaseNotes}
+              className={cn(
+                buttonVariants({ variant: 'ghost', size: 'sm' }),
+                'text-muted-foreground',
+              )}
             >
-              soren
-            </a>
-          </p>
+              v{applicationVersion}
+            </button>
+          </div>
           <a
             href="#top"
             aria-label="Nach oben"

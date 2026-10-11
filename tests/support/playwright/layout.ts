@@ -78,6 +78,71 @@ export class LayoutMeasurements {
     }, viewportWidth)
   }
 
+  async releaseNotesScrollLayout() {
+    const dialog = this.page.getByRole('dialog', {
+      name: 'Versionshinweise',
+      exact: true,
+    })
+    const scrollArea = dialog.locator('.overflow-y-auto').first()
+    const [version, selector, footer, firstHeading, viewport] =
+      await Promise.all([
+        dialog.getByText('Version 1.0.0', { exact: true }).boundingBox(),
+        dialog
+          .getByRole('combobox', { name: 'Version auswählen' })
+          .boundingBox(),
+        dialog
+          .getByRole('button', { name: 'Verstanden' })
+          .locator('..')
+          .boundingBox(),
+        dialog.locator('article h3').first().boundingBox(),
+        scrollArea.evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          const style = getComputedStyle(element)
+          return {
+            top: box.top,
+            bottom: box.bottom,
+            scrollTop: element.scrollTop,
+            paddingTop: Number.parseFloat(style.paddingTop),
+            paddingBottom: Number.parseFloat(style.paddingBottom),
+          }
+        }),
+      ])
+    if (!version || !selector || !footer || !firstHeading) {
+      throw new Error('Release-note controls and content must be rendered.')
+    }
+    return { version, selector, footer, firstHeading, viewport }
+  }
+
+  async releaseNotesHeaderSeamBrightPixels() {
+    const box = await this.page
+      .getByRole('dialog', { name: 'Versionshinweise', exact: true })
+      .locator('[data-slot="adaptive-dialog-scroll-area"]')
+      .boundingBox()
+    if (!box) throw new Error('The release-note scroll area must be visible.')
+    const screenshot = await this.page.screenshot({
+      clip: { x: box.x + 24, y: box.y, width: box.width - 48, height: 2 },
+    })
+    return this.page.evaluate(async (base64) => {
+      const image = new Image()
+      image.src = `data:image/png;base64,${base64}`
+      await image.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const context = canvas.getContext('2d')!
+      context.drawImage(image, 0, 0)
+      const pixels = context.getImageData(0, 0, image.width, image.height).data
+      let brightPixels = 0
+      for (let offset = 0; offset < pixels.length; offset += 4) {
+        if (
+          Math.max(pixels[offset], pixels[offset + 1], pixels[offset + 2]) > 128
+        )
+          brightPixels++
+      }
+      return brightPixels
+    }, screenshot.toString('base64'))
+  }
+
   async businessProfileOwnerAndSaveButton() {
     return Promise.all([
       this.profileControlBox('Inhaber/in'),

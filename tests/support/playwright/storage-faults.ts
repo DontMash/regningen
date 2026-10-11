@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 
 const businessProfileStorageKey = 'regningen.business-profile'
+const releaseNotesStorageKey = 'regningen.release-notes.acknowledged-versions'
 
 export class StorageFaults {
   constructor(private readonly page: Page) {}
@@ -23,5 +24,15 @@ export class StorageFaults {
         return originalSetItem.call(this, key, value)
       }
     }, businessProfileStorageKey)
+  }
+
+  async preventReleaseNotesWrites() {
+    await this.page.addInitScript((storageKey) => {
+      const originalSetItem = Storage.prototype.setItem
+      Storage.prototype.setItem = function (key, value) {
+        if (key === storageKey) throw new Error('storage unavailable')
+        return originalSetItem.call(this, key, value)
+      }
+    }, releaseNotesStorageKey)
   }
 }
