@@ -13,7 +13,7 @@ export default function Header() {
   const businessName = profile?.businessName.trim()
 
   return (
-    <header className="border-b bg-background">
+    <header id="top" className="border-b bg-background">
       <nav
         aria-label="Hauptnavigation"
         className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4"

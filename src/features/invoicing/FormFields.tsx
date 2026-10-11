@@ -17,7 +17,7 @@ export function RequiredMark() {
 
 export function FormErrorSlot({ id, error }: { id: string; error?: string }) {
   return (
-    <div className='min-h-5'>
+    <div className="min-h-5">
       {error && <FieldError id={id}>{error}</FieldError>}
     </div>
   )

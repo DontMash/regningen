@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import Footer from '../components/Footer'
 import Header from '../components/Header'
 import { Toaster } from '@/components/ui/toast'
 import StoreDevtools from '../lib/theme-store-devtools'
@@ -79,7 +80,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body className="min-h-screen antialiased">
         <Header />
-        <main id="hauptinhalt">{children}</main>
+        <main id="hauptinhalt" className="min-h-screen">
+          {children}
+        </main>
+        <Footer />
         <Toaster />
         <TanStackDevtools
           config={{

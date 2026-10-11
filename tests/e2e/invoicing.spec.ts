@@ -67,8 +67,16 @@ async function documentBox(locator: Locator) {
   })
 }
 
+async function wrappedErrorGrowth(error: Locator) {
+  await expect(error).toBeVisible()
+  const { height } = await documentBox(error)
+  // One 20px feedback line is reserved; only additional lines move content below.
+  expect(height).toBeGreaterThanOrEqual(20)
+  return height - 20
+}
+
 for (const width of [320, 768, 1024, 1440]) {
-  test(`keeps form controls and position rows stable while errors change at ${width}px`, async ({
+  test(`reserves one error line and lets wrapped feedback expand at ${width}px`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 })
@@ -94,11 +102,16 @@ for (const width of [320, 768, 1024, 1440]) {
     const streetBox = await documentBox(street)
     await page.getByLabel('Name / z. Hd.').focus()
     await page.getByLabel('Name / z. Hd.').blur()
-    await expect(
-      page.getByText('Unternehmen oder Name des Empfängers angeben.'),
-    ).toBeVisible()
-    expect(await documentBox(street)).toEqual(streetBox)
+    const recipientError = page.getByText(
+      'Unternehmen oder Name des Empfängers angeben.',
+    )
+    const recipientGrowth = await wrappedErrorGrowth(recipientError)
+    expect(await documentBox(street)).toEqual({
+      ...streetBox,
+      y: streetBox.y + recipientGrowth,
+    })
     await page.getByLabel('Name / z. Hd.').fill('Max Mustermann')
+    await expect(recipientError).not.toBeVisible()
     expect(await documentBox(street)).toEqual(streetBox)
 
     const description = page.getByRole('textbox', {
@@ -117,12 +130,16 @@ for (const width of [320, 768, 1024, 1440]) {
       [description, amount, addButton].map(documentBox),
     )
     await addButton.click()
-    await expect(
+    const amountGrowth = await wrappedErrorGrowth(
       page.getByText('Einen positiven Bruttopreis eingeben.'),
-    ).toBeVisible()
+    )
     expect(
       await Promise.all([description, amount, addButton].map(documentBox)),
-    ).toEqual(before)
+    ).toEqual([
+      before[0],
+      before[1],
+      { ...before[2], y: before[2].y + (width < 768 ? amountGrowth : 0) },
+    ])
     if (width >= 768) {
       expect(before[0].y).toBe(before[1].y)
       expect(before[1].y).toBe(before[2].y)
@@ -167,13 +184,16 @@ for (const width of [320, 768, 1024, 1440]) {
     )
     await owner.fill('')
     await owner.blur()
-    await expect(
-      page.getByText('Name der Inhaberin oder des Inhabers fehlt.'),
-    ).toBeVisible()
-    expect(await Promise.all([owner, saveButton].map(documentBox))).toEqual(
-      profileBefore,
+    const ownerError = page.getByText(
+      'Name der Inhaberin oder des Inhabers fehlt.',
     )
+    const ownerGrowth = await wrappedErrorGrowth(ownerError)
+    expect(await Promise.all([owner, saveButton].map(documentBox))).toEqual([
+      profileBefore[0],
+      { ...profileBefore[1], y: profileBefore[1].y + ownerGrowth },
+    ])
     await owner.fill('Erika Beispiel')
+    await expect(ownerError).not.toBeVisible()
     expect(await Promise.all([owner, saveButton].map(documentBox))).toEqual(
       profileBefore,
     )
@@ -182,22 +202,29 @@ for (const width of [320, 768, 1024, 1440]) {
       [taxNumber, saveButton].map(documentBox),
     )
     await page.getByRole('textbox', { name: 'USt-IdNr.' }).fill('DE123')
-    await expect(
-      page.getByText(
-        'Eine deutsche Umsatzsteuer-ID beginnt mit DE und hat neun Ziffern.',
-      ),
-    ).toBeVisible()
+    const vatError = page.getByText(
+      'Eine deutsche Umsatzsteuer-ID beginnt mit DE und hat neun Ziffern.',
+    )
+    const vatGrowth = await wrappedErrorGrowth(vatError)
     expect(await Promise.all([taxNumber, saveButton].map(documentBox))).toEqual(
-      taxBefore,
+      [
+        {
+          ...taxBefore[0],
+          y: taxBefore[0].y + (width < 768 ? vatGrowth : 0),
+        },
+        { ...taxBefore[1], y: taxBefore[1].y + vatGrowth },
+      ],
     )
     await page.getByRole('textbox', { name: 'USt-IdNr.' }).fill('')
-    await expect(
-      page.getByText('Umsatzsteuer-ID oder Steuernummer angeben.'),
-    ).toBeVisible()
+    const missingTaxError = page.getByText(
+      'Umsatzsteuer-ID oder Steuernummer angeben.',
+    )
+    const missingTaxGrowth = await wrappedErrorGrowth(missingTaxError)
     expect(await Promise.all([taxNumber, saveButton].map(documentBox))).toEqual(
-      taxBefore,
+      [taxBefore[0], { ...taxBefore[1], y: taxBefore[1].y + missingTaxGrowth }],
     )
     await taxNumber.fill('12/345/67890')
+    await expect(missingTaxError).not.toBeVisible()
     expect(await Promise.all([taxNumber, saveButton].map(documentBox))).toEqual(
       taxBefore,
     )
@@ -423,7 +450,10 @@ test('keeps invoicing blocked after an existing profile fails to save', async ({
     .getByRole('alertdialog')
     .getByRole('button', { name: 'Schließen' })
     .click()
-  await page.getByRole('link', { name: 'Rechnung', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Hauptnavigation' })
+    .getByRole('link', { name: 'Rechnung', exact: true })
+    .click()
 
   await expect(
     page.getByRole('alertdialog', {
@@ -856,7 +886,10 @@ test('exports an imported partial profile without unlocking invoicing', async ({
   const exported = JSON.parse(await readFile(path, 'utf8'))
   expect(exported.profile).toEqual(partialProfile)
 
-  await page.getByRole('link', { name: 'Rechnung', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Hauptnavigation' })
+    .getByRole('link', { name: 'Rechnung', exact: true })
+    .click()
   await expect(page).toHaveURL(/\/invoice$/)
   await expect(
     page.getByRole('heading', { name: 'Unternehmensprofil vervollständigen' }),
@@ -925,7 +958,10 @@ test('keeps invoice entries while the profile is deleted and set up again', asyn
   await page.getByLabel('Rechnungsnummer').fill('preserved-001')
   await addInvoicePosition(page, 'Catering', '107,00')
 
-  await page.getByRole('link', { name: 'Profile', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Hauptnavigation' })
+    .getByRole('link', { name: 'Profile', exact: true })
+    .click()
   await page
     .getByRole('main')
     .getByRole('button', { name: 'Profil löschen' })
@@ -947,7 +983,10 @@ test('keeps invoice entries while the profile is deleted and set up again', asyn
     .click()
   await expect(page.getByText(/Profil gelöscht/)).toBeVisible()
 
-  await page.getByRole('link', { name: 'Rechnung', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Hauptnavigation' })
+    .getByRole('link', { name: 'Rechnung', exact: true })
+    .click()
   await expect(page.getByLabel('Rechnungsnummer')).toHaveValue('preserved-001')
   await expect(
     page.getByRole('alertdialog', {
@@ -965,7 +1004,10 @@ test('keeps invoice entries while the profile is deleted and set up again', asyn
     page.getByRole('button', { name: 'PDF erstellen' }),
   ).toBeDisabled()
 
-  await page.getByRole('link', { name: 'Profile', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Hauptnavigation' })
+    .getByRole('link', { name: 'Profile', exact: true })
+    .click()
   await page
     .getByRole('textbox', { name: 'Unternehmensname' })
     .fill('Neu eingerichteter Betrieb')
