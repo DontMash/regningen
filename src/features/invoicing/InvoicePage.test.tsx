@@ -337,9 +337,13 @@ describe('invoice editor', () => {
     ).toBeRequired()
   })
 
-  it('selects a date from the calendar and cancels resetting invoice data', async () => {
+  it('selects the requested calendar date and preserves invoice data when reset is cancelled', async () => {
     const user = userEvent.setup()
     saveBusinessProfile(completeBusinessProfile)
+    invoiceDraftStore.setState((current) => ({
+      ...current,
+      date: '2026-06-10',
+    }))
     await renderAtRoute('/invoice', InvoicePage)
     await screen.findByRole('heading', { name: 'Rechnung erstellen' })
     await user.type(
@@ -348,18 +352,14 @@ describe('invoice editor', () => {
     )
 
     await user.click(screen.getByRole('button', { name: /^Datum/ }))
-    expect(await screen.findByRole('grid')).toBeVisible()
-    const dateButtons = screen
-      .getAllByRole('button')
-      .filter((button) => button.hasAttribute('data-day'))
-    const anotherDate = dateButtons.find(
-      (button) => button.dataset.selectedSingle !== 'true',
+    const calendar = await screen.findByRole('grid')
+    expect(calendar).toBeVisible()
+    await user.click(
+      within(calendar).getByRole('button', { name: /15\. Juni 2026/ }),
     )
-    expect(anotherDate).toBeDefined()
-    await user.click(anotherDate!)
-    expect(
-      screen.getByRole('button', { name: /^Datum/ }),
-    ).not.toHaveTextContent(new Date().toLocaleDateString('de-DE'))
+    expect(screen.getByRole('button', { name: /^Datum/ })).toHaveTextContent(
+      '15.06.2026',
+    )
 
     await user.click(screen.getByRole('button', { name: /^Neue Rechnung$/ }))
     const dialog = await screen.findByRole('alertdialog', {
@@ -369,19 +369,29 @@ describe('invoice editor', () => {
     expect(
       screen.getByRole('textbox', { name: /^Rechnungsnummer/ }),
     ).toHaveValue('keep-me')
+    expect(screen.getByRole('button', { name: /^Datum/ })).toHaveTextContent(
+      '15.06.2026',
+    )
   })
 
-  it('downloads a generated PDF with a sanitized filename', async () => {
+  it('initiates a PDF download with a sanitized filename and the invoice date', async () => {
     const user = userEvent.setup()
     saveBusinessProfile(completeBusinessProfile)
+    invoiceDraftStore.setState((current) => ({
+      ...current,
+      date: '2026-06-15',
+    }))
     const createObjectURL = vi.fn(() => 'blob:invoice')
     vi.stubGlobal(
       'URL',
       Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }),
     )
-    const anchorClick = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(() => {})
+    const downloads: Array<{ filename: string; href: string }> = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push({ filename: this.download, href: this.href })
+    })
     await renderAtRoute('/invoice', InvoicePage)
     await screen.findByRole('heading', { name: 'Rechnung erstellen' })
 
@@ -395,7 +405,12 @@ describe('invoice editor', () => {
 
     await user.click(screen.getByRole('button', { name: 'PDF erstellen' }))
     expect(await screen.findByText('PDF wurde erstellt')).toBeVisible()
-    expect(anchorClick).toHaveBeenCalledOnce()
+    expect(downloads).toEqual([
+      {
+        filename: 'Rechnung_2026_001_2026-06-15.pdf',
+        href: 'blob:invoice',
+      },
+    ])
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
   })
 
@@ -426,6 +441,7 @@ describe('invoice editor', () => {
       await screen.findByText('PDF konnte nicht erstellt werden'),
     ).toBeVisible()
     expect(screen.getByText('Browser-Download nicht verfügbar.')).toBeVisible()
+    expect(screen.queryByText('PDF wurde erstellt')).not.toBeInTheDocument()
     expect(anchorClick).not.toHaveBeenCalled()
   })
 

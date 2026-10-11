@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 describe('home route', () => {
-  it('shows its local loading state and routes a blank profile to settings', async () => {
+  it('shows its local loading state and routes to settings when no profile is saved', async () => {
     await renderAtRoute('/', Home)
     expect(
       screen.getByText('Unternehmensprofil wird lokal geladen …'),
@@ -36,7 +36,7 @@ describe('home route', () => {
     ).toBeVisible()
   })
 
-  it('routes a complete profile directly to invoice creation', async () => {
+  it('routes a saved complete profile to invoice creation', async () => {
     saveBusinessProfile(completeBusinessProfile)
     await renderAtRoute('/', Home)
 

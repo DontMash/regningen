@@ -26,6 +26,20 @@ import {
   saveBusinessProfile,
 } from '../../../tests/helpers/business-profile'
 
+const profileFieldLabels = [
+  'Unternehmensname',
+  'Leistungsbeschreibung',
+  'Inhaber/in',
+  'Straße und Hausnummer',
+  'Postleitzahl',
+  'Ort',
+  'Telefon',
+  'Mobiltelefon',
+  'IBAN',
+  'USt-IdNr.',
+  'Steuernummer',
+]
+
 async function fillRequiredFields(
   user: ReturnType<typeof userEvent.setup>,
   includeVatId = true,
@@ -69,6 +83,9 @@ describe('business profile settings', () => {
     expect(
       await screen.findByRole('heading', { name: 'Unternehmensprofil' }),
     ).toBeVisible()
+    for (const label of profileFieldLabels) {
+      expect(screen.getByRole('textbox', { name: label })).toHaveValue('')
+    }
     expect(
       screen.getByRole('button', { name: 'Profil speichern' }),
     ).toBeDisabled()
@@ -172,29 +189,49 @@ describe('business profile settings', () => {
     expect(taxNumber).toHaveAttribute('aria-invalid', 'false')
   })
 
-  it('exports a backup and leaves the current profile unchanged when import is cancelled', async () => {
+  it('exports every saved profile field and preserves the profile when import is cancelled', async () => {
     const user = userEvent.setup()
-    saveBusinessProfile(completeBusinessProfile)
-    const createObjectURL = vi.fn(() => 'blob:profile-backup')
+    const profile = {
+      ...completeBusinessProfile,
+      mobile: '0171 2345678',
+      iban: 'DE89 3704 0044 0532 0130 00',
+      taxNumber: '12/345/67890',
+    }
+    saveBusinessProfile(profile)
+    const createObjectURL = vi.fn<(blob: Blob) => string>(
+      () => 'blob:profile-backup',
+    )
     vi.stubGlobal(
       'URL',
       Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }),
     )
-    const click = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(() => {})
+    const downloads: Array<{ filename: string; href: string }> = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push({ filename: this.download, href: this.href })
+    })
     await renderAtRoute('/business-profile', BusinessProfilePage)
     await screen.findByRole('heading', { name: 'Unternehmensprofil' })
 
     await user.click(
       screen.getByRole('button', { name: 'Sicherung exportieren' }),
     )
-    await waitFor(() => expect(click).toHaveBeenCalled())
-    expect(
-      document.querySelector('a[download="regningen-unternehmensprofil.json"]'),
-    ).not.toBeInTheDocument()
     expect(await screen.findByText('Sicherung erstellt.')).toBeVisible()
-    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+    expect(downloads).toEqual([
+      {
+        filename: 'regningen-unternehmensprofil.json',
+        href: 'blob:profile-backup',
+      },
+    ])
+    expect(createObjectURL).toHaveBeenCalledOnce()
+    const [blob] = createObjectURL.mock.calls[0]
+    expect(blob.type).toBe('application/json')
+    expect(JSON.parse(await blob.text())).toEqual({
+      format: 'regningen-business-profile',
+      version: 1,
+      profile,
+    })
 
     const fileInput = screen.getByLabelText('Sicherung importieren')
     fireEvent.change(fileInput, {
@@ -206,7 +243,7 @@ describe('business profile settings', () => {
                 format: 'regningen-business-profile',
                 version: 1,
                 profile: {
-                  ...completeBusinessProfile,
+                  ...profile,
                   businessName: 'Neue Firma',
                 },
               }),
@@ -228,7 +265,7 @@ describe('business profile settings', () => {
     ).toHaveValue('Nordlicht Catering')
     expect(
       await createBusinessProfileRepository(window.localStorage).loadProfile(),
-    ).toEqual(completeBusinessProfile)
+    ).toEqual(profile)
   })
 
   it('restores an unconfirmed partial backup when no profile exists', async () => {
@@ -309,17 +346,25 @@ describe('business profile settings', () => {
     ).toEqual(completeBusinessProfile)
   })
 
-  it('cancels profile deletion or confirms it and clears the form', async () => {
+  it('cancels profile deletion or confirms it and clears every profile field', async () => {
     const user = userEvent.setup()
-    saveBusinessProfile(completeBusinessProfile)
+    const profile = {
+      ...completeBusinessProfile,
+      mobile: '0171 2345678',
+      taxNumber: '12/345/67890',
+    }
+    saveBusinessProfile(profile)
     await renderAtRoute('/business-profile', BusinessProfilePage)
     await screen.findByRole('heading', { name: 'Unternehmensprofil' })
+    for (const label of profileFieldLabels) {
+      expect(screen.getByRole('textbox', { name: label })).not.toHaveValue('')
+    }
 
     await user.click(screen.getByRole('button', { name: 'Profil löschen' }))
     await user.click(await screen.findByRole('button', { name: 'Abbrechen' }))
     expect(
       await createBusinessProfileRepository(window.localStorage).loadProfile(),
-    ).toEqual(completeBusinessProfile)
+    ).toEqual(profile)
 
     await user.click(screen.getByRole('button', { name: 'Profil löschen' }))
     const dialog = await screen.findByRole('alertdialog', {
@@ -335,17 +380,20 @@ describe('business profile settings', () => {
         ).loadProfile(),
       ).toBeNull(),
     )
-    expect(
-      screen.getByRole('textbox', { name: 'Unternehmensname' }),
-    ).toHaveValue('')
     expect(await screen.findByText('Profil gelöscht.')).toBeVisible()
+    for (const label of profileFieldLabels) {
+      expect(screen.getByRole('textbox', { name: label })).toHaveValue('')
+    }
   })
 
-  it('reports export and deletion failures without claiming data was handled', async () => {
+  it('reports export and deletion failures without downloading a backup or claiming success', async () => {
     const user = userEvent.setup()
     saveBusinessProfile(completeBusinessProfile)
     await renderAtRoute('/business-profile', BusinessProfilePage)
     await screen.findByRole('heading', { name: 'Unternehmensprofil' })
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {})
 
     const originalGetItem = Storage.prototype.getItem
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (
@@ -364,6 +412,8 @@ describe('business profile settings', () => {
         'Die Profilsicherung konnte nicht erstellt werden.',
       ),
     ).toBeVisible()
+    expect(screen.queryByText('Sicherung erstellt.')).not.toBeInTheDocument()
+    expect(anchorClick).not.toHaveBeenCalled()
     vi.restoreAllMocks()
 
     const originalRemoveItem = Storage.prototype.removeItem
@@ -385,6 +435,7 @@ describe('business profile settings', () => {
         'Das Profil konnte nicht aus diesem Browser gelöscht werden.',
       ),
     ).toBeVisible()
+    expect(screen.queryByText('Profil gelöscht.')).not.toBeInTheDocument()
     expect(
       screen.getByRole('alertdialog', {
         name: 'Profil konnte nicht gespeichert werden',
