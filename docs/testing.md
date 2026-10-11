@@ -4,7 +4,7 @@ This guide is the source of truth for test architecture and contribution. Packag
 
 ## Test intent and scope
 
-Classify tests by their boundary and purpose, not their runner. Vitest includes both unit tests and rendered-module integration tests; Playwright exercises browser-level integration/E2E journeys.
+Classify tests by their boundary and purpose. Use Vitest for unit tests and module-level integration tests, including rendered-module tests. Use Playwright for browser-level integration/E2E journeys, including cross-feature workflows; keep Vitest rendering scoped to the module under test.
 
 - **Unit tests** may focus on individual function calls or isolated modules, checking results, errors, branches, and relevant collaborator calls. These focused tests support the coverage gate and need not each describe a user journey.
 - **Integration tests** must focus on user intent and feature requirements. Make the user's goal, relevant prerequisites or input variation, and selected observable outcomes clear from the test itself, without needing the originating spec to explain it. Exercise collaborating application parts at the chosen seam and assert the claimed outcome; internal-call assertions may support that proof but cannot replace it.
@@ -17,17 +17,25 @@ Review integration tests for intent clarity, behavioral proof, and alignment wit
 ## Test roles and locations
 
 - **Scenarios** are runner-independent, deterministic user-input examples with test-owned types. Factories in `tests/scenarios/` return fresh data, accept focused overrides, and never run workflows, install state, or calculate application results. Keep invalid user input representable. Expected totals and artifact content are independently authored, not obtained from production code. The built-in Invoice PDF expectation assumes the built-in Business Profile scenario.
-- **Robots** perform meaningful user-facing tasks and expose explicit checks. Put Playwright robots in `tests/robots/playwright/`; keep selectors and interaction mechanics there. A task may wait for readiness but should not silently assert unrelated outcomes.
+- **Robots** perform meaningful user-facing tasks and expose explicit checks. Put Playwright robots in `tests/robots/playwright/` and Testing Library robots in `tests/robots/vitest/`; share scenarios, not robot implementations or a forced common interface. Robots own UI selectors and interaction mechanics, including feature-owned accessibility checks. Provide focused tasks for incomplete input, validation timing, and cancellation as well as useful complete tasks. A task may wait for readiness but should not silently assert business outcomes.
 - **Specs** compose journeys, configure prerequisites, and choose the outcomes to check. Keep executable E2E specs only in `tests/e2e/`; keep UI selectors and locators out of them. Specs may make direct assertions about returned values and artifacts.
 - **Playwright fixtures** live in `tests/support/playwright/playwright.ts`. They construct robots bound to the test's page, without navigation, feature setup, data installation, or assertions. Keep the standard per-test browser isolation and parallel execution.
-- **Technical support** lives under `tests/support/`, separated by runner and organized by actual need. Playwright support belongs in `tests/support/playwright/`; Vitest support belongs in `tests/support/vitest/`. Keep deliberate browser controls and exceptional mechanics separate from feature robots: storage faults, secondary pages, viewport or system-theme changes, request observation, download/PDF handling, and layout or style measurements belong in Playwright support. Keep runner-independent input data in `tests/scenarios/`. Add a module when a test need exists; do not create speculative support layers.
-- **Vitest support** lives in `tests/support/vitest/`. Existing rendering, router cleanup, and Business Profile storage setup retain their current seams. These modules are not Playwright support or robots, and this directory reorganization does not change existing Vitest test behavior.
+- **Technical support** lives under `tests/support/`, separated by runner and organized by actual need. Playwright support belongs in `tests/support/playwright/`; Vitest support belongs in `tests/support/vitest/`. Keep environmental controls and technical inspection separate from feature robots. Browser controls such as secondary pages, viewport or system-theme changes, request observation, downloaded artifact handling, and layout measurements belong in Playwright support. Vitest tests may control storage faults, dispatch external storage events, intercept download initiation, and inspect persisted state directly or through support modules where reuse warrants them. Keep runner-independent input data in `tests/scenarios/`. Add a module when a test need exists; do not create speculative support layers.
+- **Vitest support** owns rendering, router disposal, and explicit prerequisite installation. `saveBusinessProfile()` accepts test-owned scenario data; storage keys and serialization belong to this support seam, not shared scenarios or robots. The legacy `completeBusinessProfile` export supports unmigrated tests; migrated tests create fresh examples with the scenario factory.
 
 ## Setup policy
+
+### Playwright
 
 Ordinary feature setup crosses the user-facing browser interface. For example, an Invoice journey that requires a Business Profile configures that profile through its UI first; the Invoice robot never repairs or creates its prerequisite implicitly. Keep prerequisite feature setup visible in the spec.
 
 Use browser-harness support only for conditions that ordinary UI actions cannot create or observe reliably, such as unavailable storage, a second tab, an operating-system preference change, outgoing-request observation, or downloaded artifact inspection. Configure real prerequisites through the UI before enabling a fault (for example, configure a Business Profile before making storage writes fail). Harness support controls the test environment; it is not a shortcut for installing normal feature data.
+
+### Vitest
+
+Tests own rendering, prerequisite installation, state resets, cleanup, and deliberate faults. Construct fresh feature robots with the test's `userEvent.setup()` instance; the robots query the current jsdom document and return no raw DOM handles. Construction performs no mounting, navigation, data installation, state reset, or assertions. Tasks operate through the rendered feature's UI without implicitly configuring prerequisites in another feature.
+
+Configure dependencies outside the module under test explicitly through Vitest support. For example, an Invoice module test can install a Business Profile scenario with `saveBusinessProfile()` before rendering. The existing `renderAtRoute()` renders one real module with placeholder destination pages, so navigation checks prove the destination route was selected, not that another feature works. UI-to-storage-to-UI journeys across features belong in Playwright.
 
 ## Adding or changing an E2E journey
 
@@ -38,8 +46,14 @@ Use browser-harness support only for conditions that ordinary UI actions cannot 
 5. When input overrides change an expected calculation or PDF, supply the corresponding independently authored expected values too; an `expected.pdfText` override replaces the complete expected list. Do not import application schemas, calculations, serializers, storage code, or app-owned types into shared scenarios.
 6. Keep every executable Playwright test in `tests/e2e/`, then run the relevant package test command and the repository-required verification commands before handoff.
 
-## Vitest reuse and future robots
+## Adding or changing a Vitest module test
 
-Vitest may import `tests/scenarios/` directly; scenario factories have no runner dependency. Pure-function tests do not need robots. Existing Vitest tests are not being migrated by the E2E refactor.
+Business Profile and Invoice rendered-module suites use Vitest feature robots and shared scenarios. Shell, Home route, and focused unit/module suites retain their existing test interfaces; pure-function tests do not need robots.
 
-If a future rendered-component test benefits from a robot, implement a separate Testing Library version under `tests/robots/vitest/`. It can encapsulate `screen` queries, `userEvent`, and explicit assertions at the rendered module's chosen seam. Keep it runner-specific rather than sharing Playwright interaction code or requiring both robot implementations to have identical interfaces. Decide Vitest migration scope, rendering ownership, cleanup, and prerequisite policy separately before changing existing tests. No Vitest robot directory is needed until that work exists.
+1. Render the module and configure prerequisites explicitly at the existing seam. Keep reset/cleanup hooks visible in the suite.
+2. Create fresh examples from `tests/scenarios/` and override inputs relevant to the behavior. Invalid and incomplete user input must remain representable; robot inputs use test-owned types rather than application draft types.
+3. Compose meaningful robot tasks, including partial edits, blur/Enter actions, uploads, and separate confirmation or cancellation actions. Keep UI queries and interactions in the robot.
+4. Invoke the feature checks that prove the test's claimed outcome explicitly. Keep expected totals independently authored and inspect returned values, persistence, or intercepted artifacts in the test. Download interception in jsdom does not prove a downloaded file's contents.
+5. Preserve existing behavioral and accessibility assertions during a rework. Run the focused suite during development and the repository-required verification commands before handoff.
+
+These conventions are enforced through guidance and review rather than a custom architecture linter.

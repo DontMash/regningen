@@ -11,7 +11,7 @@ After any code-related changes, run these package scripts and require each to pa
 
 ## Testing
 
-Test architecture, E2E contribution workflow, setup policy, and support-module locations: [docs/testing.md](docs/testing.md).
+Test architecture, contribution workflow, setup policy, and support-module locations: [docs/testing.md](docs/testing.md).
 
 ## Agent skills
 

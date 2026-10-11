@@ -13,7 +13,7 @@ pnpm dev
 
 The app is available at <http://localhost:3000>.
 
-See the [testing guide](docs/testing.md) for test architecture and E2E contribution conventions.
+See the [testing guide](docs/testing.md) for test architecture and contribution conventions.
 
 ## Checks
 
@@ -25,7 +25,7 @@ pnpm test:e2e
 pnpm build
 ```
 
-The unit tests use Vitest. The Playwright integration tests use Chromium; install it once with:
+Unit and module-level integration tests use Vitest. Browser-level integration tests use Playwright with Chromium; install it once with:
 
 ```bash
 pnpm exec playwright install chromium
