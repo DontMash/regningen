@@ -231,6 +231,8 @@ describe('invoice editor', () => {
       },
     ])
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+    expect(invoiceDraftStore.state.number).toBe(input.number)
+    invoice.expectMessageAbsent('PDF konnte nicht erstellt werden')
   })
 
   it('reports a browser download failure without claiming PDF creation succeeded', async () => {

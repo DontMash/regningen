@@ -9,6 +9,7 @@ import { TanStackDevtools } from '@tanstack/react-devtools'
 import Footer from '../components/Footer'
 import Header from '../components/Header'
 import { ReleaseNotesProvider } from '@/features/release-notes/ReleaseNotesProvider'
+import { PwaProvider } from '@/features/pwa/PwaProvider'
 import { Toaster } from '@/components/ui/toast'
 import StoreDevtools from '../lib/theme-store-devtools'
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
@@ -36,8 +37,32 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       {
         title: 'regningen',
       },
+      {
+        name: 'theme-color',
+        content: '#ec003f',
+      },
+      {
+        name: 'application-name',
+        content: 'regningen',
+      },
+      {
+        name: 'apple-mobile-web-app-capable',
+        content: 'yes',
+      },
+      {
+        name: 'apple-mobile-web-app-title',
+        content: 'regningen',
+      },
     ],
     links: [
+      {
+        rel: 'manifest',
+        href: '/manifest.webmanifest',
+      },
+      {
+        rel: 'apple-touch-icon',
+        href: '/icons/apple-touch-icon.png',
+      },
       {
         rel: 'icon',
         type: 'image/svg+xml',
@@ -80,28 +105,30 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body className="relative min-h-screen antialiased">
-        <ReleaseNotesProvider>
-          <Header />
-          <main id="hauptinhalt" className="min-h-screen">
-            {children}
-          </main>
-          <Footer />
-          <Toaster />
-          <TanStackDevtools
-            config={{
-              position: 'bottom-right',
-            }}
-            plugins={[
-              {
-                name: 'Tanstack Router',
-                render: <TanStackRouterDevtoolsPanel />,
-              },
-              StoreDevtools,
-              TanStackQueryDevtools,
-            ]}
-          />
-          <Scripts />
-        </ReleaseNotesProvider>
+        <PwaProvider>
+          <ReleaseNotesProvider>
+            <Header />
+            <main id="hauptinhalt" className="min-h-screen">
+              {children}
+            </main>
+            <Footer />
+            <Toaster />
+            <TanStackDevtools
+              config={{
+                position: 'bottom-right',
+              }}
+              plugins={[
+                {
+                  name: 'Tanstack Router',
+                  render: <TanStackRouterDevtoolsPanel />,
+                },
+                StoreDevtools,
+                TanStackQueryDevtools,
+              ]}
+            />
+            <Scripts />
+          </ReleaseNotesProvider>
+        </PwaProvider>
       </body>
     </html>
   )

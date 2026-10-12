@@ -53,6 +53,7 @@ function acknowledgeInAnotherTab(versions: string[]) {
 
 beforeEach(() => {
   window.localStorage.clear()
+  window.sessionStorage.clear()
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => ({
@@ -253,6 +254,42 @@ describe('release-notes application state', () => {
     expect(request).toHaveBeenCalledWith(storageKey, expect.any(Function))
     expect(
       screen.queryByRole('dialog', { name: 'Versionshinweise' }),
+    ).toBeNull()
+  })
+
+  it('acknowledges staged notes only after the tab reloads into that release', async () => {
+    window.sessionStorage.setItem(
+      'regningen.pwa.update-acknowledgment',
+      '2.0.0',
+    )
+    renderProvider()
+
+    await waitFor(() =>
+      expect(window.localStorage.getItem(storageKey)).toBe('["2.0.0"]'),
+    )
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Versionshinweise' }),
+      ).toBeNull(),
+    )
+    expect(
+      window.sessionStorage.getItem('regningen.pwa.update-acknowledgment'),
+    ).toBeNull()
+  })
+
+  it('does not acknowledge an update marker when a different version is running', async () => {
+    window.sessionStorage.setItem(
+      'regningen.pwa.update-acknowledgment',
+      '3.0.0',
+    )
+    renderProvider()
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Versionshinweise' }),
+    ).toBeVisible()
+    expect(window.localStorage.getItem(storageKey)).toBeNull()
+    expect(
+      window.sessionStorage.getItem('regningen.pwa.update-acknowledgment'),
     ).toBeNull()
   })
 

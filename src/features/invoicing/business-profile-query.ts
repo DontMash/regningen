@@ -10,6 +10,7 @@ import {
   clearBusinessProfileStorageFailure,
   markBusinessProfileStorageFailure,
 } from './business-profile-storage-status'
+import { runPwaCriticalOperation } from '@/features/pwa/update-participants'
 
 export const BUSINESS_PROFILE_QUERY_KEY = ['business-profile'] as const
 
@@ -25,6 +26,7 @@ export function useBusinessProfile() {
   )
 
   return useQuery<BusinessProfileDraft | null>({
+    networkMode: 'always',
     queryKey: BUSINESS_PROFILE_QUERY_KEY,
     queryFn: async () => {
       try {
@@ -47,10 +49,12 @@ export function useSaveBusinessProfile() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (profile: BusinessProfileDraft) => {
-      await createBrowserBusinessProfileRepository().saveProfile(profile)
-      return profile
-    },
+    networkMode: 'always',
+    mutationFn: (profile: BusinessProfileDraft) =>
+      runPwaCriticalOperation(async () => {
+        await createBrowserBusinessProfileRepository().saveProfile(profile)
+        return profile
+      }),
     onSuccess: (profile) => {
       clearBusinessProfileStorageFailure()
       queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, profile)
@@ -63,8 +67,11 @@ export function useImportBusinessProfile() {
   const queryClient = useQueryClient()
 
   return useMutation({
+    networkMode: 'always',
     mutationFn: (backup: string) =>
-      createBrowserBusinessProfileRepository().importProfile(backup),
+      runPwaCriticalOperation(() =>
+        createBrowserBusinessProfileRepository().importProfile(backup),
+      ),
     onSuccess: (profile) => {
       clearBusinessProfileStorageFailure()
       queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, profile)
@@ -81,7 +88,11 @@ export function useDeleteBusinessProfile() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => createBrowserBusinessProfileRepository().deleteProfile(),
+    networkMode: 'always',
+    mutationFn: () =>
+      runPwaCriticalOperation(() =>
+        createBrowserBusinessProfileRepository().deleteProfile(),
+      ),
     onSuccess: () => {
       clearBusinessProfileStorageFailure()
       queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, null)

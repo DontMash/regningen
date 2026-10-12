@@ -4,9 +4,13 @@ import { cn } from 'cn'
 import { buttonVariants } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useReleaseNotes } from '@/features/release-notes/ReleaseNotesProvider'
+import { NotificationControl } from '@/features/pwa/PwaControls'
+import { useOptionalPwa } from '@/features/pwa/PwaProvider'
 
 export default function Footer() {
   const { applicationVersion, openReleaseNotes } = useReleaseNotes()
+  const pwa = useOptionalPwa()
+  const stagedVersion = pwa?.stagedRelease?.version
   return (
     <footer className="border-t bg-background">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:py-10">
@@ -87,17 +91,39 @@ export default function Footer() {
                 soren
               </a>
             </p>
-            <button
-              type="button"
-              aria-label={`Versionshinweise zu Version v${applicationVersion} anzeigen`}
-              onClick={openReleaseNotes}
-              className={cn(
-                buttonVariants({ variant: 'ghost', size: 'sm' }),
-                'text-muted-foreground',
-              )}
-            >
-              v{applicationVersion}
-            </button>
+            <NotificationControl />
+            {pwa?.offlineReady ? (
+              <span
+                className="paragraph-small text-muted-foreground"
+                role="status"
+              >
+                Offline bereit
+              </span>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                aria-label={`Versionshinweise zu Version v${applicationVersion} anzeigen`}
+                aria-describedby={
+                  stagedVersion ? 'staged-update-status' : undefined
+                }
+                onClick={openReleaseNotes}
+                className={cn(
+                  buttonVariants({ variant: 'ghost', size: 'sm' }),
+                  'text-muted-foreground',
+                )}
+              >
+                v{applicationVersion}
+              </button>
+              {stagedVersion ? (
+                <span
+                  id="staged-update-status"
+                  className="paragraph-small text-primary"
+                >
+                  Update v{stagedVersion} verfügbar
+                </span>
+              ) : null}
+            </div>
           </div>
           <a
             href="#top"

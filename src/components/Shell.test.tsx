@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Header from './Header'
 import ThemeToggle from './ThemeToggle'
+import { PwaProvider } from '@/features/pwa/PwaProvider'
 import { themeStore } from '@/lib/theme-store'
 import { BUSINESS_PROFILE_STORAGE_KEY } from '@/features/invoicing/business-profile-repository'
 import {
@@ -87,7 +88,13 @@ describe('application shell', () => {
       'matchMedia',
       vi.fn(() => mediaQuery(false)),
     )
-    await renderAtRoute('/', Header)
+    await renderAtRoute('/', function HeaderWithPwa() {
+      return (
+        <PwaProvider>
+          <Header />
+        </PwaProvider>
+      )
+    })
     expect(
       await screen.findByRole('navigation', { name: 'Hauptnavigation' }),
     ).toBeVisible()

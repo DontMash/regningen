@@ -6,6 +6,7 @@ import {
 } from '@/features/invoicing/business-profile-query'
 import ThemeToggle from './ThemeToggle'
 import { buttonVariants } from './ui/button'
+import { InstallButton } from '@/features/pwa/PwaControls'
 
 export default function Header() {
   const { data: profile } = useBusinessProfile()
@@ -46,6 +47,7 @@ export default function Header() {
             <IconUser data-icon="inline-start" />
             Profile
           </Link>
+          <InstallButton />
           <ThemeToggle />
         </div>
       </nav>

@@ -5,6 +5,7 @@ import { BusinessProfileRobot } from '../../robots/playwright/business-profile'
 import { FooterRobot } from '../../robots/playwright/footer'
 import { InvoiceRobot } from '../../robots/playwright/invoice'
 import { LanguageRobot } from '../../robots/playwright/language'
+import { PwaRobot } from '../../robots/playwright/pwa'
 import { ReleaseNotesRobot } from '../../robots/playwright/release-notes'
 import { ThemeRobot } from '../../robots/playwright/theme'
 import { ArtifactSupport } from './artifacts'
@@ -20,6 +21,7 @@ export type PlaywrightRobots = {
   invoice: InvoiceRobot
   language: LanguageRobot
   releaseNotes: ReleaseNotesRobot
+  pwa: PwaRobot
   theme: ThemeRobot
 }
 
@@ -47,6 +49,9 @@ export const test = base.extend<TestFixtures>({
   },
   language: async ({ page }, use) => {
     await use(new LanguageRobot(page))
+  },
+  pwa: async ({ page }, use) => {
+    await use(new PwaRobot(page))
   },
   releaseNotes: async ({ page }, use) => {
     await use(new ReleaseNotesRobot(page))
@@ -76,6 +81,7 @@ export const test = base.extend<TestFixtures>({
       footer: new FooterRobot(robotPage),
       invoice: new InvoiceRobot(robotPage),
       language: new LanguageRobot(robotPage),
+      pwa: new PwaRobot(robotPage),
       releaseNotes: new ReleaseNotesRobot(robotPage),
       theme: new ThemeRobot(robotPage),
     }))

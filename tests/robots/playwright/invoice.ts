@@ -222,6 +222,30 @@ export class InvoiceRobot {
     await expect(this.control('number')).toHaveValue(number)
   }
 
+  async expectSubject(subject: string) {
+    await expect(this.control('subject')).toHaveValue(subject)
+  }
+
+  async expectRecipientField(field: keyof RecipientInput, value: string) {
+    await expect(this.recipientControl(field)).toHaveValue(value)
+  }
+
+  async expectSelectedDate(isoDate: string) {
+    const [year, month, day] = isoDate.split('-').map(Number)
+    const expectedDate = new Date(year, month - 1, day).toLocaleDateString(
+      'de-DE',
+    )
+    await expect(
+      this.page.getByRole('button', { name: /^Datum/ }),
+    ).toContainText(expectedDate)
+  }
+
+  async expectVatRate(rate: 7 | 19) {
+    await expect(
+      this.page.getByRole('button', { name: `${rate} %`, exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  }
+
   async expectPositionCount(count: number) {
     await expect(
       this.page

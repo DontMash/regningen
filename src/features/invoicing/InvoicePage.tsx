@@ -59,6 +59,8 @@ import { businessProfileStorageStatus } from './business-profile-storage-status'
 import {
   createEmptyInvoiceDraft,
   invoiceDraftStore,
+  invoicePositionDraftStore,
+  clearInvoiceUpdateSnapshot,
 } from './invoice-draft-store'
 import type { InvoiceDraft, InvoiceLineDraft, VatRate } from './invoice'
 import {
@@ -67,6 +69,8 @@ import {
   parseEuroAmount,
 } from './invoice'
 import { createInvoicePdf } from './pdf'
+import { useOptionalPwa } from '@/features/pwa/PwaProvider'
+import { runPwaCriticalOperation } from '@/features/pwa/update-participants'
 import {
   IconCalendar,
   IconEdit,
@@ -118,14 +122,18 @@ function formattedEuro(cents: number) {
     .replaceAll('\u00a0', ' ')
 }
 
-function savePdf(bytes: Uint8Array, invoice: InvoiceDraft) {
+function suggestedPdfFilename(invoice: InvoiceDraft) {
   const safeNumber = invoice.number.replace(/[^a-zA-Z0-9_-]/g, '_')
+  return `Rechnung_${safeNumber}_${invoice.date}.pdf`
+}
+
+function savePdf(bytes: Uint8Array, filename: string) {
   const url = URL.createObjectURL(
     new Blob([bytes as BlobPart], { type: 'application/pdf' }),
   )
   const link = document.createElement('a')
   link.href = url
-  link.download = `Rechnung_${safeNumber}_${invoice.date}.pdf`
+  link.download = filename
   document.body.append(link)
   link.click()
   link.remove()
@@ -407,11 +415,9 @@ function InvoiceEditor({
   storageError: string | null
 }) {
   const draft = useSelector(invoiceDraftStore, (state) => state)
+  const pwa = useOptionalPwa()
   const [touched, setTouched] = useState<Set<string>>(() => new Set())
-  const [newItem, setNewItem] = useState<InvoiceLineDraft>({
-    description: '',
-    amount: '',
-  })
+  const newItem = useSelector(invoicePositionDraftStore, (state) => state)
   const [newItemSubmitted, setNewItemSubmitted] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -431,12 +437,16 @@ function InvoiceEditor({
 
       setIsGenerating(true)
       try {
-        const bytes = await createInvoicePdf(profile, value)
-        savePdf(bytes, value)
-        toast.add({
-          title: 'PDF wurde erstellt',
-          description: 'Das PDF wurde heruntergeladen.',
-          type: 'success',
+        await runPwaCriticalOperation(async () => {
+          const bytes = await createInvoicePdf(profile, value)
+          const filename = suggestedPdfFilename(value)
+          savePdf(bytes, filename)
+          toast.add({
+            title: 'PDF wurde erstellt',
+            description: 'Das PDF wurde heruntergeladen.',
+            type: 'success',
+          })
+          void pwa?.reportPdfExport(filename)
         })
       } catch (error) {
         toast.add({
@@ -499,7 +509,7 @@ function InvoiceEditor({
     const items = [...form.state.values.items, { ...newItem }]
     form.setFieldValue('items', items)
     invoiceDraftStore.setState((current) => ({ ...current, items }))
-    setNewItem({ description: '', amount: '' })
+    invoicePositionDraftStore.setState(() => ({ description: '', amount: '' }))
     setNewItemSubmitted(false)
   }
 
@@ -538,11 +548,16 @@ function InvoiceEditor({
   }
 
   function resetInvoice() {
+    try {
+      clearInvoiceUpdateSnapshot(window.sessionStorage)
+    } catch {
+      // The new invoice still starts clean if temporary storage is unavailable.
+    }
     const freshInvoice = { ...createEmptyInvoiceDraft(), date: localDate() }
     form.reset(freshInvoice)
     invoiceDraftStore.setState(() => freshInvoice)
     setTouched(new Set())
-    setNewItem({ description: '', amount: '' })
+    invoicePositionDraftStore.setState(() => ({ description: '', amount: '' }))
     setNewItemSubmitted(false)
     setConfirmReset(false)
   }
@@ -850,7 +865,10 @@ function InvoiceEditor({
                     maxLength={85}
                     form="new-position-form"
                     onChange={(description) =>
-                      setNewItem((current) => ({ ...current, description }))
+                      invoicePositionDraftStore.setState((current) => ({
+                        ...current,
+                        description,
+                      }))
                     }
                     error={
                       newItemSubmitted ? newItemErrors.description : undefined
@@ -864,7 +882,10 @@ function InvoiceEditor({
                     value={newItem.amount}
                     form="new-position-form"
                     onChange={(amount) =>
-                      setNewItem((current) => ({ ...current, amount }))
+                      invoicePositionDraftStore.setState((current) => ({
+                        ...current,
+                        amount,
+                      }))
                     }
                     error={newItemSubmitted ? newItemErrors.amount : undefined}
                   />

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import AdaptiveDialog from '@/components/AdaptiveDialog'
 import type { ReleaseEntry } from '@/lib/release-catalog'
+import type { StagedRelease } from '@/features/pwa/PwaProvider'
 
 interface ReleaseNotesDialogProps {
   open: boolean
@@ -22,6 +23,10 @@ interface ReleaseNotesDialogProps {
   selectedVersion: string
   onVersionChange: (version: string) => void
   releases: ReleaseEntry[]
+  stagedRelease?: StagedRelease | null
+  onApplyUpdate?: () => void
+  updateState?: 'idle' | 'preparing' | 'accepted'
+  updateError?: string | null
 }
 
 const markdownComponents: Components = {
@@ -38,10 +43,18 @@ function ReleaseNotesDialog({
   selectedVersion,
   onVersionChange,
   releases,
+  stagedRelease = null,
+  onApplyUpdate = () => {},
+  updateState = 'idle',
+  updateError = null,
 }: ReleaseNotesDialogProps) {
-  const selectedRelease = releases.find(
-    (release) => release.version === selectedVersion,
-  )
+  const stagedSelected = stagedRelease?.version === selectedVersion
+  const selectedRelease = stagedSelected
+    ? stagedRelease
+    : releases.find((release) => release.version === selectedVersion)
+  const availableReleases = stagedRelease
+    ? [stagedRelease, ...releases]
+    : releases
 
   function acknowledgeRunningVersion() {
     onAcknowledge(currentVersion)
@@ -53,12 +66,42 @@ function ReleaseNotesDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Versionshinweise"
-      footer={<Button onClick={acknowledgeRunningVersion}>Verstanden</Button>}
+      footer={
+        stagedSelected ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Später
+            </Button>
+            <Button onClick={onApplyUpdate} disabled={updateState !== 'idle'}>
+              {updateState === 'preparing'
+                ? 'Eingaben werden gesichert …'
+                : updateState === 'accepted'
+                  ? 'Aktualisierung wird gestartet …'
+                  : 'Update jetzt'}
+            </Button>
+          </div>
+        ) : (
+          <Button onClick={acknowledgeRunningVersion}>Verstanden</Button>
+        )
+      }
       stickyHeader={
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="paragraph-small text-muted-foreground">
-            Version {selectedVersion}
-          </p>
+          <div className="flex flex-col gap-1">
+            {stagedRelease ? (
+              <>
+                <p className="paragraph-small text-muted-foreground">
+                  Laufende Version: v{currentVersion}
+                </p>
+                <p className="paragraph-small text-primary">
+                  Neue Version bereit: v{stagedRelease.version}
+                </p>
+              </>
+            ) : (
+              <p className="paragraph-small text-muted-foreground">
+                Version {selectedVersion}
+              </p>
+            )}
+          </div>
           <Select
             value={selectedVersion}
             onValueChange={(value) => {
@@ -73,9 +116,12 @@ function ReleaseNotesDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {releases.map((release) => (
+                {availableReleases.map((release) => (
                   <SelectItem key={release.version} value={release.version}>
                     v{release.version}
+                    {release.version === stagedRelease?.version
+                      ? ' (bereit)'
+                      : ''}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -84,6 +130,11 @@ function ReleaseNotesDialog({
         </div>
       }
     >
+      {stagedSelected && updateError ? (
+        <p role="alert" className="paragraph-small mb-4 text-destructive">
+          {updateError}
+        </p>
+      ) : null}
       {selectedRelease ? (
         <article className="prose prose-sm max-w-none text-foreground prose-headings:font-serif prose-a:text-primary dark:prose-invert">
           <ReactMarkdown components={markdownComponents}>
