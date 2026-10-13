@@ -957,40 +957,10 @@ function InvoiceEditor({
               </Field>
             </CardContent>
           </Card>
-
-          <form
-            id="invoice-form"
-            noValidate
-            className="flex flex-col gap-5"
-            onSubmit={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              void form.handleSubmit()
-            }}
-          >
-            <Button
-              type="submit"
-              disabled={
-                !validInvoice ||
-                isGenerating ||
-                profileChanged ||
-                !profile ||
-                Boolean(storageError)
-              }
-            >
-              {isGenerating ? 'PDF wird erstellt …' : 'PDF erstellen'}
-            </Button>
-            <p className="paragraph-small text-muted-foreground">
-              Das PDF enthält das gewählte Datum fest. Eine neue Rechnung
-              beginnt mit leeren Eingaben. Der Invoice Draft wird vorübergehend
-              in dieser Browsersitzung gespeichert und kann nach einem Neuladen
-              wiederhergestellt werden.
-            </p>
-          </form>
         </div>
       </div>
 
-      <aside className="lg:sticky lg:top-6 lg:self-start">
+      <aside className="lg:sticky lg:top-6 lg:self-start space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Rechnungsübersicht</CardTitle>
@@ -1017,6 +987,30 @@ function InvoiceEditor({
             </p>
           </CardContent>
         </Card>
+
+        <form
+          id="invoice-form"
+          noValidate
+          className="flex flex-col gap-5"
+          onSubmit={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <Button
+            type="submit"
+            disabled={
+              !validInvoice ||
+              isGenerating ||
+              profileChanged ||
+              !profile ||
+              Boolean(storageError)
+            }
+          >
+            {isGenerating ? 'PDF wird erstellt …' : 'PDF erstellen'}
+          </Button>
+        </form>
       </aside>
     </div>
   )
