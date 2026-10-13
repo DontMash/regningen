@@ -25,56 +25,40 @@ export class PwaRobot {
     ).toBeVisible()
   }
 
-  async expectStagedVersion(version: string, runningVersion: string) {
+  async expectUpdateAvailable() {
     await expect(
-      this.page.getByText(`Update v${version} verfügbar`, { exact: true }),
+      this.page.getByRole('dialog', { name: 'Aktualisierung verfügbar' }),
     ).toBeVisible({ timeout: 30_000 })
-    await expect(
-      this.page.getByRole('dialog', { name: 'Versionshinweise' }),
-    ).toBeVisible()
-    const dialog = this.page.getByRole('dialog', { name: 'Versionshinweise' })
-    await expect(
-      dialog.getByText(`Laufende Version: v${runningVersion}`),
-    ).toBeVisible()
-    await expect(
-      dialog.getByText(`Neue Version bereit: v${version}`),
-    ).toBeVisible()
-    await expect(
-      dialog.getByText(
-        'Independently authored production release B notes include $& literally.',
-      ),
-    ).toBeVisible()
   }
 
-  async postponeStagedUpdate() {
+  async postponeUpdate() {
     await this.page
-      .getByRole('dialog', { name: 'Versionshinweise' })
+      .getByRole('dialog', { name: 'Aktualisierung verfügbar' })
       .getByRole('button', { name: 'Später' })
       .click()
-  }
-
-  async reopenStagedUpdate() {
-    await this.page
-      .getByRole('button', { name: /^Versionshinweise zu Version/ })
-      .click()
     await expect(
-      this.page.getByRole('button', { name: 'Update jetzt' }),
+      this.page.getByRole('button', { name: 'Update verfügbar' }),
     ).toBeVisible()
   }
 
-  async applyStagedUpdate() {
+  async reopenUpdate() {
+    await this.page.getByRole('button', { name: 'Update verfügbar' }).click()
+    await expect(
+      this.page.getByRole('dialog', { name: 'Aktualisierung verfügbar' }),
+    ).toBeVisible()
+  }
+
+  async applyUpdate() {
     await this.page
-      .getByRole('dialog', { name: 'Versionshinweise' })
+      .getByRole('dialog', { name: 'Aktualisierung verfügbar' })
       .getByRole('button', { name: 'Update jetzt' })
       .click()
   }
 
-  async expectUpdateDeferred(reason: string) {
-    const dialog = this.page.getByRole('dialog', { name: 'Versionshinweise' })
-    await expect(dialog.getByRole('alert')).toHaveText(reason)
+  async expectUpdateClosed() {
     await expect(
-      dialog.getByRole('button', { name: 'Update jetzt' }),
-    ).toBeEnabled()
+      this.page.getByRole('dialog', { name: 'Aktualisierung verfügbar' }),
+    ).toHaveCount(0)
   }
 
   async enableNotifications() {
@@ -89,12 +73,6 @@ export class PwaRobot {
         name: 'Benachrichtigungen deaktivieren',
       }),
     ).toBeVisible()
-  }
-
-  async expectStagedUpdateClosed() {
-    await expect(
-      this.page.getByRole('dialog', { name: 'Versionshinweise' }),
-    ).toHaveCount(0)
   }
 
   async expectReleaseBInvoiceAsset() {

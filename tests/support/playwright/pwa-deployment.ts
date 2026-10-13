@@ -44,7 +44,7 @@ export class PwaDeployment {
     try {
       const releaseASource = join(temporaryDirectory, 'release-a-source')
       await createReleaseSource(releaseASource)
-      await runCommand('pnpm', ['exec', 'vite', 'build'], releaseASource)
+      await runCommand('pnpm', ['build'], releaseASource)
       const releaseA = join(temporaryDirectory, 'release-a')
       await cp(join(releaseASource, '.output'), releaseA, { recursive: true })
 
@@ -55,10 +55,10 @@ export class PwaDeployment {
         join(projectRoot, 'CHANGELOG.md'),
         'utf8',
       )
-      const versionB = nextPatchVersion(packageManifest.version)
+      const versionB = packageManifest.version
       const releaseBSource = join(temporaryDirectory, 'release-b-source')
       await createReleaseBSource(releaseBSource, versionB, changelog)
-      await runCommand('pnpm', ['exec', 'vite', 'build'], releaseBSource)
+      await runCommand('pnpm', ['build'], releaseBSource)
       const releaseB = join(temporaryDirectory, 'release-b')
       await cp(join(releaseBSource, '.output'), releaseB, { recursive: true })
 
@@ -111,18 +111,11 @@ export class PwaDeployment {
         throw new Error(`Production server exited early:\n${this.serverOutput}`)
       }
       try {
-        const response = await fetch(`${this.baseUrl}/pwa-release.json`, {
+        const response = await fetch(`${this.baseUrl}/sw.js`, {
           signal: AbortSignal.timeout(1000),
         })
-        if (response.ok) {
-          const releaseInfo = (await response.json()) as { version?: string }
-          if (releaseInfo.version !== this.version(release)) {
-            throw new Error(
-              `Expected release ${this.version(release)}, received ${releaseInfo.version}.`,
-            )
-          }
-          return
-        }
+        const worker = response.ok ? await response.text() : ''
+        if (response.ok && worker.includes('precacheAndRoute')) return
       } catch (error) {
         if (
           error instanceof Error &&
@@ -167,10 +160,13 @@ async function createReleaseSource(directory: string) {
     'public',
     'docs',
     'vite.config.ts',
+    'pwa-assets.config.ts',
+    'scripts',
     'tsconfig.json',
     'tsr.config.json',
     'components.json',
     'pnpm-workspace.yaml',
+    'pnpm-lock.yaml',
     'package.json',
     'CHANGELOG.md',
   ]) {
@@ -199,11 +195,7 @@ async function createReleaseBSource(
     join(directory, 'package.json'),
     `${JSON.stringify(packageManifest, null, 2)}\n`,
   )
-  const oldChangelog = previousChangelog.replace(/^# Changelog\s*/i, '')
-  await writeFile(
-    join(directory, 'CHANGELOG.md'),
-    `# Changelog\n\n## ${version}\n\n### Test fixture\n\n- Independently authored production release B notes include $& literally.\n\n${oldChangelog}`,
-  )
+  await writeFile(join(directory, 'CHANGELOG.md'), previousChangelog)
 
   const invoicePagePath = join(
     directory,
@@ -221,13 +213,6 @@ async function createReleaseBSource(
       `${invoiceHeading}\n            <p>Release B lazy asset fixture</p>`,
     ),
   )
-}
-
-function nextPatchVersion(version: string) {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version)
-  if (!match)
-    throw new Error(`Expected a stable SemVer version, received ${version}.`)
-  return `${match[1]}.${match[2]}.${Number(match[3]) + 1}`
 }
 
 async function findAvailablePort() {

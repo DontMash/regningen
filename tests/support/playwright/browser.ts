@@ -14,6 +14,16 @@ export class BrowserControls {
     await this.page.reload()
   }
 
+  async cancelReloadAtUnsavedWarning() {
+    const warning = this.page.waitForEvent('dialog')
+    const reload = this.page.evaluate(() => window.location.reload())
+    const dialog = await warning
+    const type = dialog.type()
+    await dialog.dismiss()
+    await reload
+    return type
+  }
+
   async setViewport(width: number, height: number) {
     await this.page.setViewportSize({ width, height })
   }

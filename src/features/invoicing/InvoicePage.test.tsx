@@ -10,7 +10,10 @@ import { createBusinessProfileScenario } from '../../../tests/scenarios/business
 import { createInvoiceScenario } from '../../../tests/scenarios/invoice'
 import {
   createEmptyInvoiceDraft,
+  disposeInvoiceDraftPersistence,
+  initializeInvoiceDraftPersistence,
   invoiceDraftStore,
+  invoicePositionDraftStore,
 } from './invoice-draft-store'
 import { createBusinessProfileRepository } from './business-profile-repository'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
@@ -20,16 +23,21 @@ import {
   renderAtRoute,
 } from '../../../tests/support/vitest/render'
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   window.localStorage.clear()
+  window.sessionStorage.clear()
   invoiceDraftStore.setState(() => createEmptyInvoiceDraft())
+  invoicePositionDraftStore.setState(() => ({ description: '', amount: '' }))
   businessProfileStorageStatus.setState(() => ({ error: null }))
+  await initializeInvoiceDraftPersistence()
 })
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   disposeTestRouters()
+  await disposeInvoiceDraftPersistence()
+  window.sessionStorage.clear()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })

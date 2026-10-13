@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3000",
-    "build": "vite build",
+    "build": "vite build && node scripts/finalize-pwa-output.mjs",
     "build:routes": "tsr generate",
     "preview": "vite preview",
     "release": "changelogen --release --clean --no-github",
@@ -67,6 +67,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@vite-pwa/assets-generator": "^2.0.0",
     "@vitejs/plugin-react": "^6.0.1",
     "@vitest/coverage-v8": "5.0.2",
     "babel-plugin-react-compiler": "^1.0.0",
@@ -77,6 +78,8 @@
     "prettier": "^3.8.1",
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
-    "vitest": "^5.0.2"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.2",
+    "workbox-window": "^7.4.1"
   }
 }

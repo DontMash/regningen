@@ -1,11 +1,16 @@
+// @vitest-environment jsdom
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createEmptyInvoiceDraft,
+  disposeInvoiceDraftPersistence,
+  initializeInvoiceDraftPersistence,
+  invoiceDraftPersistenceStore,
   invoiceDraftStore,
   invoicePositionDraftStore,
   resetInvoiceDraft,
-  restoreInvoiceUpdateSnapshot,
-  saveInvoiceUpdateSnapshot,
+  clearStoredInvoiceDraft,
+  waitForInvoiceDraftPersistence,
 } from './invoice-draft-store'
 
 const expectedEmptyDraft = {
@@ -21,14 +26,43 @@ const expectedEmptyDraft = {
   items: [],
 }
 
-function createSessionStorage() {
-  const values = new Map<string, string>()
+function createSessionStorage(initial: Record<string, unknown> = {}) {
+  const values = new Map<string, unknown>(Object.entries(initial))
   return {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => values.set(key, value),
-    removeItem: (key: string) => values.delete(key),
+    getItem: async (key: string) => values.get(key) ?? null,
+    setItem: async (key: string, value: unknown) => {
+      values.set(key, value)
+    },
+    removeItem: async (key: string) => {
+      values.delete(key)
+    },
+    values,
   }
 }
+
+const storedDraft = {
+  schemaVersion: 1,
+  invoice: {
+    ...expectedEmptyDraft,
+    number: ' draft / 17 ',
+    date: '',
+    subject: ' Unfinished subject ',
+    company: 'Recipient GmbH',
+    street: 'Main St',
+    rate: 19 as const,
+    items: [{ description: 'Consulting ', amount: 'not a price' }],
+  },
+  newPosition: { description: ' Unsubmitted ', amount: '0,' },
+}
+
+beforeEach(() => {
+  resetInvoiceDraft()
+})
+
+afterEach(() => {
+  disposeInvoiceDraftPersistence()
+  resetInvoiceDraft()
+})
 
 describe('empty invoice drafts', () => {
   it('starts with empty fields, no positions, and 7% VAT', () => {
@@ -48,87 +82,181 @@ describe('empty invoice drafts', () => {
   })
 })
 
-describe('temporary invoice snapshots for an accepted update', () => {
-  beforeEach(resetInvoiceDraft)
-  afterEach(resetInvoiceDraft)
+describe('session-autosaved Invoice Drafts', () => {
+  it('restores incomplete values exactly, including a blank date and the unsubmitted position', async () => {
+    const storage = createSessionStorage({
+      'regningen.invoice-draft': storedDraft,
+    })
 
-  it('restores exact incomplete invoice and unsubmitted position values in the same tab', () => {
-    const tabStorage = createSessionStorage()
-    const incompleteInvoice = {
-      ...createEmptyInvoiceDraft(),
-      number: ' draft / 17 ',
-      date: 'not-a-date',
-      subject: 'Unfinished subject',
-      company: 'Recipient GmbH',
-      street: 'Main St',
-      postalCode: '',
-      town: 'Hamburg',
-      rate: 19 as const,
-      items: [{ description: 'Consulting', amount: 'not a price' }],
+    await initializeInvoiceDraftPersistence(storage)
+
+    expect(invoiceDraftStore.state).toEqual(storedDraft.invoice)
+    expect(invoicePositionDraftStore.state).toEqual(storedDraft.newPosition)
+    expect(invoiceDraftPersistenceStore.state).toMatchObject({
+      initialized: true,
+      saved: true,
+      error: null,
+    })
+    expect(storage.values.get('regningen.invoice-draft')).toEqual(storedDraft)
+  })
+
+  it('saves every edit as one current envelope without waiting for a debounce', async () => {
+    const storage = createSessionStorage()
+    await initializeInvoiceDraftPersistence(storage)
+
+    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'draft-1' }))
+    invoicePositionDraftStore.setState(() => ({
+      description: 'unfinished row',
+      amount: '0,',
+    }))
+    await waitForInvoiceDraftPersistence()
+
+    expect(storage.values.get('regningen.invoice-draft')).toEqual({
+      schemaVersion: 1,
+      invoice: { ...expectedEmptyDraft, number: 'draft-1' },
+      newPosition: { description: 'unfinished row', amount: '0,' },
+    })
+    expect(invoiceDraftPersistenceStore.state).toMatchObject({
+      saved: true,
+      error: null,
+    })
+  })
+
+  it('warns and starts empty for an unsupported envelope rather than guessing fields', async () => {
+    const storage = createSessionStorage({
+      'regningen.invoice-draft': {
+        ...storedDraft,
+        invoice: { ...storedDraft.invoice, town: 42 },
+      },
+    })
+
+    await initializeInvoiceDraftPersistence(storage)
+
+    expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
+    expect(invoicePositionDraftStore.state).toEqual({
+      description: '',
+      amount: '',
+    })
+    expect(invoiceDraftPersistenceStore.state).toMatchObject({
+      initialized: true,
+      saved: true,
+      error: expect.stringContaining('Entwurf'),
+    })
+    expect(storage.values.has('regningen.invoice-draft')).toBe(false)
+  })
+
+  it('keeps edits in memory and marks them unsaved when session persistence fails', async () => {
+    const storage = createSessionStorage()
+    storage.setItem = async () => {
+      throw new Error('session storage blocked')
     }
-    const incompletePosition = { description: 'Unsubmitted', amount: '0,' }
-    invoiceDraftStore.setState(() => incompleteInvoice)
-    invoicePositionDraftStore.setState(() => incompletePosition)
+    await initializeInvoiceDraftPersistence(storage)
 
-    saveInvoiceUpdateSnapshot(tabStorage, '2.1.0', '/invoice')
-    resetInvoiceDraft()
-    const restored = restoreInvoiceUpdateSnapshot(tabStorage, '2.1.0')
+    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'still-here' }))
+    await waitForInvoiceDraftPersistence()
 
-    expect(restored).toEqual({ route: '/invoice' })
-    expect(invoiceDraftStore.state).toEqual(incompleteInvoice)
-    expect(invoicePositionDraftStore.state).toEqual(incompletePosition)
-    expect(restoreInvoiceUpdateSnapshot(tabStorage, '2.1.0')).toBeNull()
+    expect(invoiceDraftStore.state.number).toBe('still-here')
+    expect(invoiceDraftPersistenceStore.state).toMatchObject({
+      saved: false,
+      error: expect.stringContaining('session storage blocked'),
+    })
   })
 
-  it('keeps simultaneous tabs’ invoice snapshots independent', () => {
-    const firstTab = createSessionStorage()
-    const secondTab = createSessionStorage()
-    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'first-tab' }))
-    invoicePositionDraftStore.setState(() => ({
-      description: 'first row',
-      amount: '1',
-    }))
-    saveInvoiceUpdateSnapshot(firstTab, '2.1.0', '/invoice')
+  it('does not let an older in-flight save resurrect the draft after a confirmed clear', async () => {
+    const storage = createSessionStorage()
+    let markStarted = () => {}
+    let finishWrite = () => {}
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const blockedWrite = new Promise<void>((resolve) => {
+      finishWrite = resolve
+    })
+    storage.setItem = async (key, value) => {
+      markStarted()
+      await blockedWrite
+      storage.values.set(key, value)
+    }
+    await initializeInvoiceDraftPersistence(storage)
 
-    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'second-tab' }))
-    invoicePositionDraftStore.setState(() => ({
-      description: 'second row',
-      amount: '2',
-    }))
-    saveInvoiceUpdateSnapshot(secondTab, '2.1.0', '/business-profile')
-
+    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'old draft' }))
+    await started
+    const clearing = clearStoredInvoiceDraft()
+    finishWrite()
+    await clearing
     resetInvoiceDraft()
-    expect(restoreInvoiceUpdateSnapshot(firstTab, '2.1.0')).toEqual({
-      route: '/invoice',
+    await waitForInvoiceDraftPersistence()
+
+    expect(storage.values.get('regningen.invoice-draft')).toEqual({
+      schemaVersion: 1,
+      invoice: expectedEmptyDraft,
+      newPosition: { description: '', amount: '' },
     })
-    expect(invoiceDraftStore.state.number).toBe('first-tab')
-    expect(invoicePositionDraftStore.state.description).toBe('first row')
-    expect(restoreInvoiceUpdateSnapshot(secondTab, '2.1.0')).toEqual({
-      route: '/business-profile',
-    })
-    expect(invoiceDraftStore.state.number).toBe('second-tab')
-    expect(invoicePositionDraftStore.state.description).toBe('second row')
   })
 
-  it('rejects malformed or for-another-release snapshots instead of claiming restoration', () => {
-    const tabStorage = createSessionStorage()
-    tabStorage.setItem('regningen.pwa.invoice-update', '{broken')
+  it('attaches a native unload warning only while a draft is not saved', async () => {
+    const storage = createSessionStorage()
+    await initializeInvoiceDraftPersistence(storage)
 
-    expect(() => restoreInvoiceUpdateSnapshot(tabStorage, '2.1.0')).toThrow(
-      'Rechnungseingaben konnten nach der Aktualisierung nicht sicher wiederhergestellt werden.',
-    )
+    const savedEvent = new Event('beforeunload', {
+      cancelable: true,
+    })
+    window.dispatchEvent(savedEvent)
+    expect(savedEvent.defaultPrevented).toBe(false)
 
-    saveInvoiceUpdateSnapshot(tabStorage, '2.2.0', '/invoice')
-    expect(() => restoreInvoiceUpdateSnapshot(tabStorage, '2.1.0')).toThrow(
-      'Rechnungseingaben konnten nach der Aktualisierung nicht sicher wiederhergestellt werden.',
+    storage.setItem = async () => {
+      throw new Error('session storage blocked')
+    }
+    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'unsaved' }))
+    await waitForInvoiceDraftPersistence()
+
+    const unsavedEvent = new Event('beforeunload', {
+      cancelable: true,
+    })
+    window.dispatchEvent(unsavedEvent)
+    expect(unsavedEvent.defaultPrevented).toBe(true)
+  })
+
+  it('clears persisted work before resetting and refuses a failed discard', async () => {
+    const storage = createSessionStorage({
+      'regningen.invoice-draft': storedDraft,
+    })
+    await initializeInvoiceDraftPersistence(storage)
+    invoiceDraftStore.setState(() => storedDraft.invoice)
+    invoicePositionDraftStore.setState(() => storedDraft.newPosition)
+    await waitForInvoiceDraftPersistence()
+
+    await clearStoredInvoiceDraft()
+    resetInvoiceDraft()
+    await waitForInvoiceDraftPersistence()
+    expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
+    expect(invoicePositionDraftStore.state).toEqual({
+      description: '',
+      amount: '',
+    })
+    expect(storage.values.get('regningen.invoice-draft')).toEqual({
+      schemaVersion: 1,
+      invoice: expectedEmptyDraft,
+      newPosition: { description: '', amount: '' },
+    })
+
+    storage.removeItem = async () => {
+      throw new Error('session storage removal failed')
+    }
+    invoiceDraftStore.setState((draft) => ({
+      ...draft,
+      number: 'keep-current',
+    }))
+    await waitForInvoiceDraftPersistence()
+    await expect(clearStoredInvoiceDraft()).rejects.toThrow(
+      'session storage removal failed',
     )
+    expect(invoiceDraftStore.state.number).toBe('keep-current')
+    expect(invoiceDraftPersistenceStore.state.saved).toBe(false)
   })
 })
 
 describe('invoice draft reset', () => {
-  beforeEach(resetInvoiceDraft)
-  afterEach(resetInvoiceDraft)
-
   it('clears every entered field and position and restores 7% VAT', () => {
     invoiceDraftStore.setState(() => ({
       number: '2026-001',
@@ -145,30 +273,13 @@ describe('invoice draft reset', () => {
         { description: 'Lieferung', amount: '11,90' },
       ],
     }))
-    const populatedDraft = invoiceDraftStore.state
 
     resetInvoiceDraft()
 
     expect(invoiceDraftStore.state).toStrictEqual(expectedEmptyDraft)
-    expect(invoiceDraftStore.state).not.toBe(populatedDraft)
-    expect(invoiceDraftStore.state.items).not.toBe(populatedDraft.items)
-  })
-
-  it('returns fresh defaults after edits between resets', () => {
-    resetInvoiceDraft()
-    const firstResetDraft = invoiceDraftStore.state
-
-    invoiceDraftStore.setState((draft) => ({
-      ...draft,
-      number: '2026-002',
-      date: '2026-04-02',
-      rate: 19,
-      items: [{ description: 'Catering', amount: '119,00' }],
-    }))
-    resetInvoiceDraft()
-
-    expect(invoiceDraftStore.state).toStrictEqual(expectedEmptyDraft)
-    expect(invoiceDraftStore.state).not.toBe(firstResetDraft)
-    expect(invoiceDraftStore.state.items).not.toBe(firstResetDraft.items)
+    expect(invoicePositionDraftStore.state).toEqual({
+      description: '',
+      amount: '',
+    })
   })
 })

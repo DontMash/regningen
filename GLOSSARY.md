@@ -20,6 +20,10 @@ _Avoid_: Invoice details
 A document from the business to a recipient listing goods or services and an amount due.
 _Avoid_: Draft (when referring to an issued invoice)
 
+**Invoice Draft**:
+The business's editable working inputs for an Invoice, including incomplete or invalid values and an Invoice Position still being entered. It is distinct from the generated Invoice document.
+_Avoid_: Invoice (when referring to editable working inputs)
+
 **Invoice Position**:
 A charge for a good or service on one invoice, with a description and gross amount. It is not a reusable catalogue entry.
 _Avoid_: Product (when referring to a charge on an invoice)

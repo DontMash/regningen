@@ -7,7 +7,7 @@ import { PwaBrowserControls } from '../support/playwright/pwa-browser'
 import { PwaBrowserCapabilities } from '../support/playwright/pwa-capabilities'
 import { PwaDeployment } from '../support/playwright/pwa-deployment'
 
-test('a staged production release preserves both tabs and the offline Invoice workflow', async ({
+test('generated production workers prepare offline routes and prompt for same-version content updates', async ({
   browser,
   robotsForPage,
 }) => {
@@ -15,6 +15,8 @@ test('a staged production release preserves both tabs and the offline Invoice wo
   const deployment = await PwaDeployment.create()
   const pwaBrowser = await PwaBrowserControls.create(browser)
   const capabilities = new PwaBrowserCapabilities(pwaBrowser.context)
+  const releaseA = deployment.version('a')
+  const releaseB = deployment.version('b')
   await capabilities.observeNotifications(deployment.baseUrl)
   const pageA = await pwaBrowser.openPage()
   const pageB = await pwaBrowser.openPage()
@@ -32,14 +34,12 @@ test('a staged production release preserves both tabs and the offline Invoice wo
     invoice: invoiceB,
     pwa: pwaB,
   } = robotsB
-  const releaseA = deployment.version('a')
-  const releaseB = deployment.version('b')
 
   try {
     await deployment.deploy('a')
-    const manifestA = await readManifest(deployment.baseUrl)
-    await expectProductionWorkerHeaders(deployment.baseUrl)
-    await expectManifestIcons(deployment.baseUrl, manifestA)
+    const manifest = await readManifest(deployment.baseUrl)
+    await expectGeneratedWorker(deployment.baseUrl, deployment, 'a')
+    await expectManifestAssets(deployment.baseUrl, manifest)
 
     await pageA.goto(deployment.baseUrl)
     await pwaA.acknowledgeRunningReleaseNotes()
@@ -48,216 +48,183 @@ test('a staged production release preserves both tabs and the offline Invoice wo
     expect(
       (await capabilities.notificationObservation(pageA)).permissionRequests,
     ).toBe(0)
-    await pwaA.enableNotifications()
-    await pwaA.expectNotificationsEnabled()
 
-    await pwaBrowser.createUnrelatedOriginCache(pageA)
-    const applicationCachesBeforeUpdate =
-      await pwaBrowser.applicationCacheNames(pageA)
-    expect(applicationCachesBeforeUpdate).toHaveLength(1)
-
-    const profile = createBusinessProfileScenario()
-    const profileRobot = profileA
+    // Preparation must cover routes that have never been visited online.
     await pwaBrowser.setOffline(true)
-    await pageA.goto(`${deployment.baseUrl}/business-profile`)
-    await profileRobot.expectEditorReady()
     await pwaBrowser.announceOffline(pageA)
-    await profileRobot.configureBusinessProfile(profile)
-    await pageA.goto(deployment.baseUrl)
-    await pageA.waitForURL(`${deployment.baseUrl}/invoice`)
-    await invoiceA.expectReady()
-
-    const today = localIsoDate(new Date())
-    const threeDaysAgo = localIsoDate(
-      new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    await pageA.reload()
+    await shellA.expectApplicationShell()
+    const offlineManifest = await pwaBrowser.fetchResource(
+      pageA,
+      '/manifest.webmanifest',
     )
-    const postponedSubject = 'Still editable after postponing'
-    const scenarioA = createInvoiceScenario({
-      number: 'PWA-ALPHA',
-      date: today,
-      subject: 'Offline Invoice after update',
+    expect(offlineManifest.status).toBe(200)
+    expect(JSON.parse(offlineManifest.body)).toEqual(manifest)
+    await pageA.goto(`${deployment.baseUrl}/business-profile/`)
+    const profile = createBusinessProfileScenario()
+    await profileA.configureBusinessProfile(profile)
+
+    await pageA.goto(`${deployment.baseUrl}/invoice/`)
+    await invoiceA.expectReady()
+    const offlineInvoice = createInvoiceScenario({
+      number: 'draft-tab-a',
+      subject: '  Working offline  ',
+      recipient: { company: 'Offline recipient' },
       positions: [{ description: 'Offline work', amount: '107,00' }],
-    })
-    const scenarioB = createInvoiceScenario({
-      number: 'PWA-BETA',
-      date: threeDaysAgo,
-      subject: 'Draft kept on Profile route',
-      vatRate: 19,
-      recipient: {
-        company: 'Other recipient',
-        name: 'Different person',
-        street: 'Second Street 9',
-        postalCode: '10115',
-        town: 'Berlin',
+      expected: {
+        totals: { net: '100,00 €', tax: '7,00 €', gross: '107,00 €' },
+        pdfText: [
+          'Nordlicht Catering',
+          'Offline recipient',
+          'Rechnungsnummer draft-tab-a',
+          'Working offline',
+          'Offline work',
+          '100,00 €',
+          '7,00 €',
+          '107,00 €',
+        ],
       },
-      positions: [{ description: 'Incomplete tab work', amount: '81,60' }],
+    })
+    await invoiceA.enterInvoice(offlineInvoice.input)
+    const unfinishedPosition = createInvoiceScenario({
+      positions: [{ description: '  unfinished row  ', amount: 'not-money' }],
+    }).input.positions[0]
+    await invoiceA.enterNewPosition(unfinishedPosition)
+    const expectedDate = await invoiceA.readSelectedDate()
+    await pageA.reload()
+    await invoiceA.expectInvoiceNumber('draft-tab-a')
+    await invoiceA.expectSubject('  Working offline  ')
+    await invoiceA.expectDateLabelMatches(new RegExp(expectedDate.trim()))
+    await invoiceA.expectNewPositionValues({
+      description: '  unfinished row  ',
+      amount: 'not-money',
     })
 
     await pageB.goto(`${deployment.baseUrl}/invoice`)
     await invoiceB.expectReady()
-    await invoiceB.enterInvoiceNumber(scenarioB.input.number)
-    await invoiceB.chooseInvoiceDate(scenarioB.input.date)
-    await invoiceB.enterSubject(scenarioB.input.subject)
-    await invoiceB.enterRecipient(scenarioB.input.recipient)
-    await invoiceB.addPosition(scenarioB.input.positions[0])
-    await invoiceB.chooseVatRate(scenarioB.input.vatRate)
-    await invoiceB.enterNewPosition({
-      description: 'Unsubmitted B',
-      amount: '0,',
+    const independentDraft = createInvoiceScenario({
+      number: 'draft-tab-b',
+      subject: 'Independent tab',
     })
-    await shellB.navigateToBusinessProfile()
+    await invoiceB.enterInvoiceNumber(independentDraft.input.number)
+    await invoiceB.enterSubject(independentDraft.input.subject)
+    await pageB.goto(`${deployment.baseUrl}/business-profile`)
     await profileB.expectEditorReady()
 
+    await pwaA.enableNotifications()
+    await pwaA.expectNotificationsEnabled()
+    await capabilities.failNotificationDelivery(pageA)
+    await pwaBrowser.createUnrelatedOriginCache(pageA)
+
+    await pageA.goto(deployment.baseUrl)
+    await shellA.expectApplicationShell()
+    await pageA.goto(`${deployment.baseUrl}/invoice/`)
+    await invoiceA.expectReady()
+    await invoiceA.expectInvoiceNumber('draft-tab-a')
+    await pageA.goto(`${deployment.baseUrl}/business-profile/`)
+    await profileA.expectEditorReady()
+    await profileA.expectFieldValue('businessName', profile.businessName)
     await shellA.navigateToInvoice()
     await invoiceA.expectReady()
-    await invoiceA.enterInvoice(scenarioA.input)
-    await invoiceA.enterNewPosition({
-      description: 'Unsubmitted A',
+    await invoiceA.expectNewPositionValues({
+      description: '  unfinished row  ',
       amount: 'not-money',
     })
+
+    const download = await new ArtifactSupport(pageA).captureDownload(() =>
+      invoiceA.createPdf(),
+    )
+    expect(download.suggestedFilename()).toMatch(
+      /^Rechnung_draft-tab-a_.*\.pdf$/,
+    )
+    const pdf = await new ArtifactSupport(pageA).readPdf(download)
+    expect(pdf.pageCount).toBe(1)
+    for (const text of offlineInvoice.expected.pdfText) {
+      expect(pdf.text).toContain(text)
+    }
+    await invoiceA.expectSummaryTotals(offlineInvoice.expected.totals)
+    await invoiceA.expectPdfCreated()
+    await invoiceA.expectInvoiceNumber('draft-tab-a')
+    await expect
+      .poll(
+        async () =>
+          (await capabilities.notificationObservation(pageA)).notifications,
+      )
+      .toHaveLength(1)
+    const notification = (await capabilities.notificationObservation(pageA))
+      .notifications[0]
+    expect(notification.title).toBe('PDF wurde erstellt')
+    expect(notification.body).toContain('Rechnung_draft-tab-a_')
+    expect(notification.body).toContain('Du findest es in den Downloads.')
+    await pwaA.expectNotificationsEnabled()
 
     await pwaBrowser.setOffline(false)
     await deployment.deploy('b')
     await pwaBrowser.returnToForeground(pageA)
-    await pwaA.expectStagedVersion(releaseB, releaseA)
-    await pwaA.postponeStagedUpdate()
-    await pwaA.expectStagedUpdateClosed()
-    await expect(pageA).toHaveURL(`${deployment.baseUrl}/invoice`)
-    await invoiceA.enterSubject(postponedSubject)
-    await pwaA.reopenStagedUpdate()
-
-    await pwaBrowser.withSnapshotWritesBlocked(pageB, async () => {
-      await pwaA.applyStagedUpdate()
-      await pwaA.expectUpdateDeferred(
-        'Ein geöffnetes Fenster konnte seine Eingaben nicht sicher vorbereiten. Alle Fenster bleiben geöffnet.',
-      )
-      await pwaA.postponeStagedUpdate()
-      await pwaA.expectRunningVersion(releaseA)
-      await invoiceA.expectSubject(postponedSubject)
-      await invoiceA.enterSubject(postponedSubject)
+    await pageA.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration()
+      await registration?.update()
     })
-
-    await pwaA.reopenStagedUpdate()
-    const heldPreparation = await pwaBrowser.holdPreparationResponse(pageB)
-    await pwaA.applyStagedUpdate()
-    await heldPreparation.waitUntilPrepared()
-    const latePage = await pwaBrowser.openPage(
-      `${deployment.baseUrl}/business-profile`,
-    )
-    try {
-      await robotsForPage(latePage).pwa.expectStagedVersion(releaseB, releaseA)
-      await heldPreparation.release()
-      await pwaA.expectUpdateDeferred(
-        'Die geöffneten Fenster haben sich während der Vorbereitung geändert. Bitte später erneut versuchen.',
-      )
-    } finally {
-      await pwaBrowser.closePage(latePage)
-    }
-    await pwaA.postponeStagedUpdate()
-    await invoiceA.enterSubject(postponedSubject)
-    await pwaA.reopenStagedUpdate()
+    await pwaA.expectUpdateAvailable()
+    await pwaA.postponeUpdate()
+    await pwaA.expectUpdateClosed()
+    await pwaA.expectRunningVersion(releaseA)
+    await expect(pageA).toHaveURL(`${deployment.baseUrl}/invoice`)
+    await pwaA.reopenUpdate()
 
     const pageAReloaded = pageA.waitForEvent(
       'framenavigated',
       (frame) => frame === pageA.mainFrame(),
     )
-    const pageBReloaded = pageB.waitForEvent(
-      'framenavigated',
-      (frame) => frame === pageB.mainFrame(),
-    )
-    await pwaA.applyStagedUpdate()
-    await Promise.all([pageAReloaded, pageBReloaded])
+    await pwaA.applyUpdate()
+    await pageAReloaded
 
     await expect(pageA).toHaveURL(`${deployment.baseUrl}/invoice`)
     await invoiceA.expectReady()
     await pwaA.expectRunningVersion(releaseB)
-    await invoiceA.expectInvoiceNumber(scenarioA.input.number)
-    await invoiceA.expectSubject(postponedSubject)
-    await invoiceA.expectSelectedDate(scenarioA.input.date)
-    await invoiceA.expectRecipientField('name', scenarioA.input.recipient.name)
-    await invoiceA.expectPositionValue(
-      1,
-      'description',
-      scenarioA.input.positions[0].description,
-    )
+    await invoiceA.expectInvoiceNumber('draft-tab-a')
+    await invoiceA.expectSubject('  Working offline  ')
     await invoiceA.expectNewPositionValues({
-      description: 'Unsubmitted A',
+      description: '  unfinished row  ',
       amount: 'not-money',
     })
     await pwaA.expectReleaseBInvoiceAsset()
+    await pwaA.expectNotificationsEnabled()
 
+    await pageB.reload()
     await expect(pageB).toHaveURL(`${deployment.baseUrl}/business-profile`)
     await profileB.expectEditorReady()
-    await profileB.expectFieldValue('businessName', profile.businessName)
     await shellB.navigateToInvoice()
-    await invoiceB.expectReady()
-    await invoiceB.expectInvoiceNumber(scenarioB.input.number)
-    await invoiceB.expectSubject(scenarioB.input.subject)
-    await invoiceB.expectSelectedDate(scenarioB.input.date)
-    await invoiceB.expectVatRate(19)
-    await invoiceB.expectNewPositionValues({
-      description: 'Unsubmitted B',
-      amount: '0,',
-    })
-    await pwaB.expectReleaseBInvoiceAsset()
+    await invoiceB.expectInvoiceNumber('draft-tab-b')
+    await invoiceB.expectSubject('Independent tab')
+    await pwaB.expectRunningVersion(releaseB)
 
-    await pwaA.expectStagedUpdateClosed()
-    const manifestB = await readManifest(deployment.baseUrl)
-    expect(manifestB).toEqual(manifestA)
-    await expectProductionWorkerHeaders(deployment.baseUrl)
-    const releaseAWorker = await readFile(
+    await expectGeneratedWorker(deployment.baseUrl, deployment, 'b')
+    const workerA = await readFile(
       await deployment.artifactPath('a', 'public/sw.js'),
       'utf8',
     )
-    const releaseBWorker = await readFile(
+    const workerB = await readFile(
       await deployment.artifactPath('b', 'public/sw.js'),
       'utf8',
     )
-    expect(releaseAWorker).not.toBe(releaseBWorker)
-    const invoiceAsset = (worker: string) =>
-      worker.match(/\/assets\/invoice-[^"'\\]+\.js/)?.[0]
-    expect(invoiceAsset(releaseAWorker)).toBeTruthy()
-    expect(invoiceAsset(releaseBWorker)).toBeTruthy()
-    expect(invoiceAsset(releaseBWorker)).not.toBe(invoiceAsset(releaseAWorker))
-
-    const cacheNamesAfterUpdate = await pwaBrowser.cacheNames(pageA)
-    expect(cacheNamesAfterUpdate).toContain(pwaBrowser.unrelatedCacheName)
-    expect(cacheNamesAfterUpdate).not.toContain(
-      applicationCachesBeforeUpdate[0],
-    )
+    expect(workerA).not.toBe(workerB)
+    const documentRevision = /url:"\/invoice",revision:"([^"]+)"/
+    const revisionA = documentRevision.exec(workerA)?.[1]
+    const revisionB = documentRevision.exec(workerB)?.[1]
+    expect(revisionA).toBeTruthy()
+    expect(revisionB).toBeTruthy()
+    expect(revisionA).not.toBe(revisionB)
+    expect(workerA).toContain('/invoice')
+    expect(workerB).toContain('/business-profile')
 
     await pwaBrowser.setOffline(true)
-    await pageB.goto(`${deployment.baseUrl}/business-profile`)
-    await profileB.expectEditorReady()
-    await invoiceA.expectReady()
+    await pageA.goto(`${deployment.baseUrl}/invoice`)
     await pwaA.expectReleaseBInvoiceAsset()
     await invoiceA.expectPdfEnabled()
-    await pwaA.expectNotificationsEnabled()
-    await capabilities.failNotificationDelivery(pageA)
-
-    const download = await new ArtifactSupport(pageA).captureDownload(() =>
-      invoiceA.createPdf(),
+    expect(await pwaBrowser.cacheNames(pageA)).toContain(
+      pwaBrowser.unrelatedCacheName,
     )
-    expect(download.suggestedFilename()).toBe(`Rechnung_PWA-ALPHA_${today}.pdf`)
-    const pdf = await new ArtifactSupport(pageA).readPdf(download)
-    expect(pdf.pageCount).toBe(1)
-    expect(pdf.text).toContain(profile.businessName)
-    expect(pdf.text).toContain(postponedSubject)
-    expect(pdf.text).toContain('Offline work')
-    expect(pdf.text).toContain('107,00 €')
-    await invoiceA.expectPdfCreated()
-    await invoiceA.expectInvoiceNumber(scenarioA.input.number)
-    expect(
-      (await capabilities.notificationObservation(pageA)).notifications,
-    ).toEqual([
-      {
-        title: 'PDF wurde erstellt',
-        body: `Rechnung_PWA-ALPHA_${today}.pdf wurde heruntergeladen. Du findest es in den Downloads.`,
-      },
-    ])
-    await pageA.reload()
-    await invoiceA.expectReady()
-    await pwaA.expectReleaseBInvoiceAsset()
   } finally {
     try {
       await pwaBrowser.dispose()
@@ -270,52 +237,78 @@ test('a staged production release preserves both tabs and the offline Invoice wo
 async function readManifest(baseUrl: string) {
   const response = await fetch(`${baseUrl}/manifest.webmanifest`)
   expect(response.ok).toBe(true)
-  return (await response.json()) as Record<string, unknown>
+  return (await response.json()) as {
+    name: string
+    start_url: string
+    scope: string
+    icons: Array<{ src: string; sizes: string; purpose?: string }>
+  }
 }
 
-async function expectProductionWorkerHeaders(baseUrl: string) {
-  const worker = await fetch(`${baseUrl}/sw.js`)
-  expect(worker.ok).toBe(true)
-  expect(worker.headers.get('cache-control')).toBe(
+async function expectGeneratedWorker(
+  baseUrl: string,
+  deployment: PwaDeployment,
+  release: 'a' | 'b',
+) {
+  const response = await fetch(`${baseUrl}/sw.js`)
+  expect(response.ok).toBe(true)
+  expect(response.headers.get('cache-control')).toBe(
     'no-cache, no-store, must-revalidate',
   )
-  const release = await fetch(`${baseUrl}/pwa-release.json`)
-  expect(release.ok).toBe(true)
-  expect(release.headers.get('cache-control')).toBe('no-cache')
+  const body = await response.text()
+  expect(body).toContain('precacheAndRoute')
+  for (const route of ['/', '/invoice', '/business-profile']) {
+    expect(body).toContain(route)
+  }
+  const artifact = await readFile(
+    await deployment.artifactPath(release, 'public/sw.js'),
+    'utf8',
+  )
+  expect(body.trim()).toBe(artifact.trim())
+
+  const html = await (await fetch(baseUrl)).text()
+  const stylesheets = [...html.matchAll(/<link\b([^>]+)>/g)]
+    .filter(([, attributes]) => /rel="stylesheet"/.test(attributes))
+    .map(([, attributes]) => attributes.match(/href="([^"]+)"/)?.[1])
+    .filter((href): href is string => Boolean(href))
+  expect(stylesheets.length).toBeGreaterThan(0)
+  for (const stylesheet of stylesheets) {
+    const styleResponse = await fetch(new URL(stylesheet, baseUrl))
+    expect(styleResponse.ok, `stylesheet was not served: ${stylesheet}`).toBe(
+      true,
+    )
+    expect(body).toContain(new URL(stylesheet, baseUrl).pathname.slice(1))
+  }
 }
 
-async function expectManifestIcons(
+async function expectManifestAssets(
   baseUrl: string,
-  manifest: Record<string, unknown>,
+  manifest: Awaited<ReturnType<typeof readManifest>>,
 ) {
   expect(manifest.name).toBe('regningen')
   expect(manifest.start_url).toBe('/')
   expect(manifest.scope).toBe('/')
-  const icons = manifest.icons as Array<{ src: string; sizes: string }>
-  const expectedIcons = [
-    ['/icons/icon-192.png', 192],
-    ['/icons/icon-512.png', 512],
-    ['/icons/icon-maskable-192.png', 192],
-    ['/icons/icon-maskable-512.png', 512],
-  ] as const
+  expect(manifest.icons.some((icon) => icon.purpose === 'maskable')).toBe(true)
+  expect(manifest.icons.some((icon) => icon.sizes === '192x192')).toBe(true)
+  expect(manifest.icons.some((icon) => icon.sizes === '512x512')).toBe(true)
 
-  for (const [path, expectedSize] of expectedIcons) {
-    expect(icons.some((icon) => icon.src === path)).toBe(true)
-    const response = await fetch(`${baseUrl}${path}`)
+  for (const icon of manifest.icons) {
+    const response = await fetch(new URL(icon.src, baseUrl))
     expect(response.ok).toBe(true)
     const bytes = new DataView(await response.arrayBuffer())
-    expect(bytes.getUint32(16)).toBe(expectedSize)
-    expect(bytes.getUint32(20)).toBe(expectedSize)
+    const [width, height] = icon.sizes.split('x').map(Number)
+    expect(bytes.getUint32(16)).toBe(width)
+    expect(bytes.getUint32(20)).toBe(height)
   }
 
-  const appleTouchIcon = await fetch(`${baseUrl}/icons/apple-touch-icon.png`)
-  expect(appleTouchIcon.ok).toBe(true)
-  const appleIconBytes = new DataView(await appleTouchIcon.arrayBuffer())
-  expect(appleIconBytes.getUint32(16)).toBe(180)
-  expect(appleIconBytes.getUint32(20)).toBe(180)
-}
-
-function localIsoDate(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 10)
+  const shell = await fetch(baseUrl)
+  expect(shell.ok).toBe(true)
+  const html = await shell.text()
+  expect(html).toContain('rel="apple-touch-icon"')
+  expect(html).toContain('apple-touch-icon-180x180.png')
+  const touchIcon = await fetch(`${baseUrl}/apple-touch-icon-180x180.png`)
+  expect(touchIcon.ok).toBe(true)
+  const touchIconBytes = new DataView(await touchIcon.arrayBuffer())
+  expect(touchIconBytes.getUint32(16)).toBe(180)
+  expect(touchIconBytes.getUint32(20)).toBe(180)
 }

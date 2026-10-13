@@ -10,7 +10,6 @@ import { useOptionalPwa } from '@/features/pwa/PwaProvider'
 export default function Footer() {
   const { applicationVersion, openReleaseNotes } = useReleaseNotes()
   const pwa = useOptionalPwa()
-  const stagedVersion = pwa?.stagedRelease?.version
   return (
     <footer className="border-t bg-background">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:py-10">
@@ -104,9 +103,6 @@ export default function Footer() {
               <button
                 type="button"
                 aria-label={`Versionshinweise zu Version v${applicationVersion} anzeigen`}
-                aria-describedby={
-                  stagedVersion ? 'staged-update-status' : undefined
-                }
                 onClick={openReleaseNotes}
                 className={cn(
                   buttonVariants({ variant: 'ghost', size: 'sm' }),
@@ -115,13 +111,18 @@ export default function Footer() {
               >
                 v{applicationVersion}
               </button>
-              {stagedVersion ? (
-                <span
-                  id="staged-update-status"
-                  className="paragraph-small text-primary"
+              {pwa?.updateAvailable ? (
+                <button
+                  type="button"
+                  aria-haspopup="dialog"
+                  onClick={pwa.openUpdatePrompt}
+                  className={cn(
+                    buttonVariants({ variant: 'ghost', size: 'sm' }),
+                    'text-primary',
+                  )}
                 >
-                  Update v{stagedVersion} verfügbar
-                </span>
+                  Update verfügbar
+                </button>
               ) : null}
             </div>
           </div>

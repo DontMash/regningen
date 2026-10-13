@@ -1,32 +1,24 @@
 'use client'
 
 import * as React from 'react'
-import { useCreateStore, useSelector } from '@tanstack/react-store'
+import { useRegisterSW } from 'virtual:pwa-register/react'
 import AdaptiveDialog from '@/components/AdaptiveDialog'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
-import { restoreInvoiceUpdateSession } from '@/features/invoicing/invoice-update-participant'
-import { applicationVersion } from '@/lib/application-release'
 import {
-  abortPwaUpdateParticipants,
-  preparePwaUpdateParticipants,
-} from './update-participants'
-import { UPDATE_ACKNOWLEDGMENT_KEY } from './update-session'
+  initializeInvoiceDraftPersistence,
+  invoiceDraftPersistenceStore,
+  waitForInvoiceDraftPersistence,
+} from '@/features/invoicing/invoice-draft-store'
+import { waitForPwaCriticalOperations } from './pwa-critical-operations'
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
-export interface StagedRelease {
-  version: string
-  markdown: string
-}
-
 type NotificationStatus =
   'unavailable' | 'install-required' | 'denied' | 'enabled' | 'disabled'
-
-type UpdateState = 'idle' | 'preparing' | 'accepted'
 
 interface PwaContextValue {
   installed: boolean
@@ -38,23 +30,19 @@ interface PwaContextValue {
   disableNotifications: () => void
   reportPdfExport: (filename: string) => Promise<void>
   offlineReady: boolean
-  stagedRelease: StagedRelease | null
-  updateState: UpdateState
+  updateAvailable: boolean
+  openUpdatePrompt: () => void
   updateError: string | null
   applyUpdate: () => void
 }
 
-interface PwaState {
-  installed: boolean
-  installationHelp: string | null
-  notificationSupported: boolean
-  notificationPermission: NotificationPermission | 'unavailable'
-  notificationPreference: boolean
-  notificationRequiresInstall: boolean
-  offlineReady: boolean
-  stagedRelease: StagedRelease | null
-  updateState: UpdateState
-  updateError: string | null
+interface RegistrationState {
+  needRefresh: (value: boolean) => void
+  offlineReady: (value: boolean) => void
+  setUpdateServiceWorker: (update: (() => Promise<void>) | null) => void
+  setRegistration: (registration: ServiceWorkerRegistration | null) => void
+  onNeedReload: () => void
+  onRegisterError: (error: unknown) => void
 }
 
 const PwaContext = React.createContext<PwaContextValue | null>(null)
@@ -86,110 +74,146 @@ function manualInstallationInstructions() {
   return 'Dieser Browser stellt keine native Installation bereit. Manche Browser bieten die Installation über ihr Menü an; andernfalls kannst du regningen weiterhin in diesem Browser nutzen.'
 }
 
-function isStagedRelease(value: unknown): value is StagedRelease {
-  if (!value || typeof value !== 'object') return false
-  const release = value as Partial<StagedRelease>
-  return (
-    typeof release.version === 'string' &&
-    release.version !== applicationVersion &&
-    /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/.test(release.version) &&
-    typeof release.markdown === 'string'
-  )
-}
-
-function requestWorkerMessage(worker: ServiceWorker, type: string) {
-  return new Promise<unknown>((resolve) => {
-    if (typeof MessageChannel === 'undefined') {
-      resolve(null)
-      return
-    }
-
-    const channel = new MessageChannel()
-    const timeout = window.setTimeout(() => {
-      channel.port1.close()
-      resolve(null)
-    }, 3000)
-    channel.port1.onmessage = (event) => {
-      window.clearTimeout(timeout)
-      channel.port1.close()
-      resolve(event.data)
-    }
-    try {
-      worker.postMessage({ type }, [channel.port2])
-    } catch {
-      window.clearTimeout(timeout)
-      channel.port1.close()
-      resolve(null)
-    }
+function PluginRegistration({
+  needRefresh,
+  offlineReady,
+  setUpdateServiceWorker,
+  setRegistration,
+  onNeedReload,
+  onRegisterError,
+}: RegistrationState) {
+  const {
+    needRefresh: [pluginNeedsRefresh],
+    offlineReady: [pluginOfflineReady],
+    updateServiceWorker,
+  } = useRegisterSW({
+    immediate: true,
+    onNeedReload,
+    onRegisteredSW: (_scriptUrl, registration) => {
+      setRegistration(registration ?? null)
+    },
+    onRegisterError,
   })
+
+  React.useEffect(() => {
+    needRefresh(pluginNeedsRefresh)
+  }, [needRefresh, pluginNeedsRefresh])
+
+  React.useEffect(() => {
+    offlineReady(pluginOfflineReady)
+  }, [offlineReady, pluginOfflineReady])
+
+  React.useEffect(() => {
+    setUpdateServiceWorker(() => updateServiceWorker())
+    return () => setUpdateServiceWorker(null)
+  }, [setUpdateServiceWorker, updateServiceWorker])
+
+  return null
 }
 
 export function PwaProvider({ children }: { children: React.ReactNode }) {
-  const store = useCreateStore<PwaState>({
-    installed: false,
-    installationHelp: null,
-    notificationSupported: false,
-    notificationPermission: 'unavailable',
-    notificationPreference: false,
-    notificationRequiresInstall: false,
-    offlineReady: false,
-    stagedRelease: null,
-    updateState: 'idle',
-    updateError: null,
-  })
-  const {
-    installed,
-    installationHelp,
-    notificationSupported,
-    notificationPermission,
-    notificationPreference,
-    notificationRequiresInstall,
-    offlineReady,
-    stagedRelease,
-    updateState,
-    updateError,
-  } = useSelector(store)
-  const {
-    setInstalled,
-    setInstallationHelp,
-    setNotificationSupported,
-    setNotificationPermission,
-    setNotificationPreference,
-    setNotificationRequiresInstall,
-    setOfflineReady,
-    setStagedRelease,
-    setUpdateState,
-    setUpdateError,
-  } = React.useMemo(() => {
-    const setter =
-      <TKey extends keyof PwaState>(key: TKey) =>
-      (value: PwaState[TKey]) =>
-        store.setState((current) => ({ ...current, [key]: value }))
-    return {
-      setInstalled: setter('installed'),
-      setInstallationHelp: setter('installationHelp'),
-      setNotificationSupported: setter('notificationSupported'),
-      setNotificationPermission: setter('notificationPermission'),
-      setNotificationPreference: setter('notificationPreference'),
-      setNotificationRequiresInstall: setter('notificationRequiresInstall'),
-      setOfflineReady: setter('offlineReady'),
-      setStagedRelease: setter('stagedRelease'),
-      setUpdateState: setter('updateState'),
-      setUpdateError: setter('updateError'),
-    }
-  }, [store])
+  const [hydrated, setHydrated] = React.useState(false)
+  const [installed, setInstalled] = React.useState(false)
+  const [installationHelp, setInstallationHelp] = React.useState<string | null>(
+    null,
+  )
+  const [notificationSupported, setNotificationSupported] =
+    React.useState(false)
+  const [notificationPermission, setNotificationPermission] = React.useState<
+    NotificationPermission | 'unavailable'
+  >('unavailable')
+  const [notificationPreference, setNotificationPreference] =
+    React.useState(false)
+  const [notificationRequiresInstall, setNotificationRequiresInstall] =
+    React.useState(false)
+  const [offlineReady, setOfflineReady] = React.useState(false)
+  const [updateAvailable, setUpdateAvailable] = React.useState(false)
+  const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false)
+  const [updateRequested, setUpdateRequested] = React.useState(false)
+  const [updateError, setUpdateError] = React.useState<string | null>(null)
+  const registrationRef = React.useRef<ServiceWorkerRegistration | null>(null)
+  const updateServiceWorkerRef = React.useRef<(() => Promise<void>) | null>(
+    null,
+  )
   const installPrompt = React.useRef<InstallPromptEvent | null>(null)
-  const activePreparationRef = React.useRef<{
-    requestId: string
-    targetVersion: string
-    previousInert: boolean
-    cancellation: AbortController
-  } | null>(null)
-  const activeRequestIdRef = React.useRef<string | null>(null)
-  const requestSequenceRef = React.useRef(0)
-  const acceptanceTimeoutRef = React.useRef<number | null>(null)
   const reloadStartedRef = React.useRef(false)
-  const controllerVerificationRef = React.useRef(false)
+  const promptShownRef = React.useRef(false)
+  const lastUpdateErrorRef = React.useRef<string | null>(null)
+  const draftPersistence = React.useSyncExternalStore(
+    (onChange) => {
+      const subscription = invoiceDraftPersistenceStore.subscribe(onChange)
+      return () => subscription.unsubscribe()
+    },
+    () => invoiceDraftPersistenceStore.state,
+    () => invoiceDraftPersistenceStore.state,
+  )
+  const hasHandledDraftError = React.useRef(false)
+
+  const setUpdateServiceWorker = React.useCallback(
+    (update: (() => Promise<void>) | null) => {
+      updateServiceWorkerRef.current = update
+    },
+    [],
+  )
+  const setRegistration = React.useCallback(
+    (registration: ServiceWorkerRegistration | null) => {
+      registrationRef.current = registration
+    },
+    [],
+  )
+  const onNeedReload = React.useCallback(() => {
+    if (reloadStartedRef.current) return
+    reloadStartedRef.current = true
+    void (async () => {
+      await waitForPwaCriticalOperations()
+      await waitForInvoiceDraftPersistence()
+      window.location.reload()
+    })()
+  }, [])
+  const onRegisterError = React.useCallback((error: unknown) => {
+    setUpdateError(
+      error instanceof Error
+        ? `Offline-Funktionen konnten nicht eingerichtet werden: ${error.message}`
+        : 'Offline-Funktionen konnten nicht eingerichtet werden. Die Online-Nutzung bleibt verfügbar.',
+    )
+  }, [])
+
+  React.useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  React.useEffect(() => {
+    if (!hydrated || draftPersistence.initialized) return
+    void initializeInvoiceDraftPersistence()
+  }, [draftPersistence.initialized, hydrated])
+
+  React.useEffect(() => {
+    if (!updateError) {
+      lastUpdateErrorRef.current = null
+      return
+    }
+    if (lastUpdateErrorRef.current === updateError) return
+    lastUpdateErrorRef.current = updateError
+    toast.add({
+      title: 'PWA-Funktion nicht verfügbar',
+      description: updateError,
+      type: 'warning',
+    })
+  }, [updateError])
+
+  React.useEffect(() => {
+    if (!draftPersistence.error || hasHandledDraftError.current) return
+    hasHandledDraftError.current = true
+    toast.add({
+      title: 'Invoice Draft-Speicherung nicht verfügbar',
+      description: draftPersistence.error,
+      type: 'warning',
+    })
+  }, [draftPersistence.error])
+
+  React.useEffect(() => {
+    if (!draftPersistence.error) hasHandledDraftError.current = false
+  }, [draftPersistence.error])
 
   React.useEffect(() => {
     const updateInstalledState = () => setInstalled(detectStandaloneMode())
@@ -215,21 +239,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       mediaQuery?.removeEventListener('change', updateInstalledState)
       window.removeEventListener('beforeinstallprompt', captureInstallPrompt)
       window.removeEventListener('appinstalled', markInstalled)
-    }
-  }, [])
-
-  React.useEffect(() => {
-    try {
-      restoreInvoiceUpdateSession(applicationVersion)
-    } catch (error) {
-      toast.add({
-        title: 'Rechnungseingaben konnten nicht wiederhergestellt werden',
-        description:
-          error instanceof Error
-            ? error.message
-            : 'Die temporäre Sicherung ist ungültig.',
-        type: 'warning',
-      })
     }
   }, [])
 
@@ -264,277 +273,27 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   }, [installed])
 
   React.useEffect(() => {
-    if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return
-
-    const active = { current: true }
-    const isActive = () => active.current
-    let registration: ServiceWorkerRegistration | null = null
-
-    const inspectRegistration = async () => {
-      if (!registration || !active.current) return
-
-      const runningWorker =
-        registration.active ?? navigator.serviceWorker.controller
-      if (runningWorker) {
-        const status = await requestWorkerMessage(runningWorker, 'GET_STATUS')
-        if (
-          status &&
-          typeof status === 'object' &&
-          'version' in status &&
-          status.version === applicationVersion &&
-          'offlineReady' in status &&
-          status.offlineReady === true
-        ) {
-          setOfflineReady(true)
-        }
-      }
-
-      const waitingWorker = registration.waiting
-      if (!waitingWorker) {
-        setStagedRelease(null)
-        return
-      }
-
-      const descriptor = await requestWorkerMessage(
-        waitingWorker,
-        'GET_RELEASE_INFO',
-      )
-      if (!isActive()) return
-      const release =
-        descriptor && typeof descriptor === 'object' && 'release' in descriptor
-          ? descriptor.release
-          : null
-      setStagedRelease(isStagedRelease(release) ? release : null)
+    if (!updateAvailable) {
+      promptShownRef.current = false
+      return
     }
+    if (promptShownRef.current) return
+    promptShownRef.current = true
+    setUpdateDialogOpen(true)
+  }, [updateAvailable])
 
-    const updateRegistration = () => {
-      if (!registration) return
-      void registration
-        .update()
-        .then(inspectRegistration)
-        .catch(() => {})
-    }
-    const onControllerChange = () => {
-      let targetRelease: string | null = null
-      try {
-        targetRelease = window.sessionStorage.getItem(UPDATE_ACKNOWLEDGMENT_KEY)
-      } catch {
-        // An accepted update always writes this marker before responding ready.
-      }
-
-      const controller = navigator.serviceWorker.controller
-      if (
-        targetRelease &&
-        controller &&
-        !reloadStartedRef.current &&
-        !controllerVerificationRef.current
-      ) {
-        controllerVerificationRef.current = true
-        void requestWorkerMessage(controller, 'GET_STATUS')
-          .then((status) => {
-            if (
-              !status ||
-              typeof status !== 'object' ||
-              !('version' in status) ||
-              status.version !== targetRelease ||
-              reloadStartedRef.current
-            )
-              return
-
-            reloadStartedRef.current = true
-            window.location.reload()
-          })
-          .finally(() => {
-            controllerVerificationRef.current = false
-          })
-        return
-      }
-      void inspectRegistration()
-    }
-    const onServiceWorkerMessage = (event: MessageEvent) => {
-      const message = event.data
-      if (!message || typeof message.type !== 'string') return
-
-      if (message.type === 'PREPARE_UPDATE') {
-        const { requestId, targetVersion } = message as {
-          requestId: string
-          targetVersion: string
-        }
-        if (activePreparationRef.current) {
-          if (activePreparationRef.current.requestId !== requestId) {
-            navigator.serviceWorker.controller?.postMessage({
-              type: 'PREPARE_RESULT',
-              requestId,
-              prepared: false,
-            })
-          }
-          return
-        }
-
-        activeRequestIdRef.current = requestId
-        const previousInert = document.body.inert
-        document.body.inert = true
-        const preparation = {
-          requestId,
-          targetVersion,
-          previousInert,
-          cancellation: new AbortController(),
-        }
-        activePreparationRef.current = preparation
-        setUpdateState('preparing')
-        setUpdateError(null)
-
-        void (async () => {
-          try {
-            await preparePwaUpdateParticipants(
-              targetVersion,
-              preparation.cancellation.signal,
-            )
-            if (activePreparationRef.current !== preparation) return
-            window.sessionStorage.setItem(
-              UPDATE_ACKNOWLEDGMENT_KEY,
-              targetVersion,
-            )
-            navigator.serviceWorker.controller?.postMessage({
-              type: 'PREPARE_RESULT',
-              requestId,
-              prepared: true,
-            })
-          } catch {
-            if (preparation.cancellation.signal.aborted) return
-            await abortPwaUpdateParticipants(targetVersion)
-            try {
-              window.sessionStorage.removeItem(UPDATE_ACKNOWLEDGMENT_KEY)
-            } catch {
-              // Continue unlocking editing if cleanup is unavailable.
-            }
-            activePreparationRef.current = null
-            document.body.inert = previousInert
-            setUpdateState('idle')
-            navigator.serviceWorker.controller?.postMessage({
-              type: 'PREPARE_RESULT',
-              requestId,
-              prepared: false,
-            })
-          }
-        })()
-        return
-      }
-
-      if (message.type === 'ABORT_UPDATE') {
-        const preparation = activePreparationRef.current
-        if (!preparation || preparation.requestId !== message.requestId) return
-        preparation.cancellation.abort()
-        void abortPwaUpdateParticipants(preparation.targetVersion).finally(
-          () => {
-            try {
-              window.sessionStorage.removeItem(UPDATE_ACKNOWLEDGMENT_KEY)
-            } catch {
-              // A failed cleanup must not leave the current session inert.
-            }
-            document.body.inert = preparation.previousInert
-            activePreparationRef.current = null
-            setUpdateState('idle')
-          },
-        )
-        return
-      }
-
-      if (message.type === 'UPDATE_JOINED') {
-        activeRequestIdRef.current = message.activeRequestId
-        setUpdateState('preparing')
-        return
-      }
-
-      if (message.type === 'UPDATE_DEFERRED') {
-        if (message.requestId !== activeRequestIdRef.current) return
-        activeRequestIdRef.current = null
-        const preparation = activePreparationRef.current
-        if (preparation) {
-          preparation.cancellation.abort()
-          void abortPwaUpdateParticipants(preparation.targetVersion).finally(
-            () => {
-              document.body.inert = preparation.previousInert
-              activePreparationRef.current = null
-              setUpdateState('idle')
-            },
-          )
-        } else {
-          setUpdateState('idle')
-        }
-        setUpdateError(
-          typeof message.reason === 'string'
-            ? message.reason
-            : 'Die Aktualisierung wurde sicherheitshalber verschoben.',
-        )
-        return
-      }
-
-      if (message.type === 'UPDATE_ACCEPTED') {
-        if (message.requestId !== activeRequestIdRef.current) return
-        setUpdateState('accepted')
-        if (acceptanceTimeoutRef.current !== null) {
-          window.clearTimeout(acceptanceTimeoutRef.current)
-        }
-        acceptanceTimeoutRef.current = window.setTimeout(() => {
-          if (reloadStartedRef.current) return
-          // skipWaiting cannot be cancelled after acceptance. Keep the bridge
-          // and editing lock intact so a delayed activation remains lossless.
-          setUpdateError(
-            'Der Browser benötigt länger für die Aktualisierung. Deine Eingaben sind gesichert; bitte lasse dieses Fenster geöffnet.',
-          )
-          onControllerChange()
-        }, 15000)
-      }
-    }
-
-    const onUpdateFound = () => {
-      const installing = registration?.installing
-      installing?.addEventListener('statechange', () => {
-        if (installing.state === 'installed') void inspectRegistration()
+  React.useEffect(() => {
+    const checkForUpdates = () => {
+      if (document.visibilityState !== 'visible') return
+      void registrationRef.current?.update().catch(() => {
+        // Update checks are optional and will be retried on a later focus.
       })
     }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') updateRegistration()
-    }
-
-    navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage)
-    navigator.serviceWorker.addEventListener(
-      'controllerchange',
-      onControllerChange,
-    )
-    window.addEventListener('focus', updateRegistration)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-
-    void navigator.serviceWorker
-      .register('/sw.js', { scope: '/', updateViaCache: 'none' })
-      .then((value) => {
-        if (!isActive()) return
-        registration = value
-        registration.addEventListener('updatefound', onUpdateFound)
-        void inspectRegistration()
-        updateRegistration()
-      })
-      .catch(() => {
-        // A worker is an enhancement; network invoicing remains available.
-      })
-
+    window.addEventListener('focus', checkForUpdates)
+    document.addEventListener('visibilitychange', checkForUpdates)
     return () => {
-      active.current = false
-      navigator.serviceWorker.removeEventListener(
-        'message',
-        onServiceWorkerMessage,
-      )
-      navigator.serviceWorker.removeEventListener(
-        'controllerchange',
-        onControllerChange,
-      )
-      window.removeEventListener('focus', updateRegistration)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      registration?.removeEventListener('updatefound', onUpdateFound)
-      if (acceptanceTimeoutRef.current !== null) {
-        window.clearTimeout(acceptanceTimeoutRef.current)
-      }
+      window.removeEventListener('focus', checkForUpdates)
+      document.removeEventListener('visibilitychange', checkForUpdates)
     }
   }, [])
 
@@ -579,11 +338,12 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
         return
 
       try {
-        const registration = await navigator.serviceWorker.ready
+        const registration = registrationRef.current
+        if (!registration) return
         await registration.showNotification('PDF wurde erstellt', {
           body: `${filename} wurde heruntergeladen. Du findest es in den Downloads.`,
-          icon: '/icons/icon-192.png',
-          badge: '/icons/icon-192.png',
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
         })
       } catch {
         // A local notification is optional; the successful download stays successful.
@@ -598,37 +358,19 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   )
 
   const applyUpdate = React.useCallback(() => {
-    if (updateState !== 'idle') return
-    const controller = navigator.serviceWorker.controller
-    if (!stagedRelease || !controller) {
-      setUpdateError(
-        'Die vorbereitete Version ist nicht mehr verfügbar. Prüfe die Verbindung und versuche es später erneut.',
-      )
-      return
-    }
-    requestSequenceRef.current += 1
-    const randomValues = new Uint32Array(1)
-    window.crypto.getRandomValues(randomValues)
-    const requestId = `${applicationVersion}-${Date.now()}-${randomValues[0]}-${requestSequenceRef.current}`
-    activeRequestIdRef.current = requestId
-    setUpdateState('preparing')
+    const updateServiceWorker = updateServiceWorkerRef.current
+    if (!updateAvailable || !updateServiceWorker || updateRequested) return
+    setUpdateRequested(true)
     setUpdateError(null)
-    controller.postMessage({
-      type: 'PREPARE_UPDATE',
-      requestId,
-      targetVersion: stagedRelease.version,
+    void updateServiceWorker().catch((error: unknown) => {
+      setUpdateRequested(false)
+      setUpdateError(
+        error instanceof Error
+          ? error.message
+          : 'Die Aktualisierung konnte nicht gestartet werden. Versuche es später erneut.',
+      )
     })
-  }, [stagedRelease, updateState])
-
-  const notificationStatus: NotificationStatus = !notificationSupported
-    ? 'unavailable'
-    : notificationRequiresInstall
-      ? 'install-required'
-      : notificationPermission === 'denied'
-        ? 'denied'
-        : notificationPreference && notificationPermission === 'granted'
-          ? 'enabled'
-          : 'disabled'
+  }, [updateAvailable, updateRequested])
 
   const requestInstallation = React.useCallback(async () => {
     const promptEvent = installPrompt.current
@@ -647,6 +389,19 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  const notificationStatus: NotificationStatus = !notificationSupported
+    ? 'unavailable'
+    : notificationRequiresInstall
+      ? 'install-required'
+      : notificationPermission === 'denied'
+        ? 'denied'
+        : notificationPreference && notificationPermission === 'granted'
+          ? 'enabled'
+          : 'disabled'
+
+  const openUpdatePrompt = React.useCallback(() => {
+    if (updateAvailable) setUpdateDialogOpen(true)
+  }, [updateAvailable])
   const value = React.useMemo(
     () => ({
       installed,
@@ -658,22 +413,22 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       disableNotifications,
       reportPdfExport,
       offlineReady,
-      stagedRelease,
-      updateState,
+      updateAvailable,
+      openUpdatePrompt,
       updateError,
       applyUpdate,
     }),
     [
       installed,
-      installationHelp,
       requestInstallation,
+      installationHelp,
       notificationStatus,
       enableNotifications,
       disableNotifications,
       reportPdfExport,
       offlineReady,
-      stagedRelease,
-      updateState,
+      updateAvailable,
+      openUpdatePrompt,
       updateError,
       applyUpdate,
     ],
@@ -682,6 +437,16 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   return (
     <PwaContext.Provider value={value}>
       {children}
+      {hydrated ? (
+        <PluginRegistration
+          needRefresh={setUpdateAvailable}
+          offlineReady={setOfflineReady}
+          setUpdateServiceWorker={setUpdateServiceWorker}
+          setRegistration={setRegistration}
+          onNeedReload={onNeedReload}
+          onRegisterError={onRegisterError}
+        />
+      ) : null}
       <AdaptiveDialog
         open={installationHelp !== null}
         onOpenChange={(open) => {
@@ -694,6 +459,33 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
         }
       >
         <p className="paragraph">{installationHelp}</p>
+      </AdaptiveDialog>
+      <AdaptiveDialog
+        open={updateDialogOpen}
+        onOpenChange={setUpdateDialogOpen}
+        title="Aktualisierung verfügbar"
+        description="Neue Anwendungsinhalte wurden im Hintergrund vorbereitet. Gespeicherte Invoice Drafts werden nach dem Neuladen in dieser Browsersitzung wiederhergestellt."
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setUpdateDialogOpen(false)}
+            >
+              Später
+            </Button>
+            <Button onClick={applyUpdate} disabled={updateRequested}>
+              {updateRequested
+                ? 'Aktualisierung wird gestartet …'
+                : 'Update jetzt'}
+            </Button>
+          </div>
+        }
+      >
+        {updateError ? (
+          <p role="alert" className="paragraph-small text-destructive">
+            {updateError}
+          </p>
+        ) : null}
       </AdaptiveDialog>
     </PwaContext.Provider>
   )

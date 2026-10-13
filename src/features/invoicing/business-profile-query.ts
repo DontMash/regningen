@@ -10,7 +10,7 @@ import {
   clearBusinessProfileStorageFailure,
   markBusinessProfileStorageFailure,
 } from './business-profile-storage-status'
-import { runPwaCriticalOperation } from '@/features/pwa/update-participants'
+import { runPwaCriticalOperation } from '@/features/pwa/pwa-critical-operations'
 
 export const BUSINESS_PROFILE_QUERY_KEY = ['business-profile'] as const
 

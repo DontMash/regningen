@@ -14,6 +14,7 @@ import { Toaster } from '@/components/ui/toast'
 import StoreDevtools from '../lib/theme-store-devtools'
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 import appCss from '../styles.css?url'
+import { pwaAssetsHead } from 'virtual:pwa-assets/head'
 
 import type { QueryClient } from '@tanstack/react-query'
 
@@ -59,19 +60,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         rel: 'manifest',
         href: '/manifest.webmanifest',
       },
-      {
-        rel: 'apple-touch-icon',
-        href: '/icons/apple-touch-icon.png',
-      },
+      ...pwaAssetsHead.links,
       {
         rel: 'icon',
         type: 'image/svg+xml',
         href: '/favicon.svg',
-      },
-      {
-        rel: 'icon',
-        type: 'image/png',
-        href: '/favicon.png',
       },
       {
         rel: 'stylesheet',

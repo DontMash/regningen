@@ -90,7 +90,7 @@ export class LayoutMeasurements {
     const scrollArea = dialog.locator('.overflow-y-auto').first()
     const [version, selector, footer, firstHeading, viewport] =
       await Promise.all([
-        dialog.getByText('Version 1.0.0', { exact: true }).boundingBox(),
+        dialog.getByText(/^Version 1\.0\.0/).boundingBox(),
         dialog
           .getByRole('combobox', { name: 'Version auswählen' })
           .boundingBox(),

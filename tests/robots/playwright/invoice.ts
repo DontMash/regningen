@@ -293,6 +293,41 @@ export class InvoiceRobot {
     await expect(this.page.getByText(message, { exact: true })).toHaveCount(0)
   }
 
+  async expectDraftPersistenceWarning() {
+    await expect(
+      this.page.getByRole('alert').filter({
+        hasText: 'Die Eingaben bleiben in diesem Tab bearbeitbar',
+      }),
+    ).toBeVisible()
+  }
+
+  async expectDraftPersistenceWarningAbsent() {
+    await expect(
+      this.page.getByRole('alert').filter({
+        hasText: 'Die Eingaben bleiben in diesem Tab bearbeitbar',
+      }),
+    ).toHaveCount(0)
+  }
+
+  async expectDraftRecoveryWarning() {
+    await expect(
+      this.page
+        .getByText(
+          'Der gespeicherte Invoice Draft ist ungültig oder nicht kompatibel. Es wurde ein leerer Entwurf geöffnet.',
+          { exact: false },
+        )
+        .first(),
+    ).toBeVisible()
+  }
+
+  async expectNewInvoiceFailed() {
+    await expect(
+      this.page.getByRole('heading', {
+        name: 'Neue Rechnung konnte nicht begonnen werden',
+      }),
+    ).toBeVisible()
+  }
+
   async expectPdfEnabled() {
     await expect(this.control('save invoice')).toBeEnabled()
   }

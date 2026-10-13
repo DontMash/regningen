@@ -10,8 +10,6 @@ import {
   applicationReleases,
   applicationVersion,
 } from '@/lib/application-release'
-import { useOptionalPwa } from '@/features/pwa/PwaProvider'
-import { consumeUpdateAcknowledgment } from '@/features/pwa/update-session'
 import ReleaseNotesDialog from './ReleaseNotesDialog'
 
 const ACKNOWLEDGED_VERSIONS_STORAGE_KEY =
@@ -53,9 +51,6 @@ interface ReleaseNotesProviderProps {
 }
 
 export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
-  const pwa = useOptionalPwa()
-  const seenStagedVersionsRef = React.useRef(new Set<string>())
-  const acceptedUpdateRef = React.useRef<boolean | null>(null)
   const store = useCreateStore<ReleaseNotesState>({
     open: false,
     selectedVersion: applicationVersion,
@@ -136,35 +131,10 @@ export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
         // Unavailable storage behaves like an unacknowledged first visit.
       }
 
-      if (acceptedUpdateRef.current === null) {
-        try {
-          acceptedUpdateRef.current = consumeUpdateAcknowledgment(
-            window.sessionStorage,
-            applicationVersion,
-          )
-        } catch {
-          // Acknowledgment storage is optional; the running release remains usable.
-          acceptedUpdateRef.current = false
-        }
-      }
-      const acceptedUpdate = acceptedUpdateRef.current
-
-      if (acceptedUpdate) {
-        acknowledgedVersions = [
-          ...new Set([...acknowledgedVersions, applicationVersion]),
-        ]
-        try {
-          await persistAcknowledgedVersions(acknowledgedVersions)
-        } catch {
-          warnAcknowledgmentStorageFailure()
-        }
-      }
-
       if (!active) return
       store.setState((current) => {
         if (current.initialized) return current
-        const open =
-          !acceptedUpdate && !acknowledgedVersions.includes(applicationVersion)
+        const open = !acknowledgedVersions.includes(applicationVersion)
         return {
           ...current,
           initialized: true,
@@ -183,22 +153,6 @@ export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
     }
   }, [persistAcknowledgedVersions, store])
 
-  React.useEffect(() => {
-    const stagedRelease = pwa?.stagedRelease
-    if (!state.initialized) return
-
-    if (!stagedRelease) return
-    if (seenStagedVersionsRef.current.has(stagedRelease.version)) return
-
-    seenStagedVersionsRef.current.add(stagedRelease.version)
-    store.setState((current) => ({
-      ...current,
-      open: true,
-      selectedVersion: stagedRelease.version,
-      automaticNotice: false,
-    }))
-  }, [pwa?.stagedRelease, state.initialized, store])
-
   function handleOpenChange(open: boolean) {
     store.setState((current) => ({
       ...current,
@@ -212,7 +166,7 @@ export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
     store.setState((current) => ({
       ...current,
       open: true,
-      selectedVersion: pwa?.stagedRelease?.version ?? applicationVersion,
+      selectedVersion: applicationVersion,
       initialized: true,
       automaticNotice: false,
     }))
@@ -254,10 +208,6 @@ export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
           store.setState((current) => ({ ...current, selectedVersion }))
         }}
         releases={applicationReleases}
-        stagedRelease={pwa?.stagedRelease}
-        onApplyUpdate={() => pwa?.applyUpdate()}
-        updateState={pwa?.updateState ?? 'idle'}
-        updateError={pwa?.updateError ?? null}
       />
     </ReleaseNotesContext.Provider>
   )

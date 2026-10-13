@@ -19,7 +19,7 @@ export default [
       'eslint.config.js',
       'prettier.config.js',
       '.output/**',
-      'src/features/pwa/service-worker-template.js',
+      '.nitro/**',
       'playwright-report/**',
       'test-results/**',
     ],

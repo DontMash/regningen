@@ -57,3 +57,7 @@ Business Profile and Invoice rendered-module suites use Vitest feature robots an
 5. Preserve existing behavioral and accessibility assertions during a rework. Run the focused suite during development and the repository-required verification commands before handoff.
 
 These conventions are enforced through guidance and review rather than a custom architecture linter.
+
+## Production PWA verification
+
+PWA caching and update claims belong in the production-browser journey, not development-server mocks. The production harness builds isolated Nitro deployments, serves generated workers on one stable origin, and should assert the delivered manifest, generated artwork, worker headers, precached SSR routes, offline navigation, and an actual downloaded PDF. Exercise update postponement and acceptance through the generic application controls, including a same-SemVer content change; plugin callback doubles can cover local reload scheduling but do not prove worker installation or activation. Draft tests should describe per-tab session autosaving, ordinary reload restoration, reset ordering, and storage failures rather than the removed update-only snapshot protocol or coordinated cross-tab consent.

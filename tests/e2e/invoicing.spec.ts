@@ -488,6 +488,10 @@ test('caps invoices at 16 line items and confirms starting a new invoice', async
   await invoice.expectNewInvoiceConfirmation()
   await invoice.cancelNewInvoice()
   await invoice.expectInvoiceNumber('2026-001')
+  await harness.reload()
+  await releaseNotes.dismissReleaseNotes()
+  await invoice.expectInvoiceNumber('2026-001')
+  await invoice.expectPositionValue(2, 'amount', 'abc')
   await invoice.startNewInvoice()
   await invoice.confirmNewInvoice()
   await invoice.expectNewInvoiceDraft()
@@ -496,6 +500,10 @@ test('caps invoices at 16 line items and confirms starting a new invoice', async
   await invoice.startNewInvoice()
   await invoice.expectNewInvoiceConfirmation()
   await invoice.confirmNewInvoice()
+  await invoice.expectNewInvoiceDraft()
+  await invoice.expectNewPositionValues({ description: '' })
+  await harness.reload()
+  await releaseNotes.dismissReleaseNotes()
   await invoice.expectNewInvoiceDraft()
   await invoice.expectNewPositionValues({ description: '' })
 })
@@ -630,7 +638,7 @@ test('exports an imported partial Business Profile without unlocking invoicing',
   await invoice.expectProfileSetupPrompt()
 })
 
-test('discards invoice form values when the page reloads', async ({
+test('restores incomplete Invoice Draft inputs after an ordinary reload', async ({
   harness,
   releaseNotes,
   businessProfile,
@@ -639,18 +647,149 @@ test('discards invoice form values when the page reloads', async ({
   await harness.open('/business-profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
-  await invoice.enterInvoiceNumber('not-persisted')
-  await invoice.addPosition({
-    description: 'Unfertige Position',
-    amount: '10,00',
+
+  await invoice.enterInvoiceNumber('  draft-reload  ')
+  await invoice.enterSubject('  unfinished subject  ')
+  await invoice.enterRecipient({
+    company: 'Recipient GmbH',
+    street: 'Main Street 1',
+    postalCode: '20095',
+    town: 'Hamburg',
   })
+  await invoice.addPosition({
+    description: 'Incomplete existing row',
+    amount: '12,00',
+  })
+  await invoice.editPosition(1, 'amount', 'not-money')
+  await invoice.chooseVatRate(19)
+  await invoice.enterNewPosition({
+    description: ' Unsubmitted position ',
+    amount: '0,',
+  })
+  const expectedDate = await invoice.readSelectedDate()
 
   await harness.reload()
   await releaseNotes.dismissReleaseNotes()
 
-  await invoice.expectInvoiceNumber('')
-  await invoice.expectEmptyPositions()
+  await invoice.expectInvoiceNumber('  draft-reload  ')
+  await invoice.expectSubject('  unfinished subject  ')
+  await invoice.expectRecipientField('company', 'Recipient GmbH')
+  await invoice.expectPositionValue(1, 'description', 'Incomplete existing row')
+  await invoice.expectPositionValue(1, 'amount', 'not-money')
+  await invoice.expectNewPositionValues({
+    description: ' Unsubmitted position ',
+    amount: '0,',
+  })
+  await invoice.expectVatRate(19)
+  await invoice.expectDateLabelMatches(new RegExp(expectedDate.trim()))
 })
+
+test('retains unsaved Invoice Draft edits when a native reload warning is cancelled and saves again after storage recovers', async ({
+  harness,
+  releaseNotes,
+  businessProfile,
+  invoice,
+  storageFaults,
+}) => {
+  await harness.open('/business-profile')
+  await releaseNotes.acknowledgeReleaseNotes()
+  await establishBusinessProfile(businessProfile)
+  const scenario = createInvoiceScenario({ number: 'storage-recovered' })
+
+  await storageFaults.preventDraftPersistence('write')
+  await invoice.enterInvoiceNumber(scenario.input.number)
+  await invoice.expectDraftPersistenceWarning()
+  const reload = await harness.cancelReloadAtUnsavedWarning()
+  expect(reload).toBe('beforeunload')
+  await invoice.expectInvoiceNumber(scenario.input.number)
+
+  await storageFaults.restoreDraftPersistence()
+  await invoice.enterSubject(scenario.input.subject)
+  await invoice.expectDraftPersistenceWarningAbsent()
+  await harness.reload()
+  await invoice.expectInvoiceNumber(scenario.input.number)
+  await invoice.expectSubject(scenario.input.subject)
+})
+
+test('refuses to discard the Invoice Draft when session removal fails and can reset after recovery', async ({
+  harness,
+  releaseNotes,
+  businessProfile,
+  invoice,
+  storageFaults,
+}) => {
+  await harness.open('/business-profile')
+  await releaseNotes.acknowledgeReleaseNotes()
+  await establishBusinessProfile(businessProfile)
+  const scenario = createInvoiceScenario({
+    number: 'keep-on-failed-reset',
+    positions: [{ description: '  unfinished  ', amount: 'not-money' }],
+  })
+  const unfinished = scenario.input.positions[0]
+  await invoice.enterInvoiceNumber(scenario.input.number)
+  await invoice.enterNewPosition(unfinished)
+
+  await storageFaults.preventDraftPersistence('remove')
+  await invoice.startNewInvoice()
+  await invoice.confirmNewInvoice()
+  await invoice.expectNewInvoiceFailed()
+  await invoice.cancelNewInvoice()
+  await invoice.expectInvoiceNumber(scenario.input.number)
+  await invoice.expectNewPositionValues(unfinished)
+
+  await storageFaults.restoreDraftPersistence()
+  await invoice.startNewInvoice()
+  await invoice.confirmNewInvoice()
+  await invoice.expectNewInvoiceDraft()
+  await invoice.expectNewPositionValues({ description: '', amount: '' })
+  await harness.reload()
+  await invoice.expectNewInvoiceDraft()
+  await invoice.expectNewPositionValues({ description: '', amount: '' })
+})
+
+for (const fault of ['access', 'read'] as const) {
+  test(`keeps the Invoice editor usable when draft-session ${fault} fails`, async ({
+    harness,
+    releaseNotes,
+    businessProfile,
+    invoice,
+    storageFaults,
+  }) => {
+    await harness.open('/business-profile')
+    await releaseNotes.acknowledgeReleaseNotes()
+    await establishBusinessProfile(businessProfile)
+    await storageFaults.preventDraftRecovery(fault)
+    await harness.reload()
+    await invoice.expectReady()
+    const scenario = createInvoiceScenario({
+      number: 'editable-without-storage',
+    })
+    await invoice.enterInvoiceNumber(scenario.input.number)
+    await invoice.expectDraftPersistenceWarning()
+    await invoice.expectInvoiceNumber(scenario.input.number)
+  })
+}
+
+for (const kind of ['malformed', 'unsupported'] as const) {
+  test(`warns and opens an empty Invoice Draft for ${kind} session data`, async ({
+    harness,
+    releaseNotes,
+    businessProfile,
+    invoice,
+    storageFaults,
+  }) => {
+    await harness.open('/business-profile')
+    await releaseNotes.acknowledgeReleaseNotes()
+    await establishBusinessProfile(businessProfile)
+    const scenario = createInvoiceScenario({ number: 'never-guess-recovery' })
+    await invoice.enterInvoiceNumber(scenario.input.number)
+    await storageFaults.supplyInvalidDraft(kind)
+    await harness.reload()
+    await invoice.expectDraftRecoveryWarning()
+    await invoice.expectNewInvoiceDraft()
+    await invoice.expectNewPositionValues({ description: '', amount: '' })
+  })
+}
 
 test('shows validation feedback for a missing recipient and an invalid line amount', async ({
   harness,

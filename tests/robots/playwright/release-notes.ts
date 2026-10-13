@@ -77,7 +77,12 @@ export class ReleaseNotesRobot {
       .getByRole('dialog', { name: 'Versionshinweise', exact: true })
       .getByRole('combobox', { name: 'Version auswählen' })
       .click()
-    await this.page.getByRole('option', { name: version, exact: true }).click()
+    const escapedVersion = version.replaceAll('.', '\\.')
+    await this.page
+      .getByRole('option', {
+        name: new RegExp(`^${escapedVersion}(?: \\(laufend\\))?$`),
+      })
+      .click()
   }
 
   async scrollReleaseNotes(to: 'middle' | 'end' | number) {

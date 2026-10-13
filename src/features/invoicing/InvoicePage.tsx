@@ -57,10 +57,11 @@ import {
 } from './business-profile-query'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
 import {
+  clearStoredInvoiceDraft,
   createEmptyInvoiceDraft,
+  invoiceDraftPersistenceStore,
   invoiceDraftStore,
   invoicePositionDraftStore,
-  clearInvoiceUpdateSnapshot,
 } from './invoice-draft-store'
 import type { InvoiceDraft, InvoiceLineDraft, VatRate } from './invoice'
 import {
@@ -70,7 +71,7 @@ import {
 } from './invoice'
 import { createInvoicePdf } from './pdf'
 import { useOptionalPwa } from '@/features/pwa/PwaProvider'
-import { runPwaCriticalOperation } from '@/features/pwa/update-participants'
+import { runPwaCriticalOperation } from '@/features/pwa/pwa-critical-operations'
 import {
   IconCalendar,
   IconEdit,
@@ -329,6 +330,10 @@ function InvoiceDateField({
 function InvoicePage() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+  const { initialized: draftInitialized } = useSelector(
+    invoiceDraftPersistenceStore,
+    (state) => state,
+  )
   const profileQuery = useBusinessProfile()
   const invoice = useSelector(invoiceDraftStore, (state) => state)
   const storageError = useSelector(
@@ -348,7 +353,7 @@ function InvoicePage() {
     if (!profileQuery.isFetching && profileChanged) setProfileChanged(false)
   }, [profileChanged, profileQuery.data, profileQuery.isFetching])
 
-  if (!mounted || profileQuery.isPending) {
+  if (!mounted || !draftInitialized || profileQuery.isPending) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-12">
         <p className="text-center" aria-live="polite">
@@ -415,6 +420,10 @@ function InvoiceEditor({
   storageError: string | null
 }) {
   const draft = useSelector(invoiceDraftStore, (state) => state)
+  const draftPersistence = useSelector(
+    invoiceDraftPersistenceStore,
+    (state) => state,
+  )
   const pwa = useOptionalPwa()
   const [touched, setTouched] = useState<Set<string>>(() => new Set())
   const newItem = useSelector(invoicePositionDraftStore, (state) => state)
@@ -470,11 +479,11 @@ function InvoiceEditor({
   }, [profile, profileChanged, storageError])
 
   useEffect(() => {
-    if (form.state.values.date) return
+    if (draftPersistence.restored || form.state.values.date) return
     const initial = { ...form.state.values, date: localDate() }
     form.reset(initial)
     invoiceDraftStore.setState(() => initial)
-  }, [form])
+  }, [draftPersistence.restored, form])
 
   const touch = (name: string) =>
     setTouched((current) => new Set(current).add(name))
@@ -544,15 +553,24 @@ function InvoiceEditor({
       setConfirmReset(true)
       return
     }
-    resetInvoice()
+    void resetInvoice()
   }
 
-  function resetInvoice() {
+  async function resetInvoice() {
     try {
-      clearInvoiceUpdateSnapshot(window.sessionStorage)
-    } catch {
-      // The new invoice still starts clean if temporary storage is unavailable.
+      await clearStoredInvoiceDraft()
+    } catch (error) {
+      toast.add({
+        title: 'Neue Rechnung konnte nicht begonnen werden',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Der gespeicherte Invoice Draft konnte nicht sicher entfernt werden.',
+        type: 'error',
+      })
+      return
     }
+
     const freshInvoice = { ...createEmptyInvoiceDraft(), date: localDate() }
     form.reset(freshInvoice)
     invoiceDraftStore.setState(() => freshInvoice)
@@ -666,6 +684,13 @@ function InvoiceEditor({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {draftPersistence.error ? (
+          <p role="alert" className="paragraph-small text-destructive">
+            {draftPersistence.error} Die Eingaben bleiben in diesem Tab
+            bearbeitbar, sind aber möglicherweise nicht wiederherstellbar.
+          </p>
+        ) : null}
 
         <div className="flex flex-col gap-5">
           <Card>
@@ -957,8 +982,9 @@ function InvoiceEditor({
             </Button>
             <p className="paragraph-small text-muted-foreground">
               Das PDF enthält das gewählte Datum fest. Eine neue Rechnung
-              beginnt mit leeren Eingaben. Rechnungseingaben werden nicht
-              gespeichert.
+              beginnt mit leeren Eingaben. Der Invoice Draft wird vorübergehend
+              in dieser Browsersitzung gespeichert und kann nach einem Neuladen
+              wiederhergestellt werden.
             </p>
           </form>
         </div>
