@@ -1,5 +1,6 @@
 import { expect, test as base } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { LandingRobot } from '../../robots/playwright/landing'
 import { AppShellRobot } from '../../robots/playwright/app-shell'
 import { BusinessProfileRobot } from '../../robots/playwright/business-profile'
 import { FooterRobot } from '../../robots/playwright/footer'
@@ -16,6 +17,7 @@ import { RequestObserver } from './requests'
 import { StorageFaults } from './storage-faults'
 
 export type PlaywrightRobots = {
+  landing: LandingRobot
   appShell: AppShellRobot
   businessProfile: BusinessProfileRobot
   footer: FooterRobot
@@ -37,6 +39,9 @@ export type TestFixtures = PlaywrightRobots & {
 }
 
 export const test = base.extend<TestFixtures>({
+  landing: async ({ page }, use) => {
+    await use(new LandingRobot(page))
+  },
   appShell: async ({ page }, use) => {
     await use(new AppShellRobot(page))
   },
@@ -81,6 +86,7 @@ export const test = base.extend<TestFixtures>({
   },
   robotsForPage: async ({ page }, use) => {
     await use((robotPage = page) => ({
+      landing: new LandingRobot(robotPage),
       appShell: new AppShellRobot(robotPage),
       businessProfile: new BusinessProfileRobot(robotPage),
       footer: new FooterRobot(robotPage),

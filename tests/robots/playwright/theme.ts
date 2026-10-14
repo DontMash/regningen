@@ -12,6 +12,15 @@ export class ThemeRobot {
       .click()
   }
 
+  async cycleThemeWithKeyboard() {
+    const control = this.page.getByRole('button', {
+      name: 'Darstellung umschalten',
+    })
+    await control.focus()
+    await expect(control).toBeFocused()
+    await control.press('Enter')
+  }
+
   async expectThemePreference(preference: ThemePreference) {
     await expect(
       this.page.getByRole('button', { name: 'Darstellung umschalten' }),

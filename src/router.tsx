@@ -1,4 +1,6 @@
 import { createRouter as createTanStackRouter } from '@tanstack/react-router'
+import { getGlobalStartContext } from '@tanstack/react-start'
+import type { DeploymentPolicy } from './lib/visibility'
 import { routeTree } from './routeTree.gen'
 
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
@@ -9,7 +11,27 @@ export function getRouter() {
 
   const router = createTanStackRouter({
     routeTree,
-    context,
+    context: {
+      ...context,
+      visibilityPolicy: {
+        canonicalOrigin: null,
+        publish: false,
+      },
+    },
+    dehydrate: () => ({
+      visibilityPolicy: getGlobalStartContext()?.visibilityPolicy ?? {
+        canonicalOrigin: null,
+        publish: false,
+      },
+    }),
+    hydrate: (data: { visibilityPolicy: DeploymentPolicy }) => {
+      router.update({
+        context: {
+          ...router.options.context,
+          visibilityPolicy: data.visibilityPolicy,
+        },
+      })
+    },
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,

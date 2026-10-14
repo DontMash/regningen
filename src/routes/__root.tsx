@@ -19,15 +19,21 @@ import appCss from '../styles.css?url'
 import { pwaAssetsHead } from 'virtual:pwa-assets/head'
 
 import type { QueryClient } from '@tanstack/react-query'
+import type { DeploymentPolicy } from '@/lib/visibility'
 
 interface MyRouterContext {
   queryClient: QueryClient
+  visibilityPolicy: DeploymentPolicy
 }
 
 // Keep this pre-hydration bootstrap aligned with the shared theme runtime.
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;}catch(e){}})();`
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+  beforeLoad: ({ serverContext, context }) => ({
+    visibilityPolicy:
+      serverContext?.visibilityPolicy ?? context.visibilityPolicy,
+  }),
   head: () => ({
     meta: [
       {
@@ -38,7 +44,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'regningen',
+        title: 'Seite nicht verfügbar – regningen',
+      },
+      {
+        name: 'robots',
+        content: 'noindex, follow',
       },
       {
         name: 'theme-color',
@@ -75,13 +85,14 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     ],
   }),
   shellComponent: RootDocument,
-  notFoundComponent: NotFound,
+  notFoundComponent: () => <UnavailablePage title="Seite nicht gefunden" />,
+  errorComponent: () => <UnavailablePage title="Seite nicht verfügbar" />,
 })
 
-function NotFound() {
+function UnavailablePage({ title }: { title: string }) {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-12">
-      <h1 className="heading-1">Seite nicht gefunden</h1>
+      <h1 className="heading-1">{title}</h1>
       <Link
         to="/"
         className="paragraph text-primary underline underline-offset-4"

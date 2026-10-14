@@ -198,7 +198,7 @@ for (const width of [375, 768]) {
   })
 }
 
-test('cycles and persists appearance inside the open menu, synchronized with settings', async ({
+test('cycles and persists appearance with the keyboard inside the open menu, synchronized with settings', async ({
   appShell,
   harness,
   releaseNotes,
@@ -218,7 +218,7 @@ test('cycles and persists appearance inside the open menu, synchronized with set
     ['Dunkel', 'dark'],
     ['System', 'dark'],
   ] as const) {
-    await theme.cycleTheme()
+    await theme.cycleThemeWithKeyboard()
     await appShell.expectMenuOpen()
     await theme.expectThemePreference(preference)
     await theme.expectResolvedTheme(resolved)
@@ -226,7 +226,7 @@ test('cycles and persists appearance inside the open menu, synchronized with set
     await settings.expectAppearance(preference)
     await appShell.openMenu()
   }
-  await theme.cycleTheme()
+  await theme.cycleThemeWithKeyboard()
   await harness.reload()
   await appShell.expectMenuClosed()
   await settings.expectAppearance('Hell')
@@ -352,13 +352,16 @@ test('keeps close and bottom controls reachable with an unbroken Business name i
   await appShell.expectMenuTriggerFocused()
 })
 
-test('opens first-time Business Profile setup from home', async ({
+test('opens first-time Business Profile setup from an explicit home action', async ({
   appShell,
   harness,
   releaseNotes,
+  landing,
 }) => {
   await harness.open('/')
   await releaseNotes.dismissReleaseNotes()
+  await landing.expectIntroduction()
+  await landing.startInvoice()
   await appShell.expectProfilePage()
 })
 
@@ -423,14 +426,17 @@ test('does not retain an alias for the removed Business Profile route', async ({
   await appShell.expectUnknownRoute()
 })
 
-test('recovers from an unknown route to first-time Business Profile setup', async ({
+test('recovers from an unknown route to the stable introduction and explicit profile setup', async ({
   appShell,
   harness,
   releaseNotes,
+  landing,
 }) => {
   await harness.open('/not-a-route')
   await releaseNotes.dismissReleaseNotes()
   await appShell.expectUnknownRoute()
   await appShell.returnToHomeFromUnknownRoute()
+  await landing.expectIntroduction()
+  await landing.startInvoice()
   await appShell.expectProfilePage()
 })

@@ -73,6 +73,12 @@ export class LayoutMeasurements {
     })
   }
 
+  async documentOverflows() {
+    return this.page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    )
+  }
+
   async pageScrollPosition() {
     return this.page.evaluate(() => window.scrollY)
   }

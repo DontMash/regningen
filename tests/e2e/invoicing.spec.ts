@@ -236,7 +236,7 @@ test('reports failed profile Save and retains edits for retry without reloading 
   invoice,
   storageFaults,
 }) => {
-  await harness.open('/')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await businessProfile.configureBusinessProfile(
     createBusinessProfileScenario(),
@@ -258,9 +258,9 @@ test('reports failed profile Save and retains edits for retry without reloading 
   await invoice.expectStorageFailureAbsent()
 })
 
-test('stops at an error screen when browser storage cannot load the Business Profile', async ({
+test('keeps the introduction readable but reports failed application entry when the Business Profile cannot load', async ({
   harness,
-  appShell,
+  landing,
   releaseNotes,
   storageFaults,
 }) => {
@@ -269,7 +269,9 @@ test('stops at an error screen when browser storage cannot load the Business Pro
   await releaseNotes.acknowledgeReleaseNotes()
   await storageFaults.preventProfileReads()
   await harness.open('/')
-  await appShell.expectRootStorageError()
+  await landing.expectIntroduction()
+  await landing.startInvoice()
+  await landing.expectEntryError()
 })
 
 test('keeps invoicing blocked after an existing Business Profile fails to save', async ({
@@ -302,6 +304,7 @@ test('keeps invoicing blocked after an existing Business Profile fails to save',
 test('configures a Business Profile through its UI before opening Invoices', async ({
   harness,
   appShell,
+  landing,
   releaseNotes,
   businessProfile,
   invoice,
@@ -310,6 +313,8 @@ test('configures a Business Profile through its UI before opening Invoices', asy
   const observedRequests = requestObserver.observeRequests()
   await harness.open('/')
   await releaseNotes.dismissReleaseNotes()
+  await landing.expectIntroduction()
+  await landing.startInvoice()
   await appShell.expectProfilePage()
   await businessProfile.expectEditorReady()
   await businessProfile.expectSaveDisabled()

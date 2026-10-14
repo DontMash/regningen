@@ -33,7 +33,7 @@ pnpm exec playwright install chromium
 
 ## Production
 
-Build the application with `pnpm build`. To preview the production build locally, run `pnpm preview`.
+Build the application with `ORIGIN=https://regningen.soren.codes pnpm build`. Set the same server-runtime `ORIGIN` when serving production. To preview the production build locally, run `pnpm preview`; its different origin is deliberately noindex. See [public visibility and deployment](docs/visibility.md) for origin validation, explicit `TRUST_PROXY` opt-in, proxy sanitization, cache isolation, discovery endpoints, and offline metadata updates.
 
 ## Settings
 

@@ -5,7 +5,7 @@ export class AppShellRobot {
   constructor(private readonly page: Page) {}
 
   async expectApplicationShell() {
-    await expect(this.page).toHaveTitle('regningen')
+    await expect(this.page).toHaveTitle(/regningen/)
     await expect(this.page.getByRole('main')).toHaveCount(1)
     await expect(
       this.page
@@ -250,15 +250,6 @@ export class AppShellRobot {
     await expect(this.page.locator('a[href="/business-profile"]')).toHaveCount(
       0,
     )
-  }
-
-  async expectRootStorageError() {
-    await expect(
-      this.page.getByRole('alertdialog', { name: 'Rechnungen sind gesperrt' }),
-    ).toBeVisible()
-    await expect(
-      this.page.getByText(/nicht aus diesem Browser geladen werden/),
-    ).toBeVisible()
   }
 
   async expectUnknownRoute() {

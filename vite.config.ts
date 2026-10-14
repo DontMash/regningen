@@ -65,6 +65,10 @@ function applicationBuildOutputRevision(rootDirectory: string) {
   }
 
   const hash = createHash('sha256')
+  // Runtime visibility changes must invalidate cached SSR documents on the next
+  // normal build/update too. ORIGIN is deliberately not bundled into the client.
+  hash.update(process.env.ORIGIN ?? '')
+  hash.update(process.env.TRUST_PROXY === 'true' ? 'true' : 'false')
   for (const file of files) {
     hash.update(file.slice(rootDirectory.length))
     hash.update(readFileSync(file))
@@ -132,6 +136,7 @@ const config = defineConfig({
       manifest: {
         name: 'regningen',
         short_name: 'regningen',
+        lang: 'de',
         description: 'Rechnungen erstellen und als PDF herunterladen.',
         start_url: '/',
         scope: '/',
