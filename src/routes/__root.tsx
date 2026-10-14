@@ -105,7 +105,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             <ApplicationResetListener />
             <SettingsGuards />
             <Header />
-            <main id="hauptinhalt" className="min-h-screen">
+            <main id="hauptinhalt" tabIndex={-1} className="min-h-screen">
               {children}
             </main>
             <Footer />

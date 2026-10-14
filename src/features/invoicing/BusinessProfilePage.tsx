@@ -614,7 +614,7 @@ function ProfileEditor({
           </Button>
           <Field className="max-w-sm">
             <FieldLabel htmlFor="profile-import">
-              <IconDownload className='size-4' data-icon="inline-start" />
+              <IconDownload className="size-4" data-icon="inline-start" />
               Sicherung importieren
             </FieldLabel>
             <Input

@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useBlocker } from '@tanstack/react-router'
 import { useSelector } from '@tanstack/react-store'
 import {
@@ -18,6 +19,7 @@ import {
 } from './unsaved-profile'
 
 export default function SettingsGuards() {
+  const confirmationOpener = useRef<HTMLElement | null>(null)
   const confirming = useSelector(
     unsavedProfileStore,
     (state) => state.confirming,
@@ -35,8 +37,27 @@ export default function SettingsGuards() {
       onOpenChange={(open) => {
         if (!open) resolveProfileDiscardConfirmation(false)
       }}
+      onOpenChangeComplete={(open) => {
+        // Compact navigation removes its opener before this confirmation closes.
+        if (!open && !confirmationOpener.current?.isConnected) {
+          document.getElementById('hauptinhalt')?.focus({ preventScroll: true })
+        }
+      }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent
+        initialFocus={() => {
+          confirmationOpener.current =
+            document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : null
+          return true
+        }}
+        finalFocus={() =>
+          confirmationOpener.current?.isConnected
+            ? confirmationOpener.current
+            : false
+        }
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>
             Ungespeicherte Änderungen verwerfen?

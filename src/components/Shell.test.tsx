@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Header from './Header'
@@ -34,11 +41,14 @@ function profileBackup(businessName: string) {
   })
 }
 
-function mediaQuery(initiallyDark: boolean) {
-  let matches = initiallyDark
+function mediaQuery(
+  initialMatches: boolean,
+  query = '(prefers-color-scheme: dark)',
+) {
+  let matches = initialMatches
   const listeners = new Set<(event: MediaQueryListEvent) => void>()
   const media = {
-    media: '(prefers-color-scheme: dark)',
+    media: query,
     get matches() {
       return matches
     },
@@ -56,14 +66,14 @@ function mediaQuery(initiallyDark: boolean) {
     addListener: vi.fn(),
     removeListener: vi.fn(),
     dispatchEvent: vi.fn(() => true),
-    setDark: (value: boolean) => {
+    setMatches: (value: boolean) => {
       matches = value
       for (const listener of listeners)
         listener({ matches } as MediaQueryListEvent)
     },
   }
   return media as unknown as MediaQueryList & {
-    setDark: (value: boolean) => void
+    setMatches: (value: boolean) => void
   }
 }
 
@@ -118,6 +128,84 @@ describe('application shell', () => {
     expect(await screen.findByText('Nordlicht Catering')).toBeVisible()
   })
 
+  it('shows saved business context in the named menu, keeps it open for theme changes, and selects the Invoice destination', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => mediaQuery(false)),
+    )
+    window.localStorage.setItem(
+      BUSINESS_PROFILE_STORAGE_KEY,
+      profileBackup('Nordlicht Catering'),
+    )
+    await renderAtRoute('/', Header)
+    await user.click(screen.getByRole('button', { name: 'Menü öffnen' }))
+    const menu = await screen.findByRole('dialog', { name: 'Navigation' })
+    expect(within(menu).getByText('Nordlicht Catering')).toBeVisible()
+    expect(
+      within(menu).getByRole('link', { name: 'Einstellungen' }),
+    ).toHaveAttribute('href', '/settings')
+    const theme = within(menu).getByRole('button', {
+      name: 'Darstellung umschalten',
+    })
+    await user.click(theme)
+    expect(theme).toHaveAttribute('title', 'Darstellung: Hell')
+    expect(menu).toBeVisible()
+    await user.click(within(menu).getByRole('link', { name: 'Rechnung' }))
+    expect(
+      await screen.findByRole('heading', { name: 'Rechnungsseite geöffnet' }),
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('dialog', { name: 'Navigation' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('dismisses the menu with focus restoration and clears it when the desktop media query matches', async () => {
+    const user = userEvent.setup()
+    const desktop = mediaQuery(false, '(min-width: 1024px)')
+    const systemTheme = mediaQuery(false)
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) =>
+        query === desktop.media ? desktop : systemTheme,
+      ),
+    )
+    await renderAtRoute('/', Header)
+    const trigger = screen.getByRole('button', { name: 'Menü öffnen' })
+    await user.click(trigger)
+    const menu = await screen.findByRole('dialog', { name: 'Navigation' })
+    await user.click(
+      within(menu).getByRole('button', { name: 'Menü schließen' }),
+    )
+    await waitFor(() => expect(menu).not.toBeInTheDocument())
+    expect(trigger).toHaveFocus()
+    await user.click(trigger)
+    expect(
+      await screen.findByRole('dialog', { name: 'Navigation' }),
+    ).toBeVisible()
+    act(() => desktop.setMatches(true))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Navigation' }),
+      ).not.toBeInTheDocument(),
+    )
+    act(() => desktop.setMatches(false))
+    expect(
+      screen.queryByRole('dialog', { name: 'Navigation' }),
+    ).not.toBeInTheDocument()
+    await user.click(trigger)
+    await user.click(
+      within(
+        await screen.findByRole('dialog', { name: 'Navigation' }),
+      ).getByRole('link', { name: 'Einstellungen' }),
+    )
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Allgemeine Einstellungen geöffnet',
+      }),
+    ).toBeVisible()
+  })
+
   it('restores the system theme, persists explicit choices, and follows OS changes only in system mode', async () => {
     const user = userEvent.setup()
     const media = mediaQuery(true)
@@ -141,8 +229,8 @@ describe('application shell', () => {
     expect(window.localStorage.getItem('theme')).toBe('light')
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
     expect(document.documentElement).toHaveStyle({ colorScheme: 'light' })
-    media.setDark(false)
-    media.setDark(true)
+    media.setMatches(false)
+    media.setMatches(true)
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
     expect(document.documentElement).toHaveStyle({ colorScheme: 'light' })
 
@@ -151,7 +239,7 @@ describe('application shell', () => {
     expect(window.localStorage.getItem('theme')).toBe('dark')
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
     expect(document.documentElement).toHaveStyle({ colorScheme: 'dark' })
-    media.setDark(false)
+    media.setMatches(false)
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
     expect(document.documentElement).toHaveStyle({ colorScheme: 'dark' })
 
@@ -159,7 +247,7 @@ describe('application shell', () => {
     expect(toggle).toHaveAttribute('title', 'Darstellung: System')
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
     expect(document.documentElement).toHaveStyle({ colorScheme: 'light' })
-    media.setDark(true)
+    media.setMatches(true)
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
     expect(document.documentElement).toHaveStyle({ colorScheme: 'dark' })
   })

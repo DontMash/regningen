@@ -18,6 +18,61 @@ export type InvoiceMeasurementControl =
 export class LayoutMeasurements {
   constructor(private readonly page: Page) {}
 
+  async navigationDrawer() {
+    const menu = this.page.getByRole('dialog', {
+      name: 'Navigation',
+      exact: true,
+    })
+    const box = async (locator: Locator) => {
+      const bounds = await locator.boundingBox()
+      if (!bounds) throw new Error('Navigation controls must be visible.')
+      return bounds
+    }
+    // Wait for the opening transform rather than measuring a mid-animation panel.
+    await expect(menu).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)')
+    return {
+      surface: await box(menu),
+      close: await box(menu.getByRole('button', { name: 'Menü schließen' })),
+      invoice: await box(
+        menu.getByRole('link', { name: 'Rechnung', exact: true }),
+      ),
+      settings: await box(
+        menu.getByRole('link', { name: 'Einstellungen', exact: true }),
+      ),
+      theme: await box(
+        menu.getByRole('button', { name: 'Darstellung umschalten' }),
+      ),
+      overflows: await menu
+        .locator('[data-slot="drawer-content"]')
+        .evaluate(
+          (element) =>
+            element.scrollWidth > element.clientWidth ||
+            document.documentElement.scrollWidth > window.innerWidth,
+        ),
+    }
+  }
+
+  async navigationBusinessName(name: string, compact: boolean) {
+    const surface = compact
+      ? this.page.getByRole('dialog', { name: 'Navigation', exact: true })
+      : this.page.getByRole('navigation', { name: 'Hauptnavigation' })
+    return surface.getByText(name, { exact: true }).evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return {
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        lineHeight: Number.parseFloat(style.lineHeight),
+        wraps: style.whiteSpace !== 'nowrap',
+        truncated:
+          element.scrollWidth > element.clientWidth &&
+          style.textOverflow === 'ellipsis',
+      }
+    })
+  }
+
   async pageScrollPosition() {
     return this.page.evaluate(() => window.scrollY)
   }

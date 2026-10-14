@@ -32,6 +32,7 @@ for (const width of [320, 768, 1024, 1440]) {
     await harness.open('/settings/profile')
     await releaseNotes.dismissReleaseNotes()
     await establishBusinessProfile(businessProfile)
+    if (width < 1024) await appShell.openMenu()
     await appShell.navigateToInvoice()
     await invoice.expectReady()
     await harness.waitForFonts()
@@ -88,6 +89,7 @@ for (const width of [320, 768, 1024, 1440]) {
     await invoice.editPosition(1, 'amount', '107,00')
     expect(await layout.invoiceExistingPositionControls(1)).toEqual(rowBefore)
 
+    if (width < 1024) await appShell.openMenu()
     await appShell.navigateToBusinessProfile()
     await businessProfile.expectEditorReady()
     await harness.waitForFonts()
@@ -155,6 +157,7 @@ for (const width of [375, 1024]) {
       await harness.open('/settings/profile')
       await releaseNotes.dismissReleaseNotes()
       await establishBusinessProfile(businessProfile)
+      if (width < 1024) await appShell.openMenu()
       await appShell.navigateToInvoice()
       await invoice.expectReady()
       await harness.waitForFonts()

@@ -38,6 +38,21 @@ export class BrowserControls {
     await this.page.setViewportSize({ width, height })
   }
 
+  async scrollPageBy(pixels: number) {
+    const viewport = this.page.viewportSize()!
+    await this.page.mouse.move(8, viewport.height / 2)
+    await this.page.mouse.wheel(0, pixels)
+    // Wheel delivery is asynchronous; allow its rendering frames to complete.
+    await this.page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          )
+        }),
+    )
+  }
+
   async useSystemTheme(colorScheme: 'light' | 'dark') {
     await this.page.emulateMedia({ colorScheme })
   }
