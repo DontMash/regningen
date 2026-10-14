@@ -60,6 +60,10 @@ export class BusinessProfileRobot {
     )
   }
 
+  async openInvoiceEditor() {
+    await this.user.click(screen.getByRole('link', { name: 'Rechnung' }))
+  }
+
   async exportBackup() {
     await this.user.click(
       screen.getByRole('button', { name: 'Sicherung exportieren' }),
@@ -109,6 +113,12 @@ export class BusinessProfileRobot {
     })
     await this.user.click(
       within(dialog).getByRole('button', { name: 'Profil löschen' }),
+    )
+  }
+
+  async retryStorageRead() {
+    await this.user.click(
+      screen.getByRole('button', { name: 'Speicher erneut prüfen' }),
     )
   }
 
@@ -233,6 +243,18 @@ export class BusinessProfileRobot {
     expect(
       screen.getByRole('button', { name: 'Profil speichern' }),
     ).toBeDisabled()
+  }
+
+  expectNoInvoiceAction() {
+    expect(
+      screen.queryByRole('link', { name: 'Rechnung' }),
+    ).not.toBeInTheDocument()
+  }
+
+  expectExportEnabled() {
+    expect(
+      screen.getByRole('button', { name: 'Sicherung exportieren' }),
+    ).toBeEnabled()
   }
 
   expectExportDisabled() {

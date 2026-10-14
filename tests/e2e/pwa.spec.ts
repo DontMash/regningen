@@ -27,12 +27,15 @@ test('generated production workers prepare offline routes and prompt for same-ve
     businessProfile: profileA,
     invoice: invoiceA,
     pwa: pwaA,
+    settings: settingsA,
+    releaseNotes: releaseNotesA,
   } = robotsA
   const {
     appShell: shellB,
     businessProfile: profileB,
     invoice: invoiceB,
     pwa: pwaB,
+    releaseNotes: releaseNotesB,
   } = robotsB
 
   try {
@@ -41,7 +44,8 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectGeneratedWorker(deployment.baseUrl, deployment, 'a')
     await expectManifestAssets(deployment.baseUrl, manifest)
 
-    await pageA.goto(deployment.baseUrl)
+    // Start on a public document without entering either Settings route.
+    await pageA.goto(`${deployment.baseUrl}/invoice`)
     await pwaA.acknowledgeRunningReleaseNotes()
     await shellA.expectApplicationShell()
     await pwaA.expectOfflineReady()
@@ -60,9 +64,21 @@ test('generated production workers prepare offline routes and prompt for same-ve
     )
     expect(offlineManifest.status).toBe(200)
     expect(JSON.parse(offlineManifest.body)).toEqual(manifest)
-    await pageA.goto(`${deployment.baseUrl}/business-profile/`)
+    await pageA.goto(`${deployment.baseUrl}/settings/`)
+    await settingsA.expectGeneralPage()
+    await pageA.reload()
+    await settingsA.expectGeneralPage()
+    await settingsA.expectActivePage('Allgemein')
+    await pageA.goto(`${deployment.baseUrl}/settings/profile/`)
+    await profileA.expectEditorReady()
+    await pageA.reload()
+    await profileA.expectEditorReady()
+    await settingsA.expectActivePage('Profil')
     const profile = createBusinessProfileScenario()
     await profileA.configureBusinessProfile(profile)
+    await profileA.expectProfileSaved()
+    await expect(pageA).toHaveURL(`${deployment.baseUrl}/settings/profile/`)
+    await shellA.navigateToInvoice()
 
     await pageA.goto(`${deployment.baseUrl}/invoice/`)
     await invoiceA.expectReady()
@@ -108,9 +124,10 @@ test('generated production workers prepare offline routes and prompt for same-ve
     })
     await invoiceB.enterInvoiceNumber(independentDraft.input.number)
     await invoiceB.enterSubject(independentDraft.input.subject)
-    await pageB.goto(`${deployment.baseUrl}/business-profile`)
+    await pageB.goto(`${deployment.baseUrl}/settings/profile`)
     await profileB.expectEditorReady()
 
+    await shellA.navigateToSettings()
     await pwaA.enableNotifications()
     await pwaA.expectNotificationsEnabled()
     await capabilities.failNotificationDelivery(pageA)
@@ -121,7 +138,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await pageA.goto(`${deployment.baseUrl}/invoice/`)
     await invoiceA.expectReady()
     await invoiceA.expectInvoiceNumber('draft-tab-a')
-    await pageA.goto(`${deployment.baseUrl}/business-profile/`)
+    await pageA.goto(`${deployment.baseUrl}/settings/profile/`)
     await profileA.expectEditorReady()
     await profileA.expectFieldValue('businessName', profile.businessName)
     await shellA.navigateToInvoice()
@@ -156,20 +173,32 @@ test('generated production workers prepare offline routes and prompt for same-ve
     expect(notification.title).toBe('PDF wurde erstellt')
     expect(notification.body).toContain('Rechnung_draft-tab-a_')
     expect(notification.body).toContain('Du findest es in den Downloads.')
+    await shellA.navigateToSettings()
     await pwaA.expectNotificationsEnabled()
+    await settingsA.openProfile()
+    await profileA.enterDetails({ businessName: 'Unsaved update in tab A' })
+    await profileB.enterDetails({ businessName: 'Unsaved update in tab B' })
+    await pwaBrowser.observeWorkerActivation(pageA)
 
     await pwaBrowser.setOffline(false)
     await deployment.deploy('b')
     await pwaBrowser.returnToForeground(pageA)
-    await pageA.evaluate(async () => {
-      const registration = await navigator.serviceWorker.getRegistration()
-      await registration?.update()
-    })
+    await pwaBrowser.requestWorkerUpdate(pageA)
     await pwaA.expectUpdateAvailable()
     await pwaA.postponeUpdate()
     await pwaA.expectUpdateClosed()
     await pwaA.expectRunningVersion(releaseA)
-    await expect(pageA).toHaveURL(`${deployment.baseUrl}/invoice`)
+    await expect(pageA).toHaveURL(`${deployment.baseUrl}/settings/profile`)
+    await pwaA.reopenUpdate()
+    await pwaA.applyUpdate()
+    await profileA.expectUnsavedChangesWarning()
+    await profileA.keepUnsavedChanges()
+    expect(await pwaBrowser.workerState(pageA)).toMatchObject({
+      waiting: 'installed',
+      controllerChanges: 0,
+    })
+    await pwaA.postponeUpdate()
+    await profileA.expectFieldValue('businessName', 'Unsaved update in tab A')
     await pwaA.reopenUpdate()
 
     const pageAReloaded = pageA.waitForEvent(
@@ -177,9 +206,13 @@ test('generated production workers prepare offline routes and prompt for same-ve
       (frame) => frame === pageA.mainFrame(),
     )
     await pwaA.applyUpdate()
+    await profileA.expectUnsavedChangesWarning()
+    await profileA.discardUnsavedChanges()
     await pageAReloaded
 
-    await expect(pageA).toHaveURL(`${deployment.baseUrl}/invoice`)
+    await expect(pageA).toHaveURL(`${deployment.baseUrl}/settings/profile`)
+    await profileA.expectFieldValue('businessName', profile.businessName)
+    await shellA.navigateToInvoice()
     await invoiceA.expectReady()
     await pwaA.expectRunningVersion(releaseB)
     await invoiceA.expectInvoiceNumber('draft-tab-a')
@@ -189,11 +222,25 @@ test('generated production workers prepare offline routes and prompt for same-ve
       amount: 'not-money',
     })
     await pwaA.expectReleaseBInvoiceAsset()
+    await shellA.navigateToSettings()
     await pwaA.expectNotificationsEnabled()
+    await shellA.navigateToInvoice()
 
-    await pageB.reload()
-    await expect(pageB).toHaveURL(`${deployment.baseUrl}/business-profile`)
-    await profileB.expectEditorReady()
+    await profileB.expectUnsavedChangesWarning()
+    await profileB.keepUnsavedChanges()
+    await profileB.expectFieldValue('businessName', 'Unsaved update in tab B')
+    await expect(pageB).toHaveURL(`${deployment.baseUrl}/settings/profile`)
+    await pwaB.reopenUpdate()
+    const pageBReloaded = pageB.waitForEvent(
+      'framenavigated',
+      (frame) => frame === pageB.mainFrame(),
+    )
+    await pwaB.applyUpdate()
+    await profileB.expectUnsavedChangesWarning()
+    await profileB.discardUnsavedChanges()
+    await pageBReloaded
+    await expect(pageB).toHaveURL(`${deployment.baseUrl}/settings/profile`)
+    await profileB.expectFieldValue('businessName', profile.businessName)
     await shellB.navigateToInvoice()
     await invoiceB.expectInvoiceNumber('draft-tab-b')
     await invoiceB.expectSubject('Independent tab')
@@ -216,7 +263,9 @@ test('generated production workers prepare offline routes and prompt for same-ve
     expect(revisionB).toBeTruthy()
     expect(revisionA).not.toBe(revisionB)
     expect(workerA).toContain('/invoice')
-    expect(workerB).toContain('/business-profile')
+    expect(workerB).toContain('/settings/profile')
+    expect(workerB).toContain('/settings')
+    expect(workerB).not.toContain('/business-profile')
 
     await pwaBrowser.setOffline(true)
     await pageA.goto(`${deployment.baseUrl}/invoice`)
@@ -225,6 +274,45 @@ test('generated production workers prepare offline routes and prompt for same-ve
     expect(await pwaBrowser.cacheNames(pageA)).toContain(
       pwaBrowser.unrelatedCacheName,
     )
+
+    // User-data reset must not uninstall the production worker or erase downloads.
+    await test.step('reset offline user data while preserving the worker and downloads', async () => {
+      await shellA.navigateToSettings()
+      await settingsA.requestReset()
+      await settingsA.confirmReset()
+      await releaseNotesA.expectReleaseNotesDialog()
+      await releaseNotesB.expectReleaseNotesDialog()
+      await releaseNotesA.acknowledgeReleaseNotes()
+      await releaseNotesB.expectReleaseNotesClosed()
+      await shellA.expectProfilePage()
+      await profileA.expectFieldValue('businessName', '')
+      await pageA.reload()
+      await profileA.expectFieldValue('businessName', '')
+      expect(await pwaBrowser.workerState(pageA)).toMatchObject({
+        controlled: true,
+        active: 'activated',
+      })
+      expect(await pwaBrowser.cacheNames(pageA)).toContain(
+        pwaBrowser.unrelatedCacheName,
+      )
+      const preservedPdf = await new ArtifactSupport(pageA).readPdf(download)
+      expect(preservedPdf.text).toBe(pdf.text)
+      await shellA.navigateToSettings()
+      await pwaA.expectNotificationsDisabled()
+      expect(
+        (await capabilities.notificationObservation(pageA)).permission,
+      ).toBe('granted')
+      await settingsA.openProfile()
+      await shellB.expectProfilePage()
+      await profileB.expectFieldValue('businessName', '')
+      await profileA.configureBusinessProfile(createBusinessProfileScenario())
+      await shellA.navigateToInvoice()
+      await invoiceA.expectNewInvoiceDraft()
+      await invoiceA.expectNewPositionValues({ description: '', amount: '' })
+      await shellB.navigateToInvoice()
+      await invoiceB.expectNewInvoiceDraft()
+      await invoiceB.expectSubject('')
+    })
   } finally {
     try {
       await pwaBrowser.dispose()
@@ -257,7 +345,7 @@ async function expectGeneratedWorker(
   )
   const body = await response.text()
   expect(body).toContain('precacheAndRoute')
-  for (const route of ['/', '/invoice', '/business-profile']) {
+  for (const route of ['/', '/invoice', '/settings', '/settings/profile']) {
     expect(body).toContain(route)
   }
   const artifact = await readFile(

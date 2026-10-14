@@ -357,6 +357,6 @@ export class InvoiceRobot {
     ).toBeVisible()
     expect(
       screen.getByRole('link', { name: 'Unternehmensprofil öffnen' }),
-    ).toHaveAttribute('href', '/business-profile')
+    ).toHaveAttribute('href', '/settings/profile')
   }
 }

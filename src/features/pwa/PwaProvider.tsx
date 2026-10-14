@@ -11,6 +11,8 @@ import {
   waitForInvoiceDraftPersistence,
 } from '@/features/invoicing/invoice-draft-store'
 import { waitForPwaCriticalOperations } from './pwa-critical-operations'
+import { confirmDiscardProfileChanges } from '@/features/settings/unsaved-profile'
+import { getCompletedApplicationResetGeneration } from '@/features/settings/reset-generation'
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -130,6 +132,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   const [updateAvailable, setUpdateAvailable] = React.useState(false)
   const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false)
   const [updateRequested, setUpdateRequested] = React.useState(false)
+  const [reloadDeferred, setReloadDeferred] = React.useState(false)
   const [updateError, setUpdateError] = React.useState<string | null>(null)
   const registrationRef = React.useRef<ServiceWorkerRegistration | null>(null)
   const updateServiceWorkerRef = React.useRef<(() => Promise<void>) | null>(
@@ -164,9 +167,24 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   const onNeedReload = React.useCallback(() => {
     if (reloadStartedRef.current) return
     reloadStartedRef.current = true
+    const resetGeneration = getCompletedApplicationResetGeneration()
     void (async () => {
       await waitForPwaCriticalOperations()
       await waitForInvoiceDraftPersistence()
+      if (!(await confirmDiscardProfileChanges())) {
+        reloadStartedRef.current = false
+        setReloadDeferred(true)
+        setUpdateRequested(false)
+        setUpdateDialogOpen(false)
+        return
+      }
+      await waitForPwaCriticalOperations()
+      if (resetGeneration !== getCompletedApplicationResetGeneration()) {
+        // Successful reset already navigates to fresh Profil setup.
+        reloadStartedRef.current = false
+        return
+      }
+      setReloadDeferred(false)
       window.location.reload()
     })()
   }, [])
@@ -359,18 +377,34 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
 
   const applyUpdate = React.useCallback(() => {
     const updateServiceWorker = updateServiceWorkerRef.current
-    if (!updateAvailable || !updateServiceWorker || updateRequested) return
+    if (
+      updateRequested ||
+      (!reloadDeferred && (!updateAvailable || !updateServiceWorker))
+    )
+      return
     setUpdateRequested(true)
     setUpdateError(null)
-    void updateServiceWorker().catch((error: unknown) => {
-      setUpdateRequested(false)
-      setUpdateError(
-        error instanceof Error
-          ? error.message
-          : 'Die Aktualisierung konnte nicht gestartet werden. Versuche es später erneut.',
-      )
-    })
-  }, [updateAvailable, updateRequested])
+    void (async () => {
+      if (!(await confirmDiscardProfileChanges())) {
+        setUpdateRequested(false)
+        return
+      }
+      if (reloadDeferred) {
+        onNeedReload()
+        return
+      }
+      try {
+        await updateServiceWorker?.()
+      } catch (error) {
+        setUpdateRequested(false)
+        setUpdateError(
+          error instanceof Error
+            ? error.message
+            : 'Die Aktualisierung konnte nicht gestartet werden. Versuche es später erneut.',
+        )
+      }
+    })()
+  }, [updateAvailable, updateRequested, reloadDeferred, onNeedReload])
 
   const requestInstallation = React.useCallback(async () => {
     const promptEvent = installPrompt.current
@@ -400,8 +434,8 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
           : 'disabled'
 
   const openUpdatePrompt = React.useCallback(() => {
-    if (updateAvailable) setUpdateDialogOpen(true)
-  }, [updateAvailable])
+    if (updateAvailable || reloadDeferred) setUpdateDialogOpen(true)
+  }, [updateAvailable, reloadDeferred])
   const value = React.useMemo(
     () => ({
       installed,
@@ -413,7 +447,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       disableNotifications,
       reportPdfExport,
       offlineReady,
-      updateAvailable,
+      updateAvailable: updateAvailable || reloadDeferred,
       openUpdatePrompt,
       updateError,
       applyUpdate,
@@ -428,6 +462,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       reportPdfExport,
       offlineReady,
       updateAvailable,
+      reloadDeferred,
       openUpdatePrompt,
       updateError,
       applyUpdate,

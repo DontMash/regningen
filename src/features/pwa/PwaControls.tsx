@@ -13,11 +13,10 @@ export function InstallButton() {
       type="button"
       variant="outline"
       aria-label="Installieren"
-      className="px-2 sm:px-3"
       onClick={() => void requestInstallation()}
     >
       <IconDownload aria-hidden="true" data-icon="inline-start" />
-      <span className="sr-only sm:not-sr-only">Installieren</span>
+      <span>Installieren</span>
     </Button>
   )
 }

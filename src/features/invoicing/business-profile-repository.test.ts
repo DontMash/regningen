@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createBrowserBusinessProfileRepository,
   createBusinessProfileRepository,
+  parseBusinessProfileBackup,
 } from './business-profile-repository'
 
 function createStorage() {
@@ -29,6 +30,39 @@ const partialProfile = {
 }
 
 describe('local business profile repository', () => {
+  it('cannot read, export, or resave a Business Profile from before an application reset', async () => {
+    let generation = 'before-reset'
+    const repository = createBusinessProfileRepository(
+      createStorage(),
+      () => generation,
+    )
+    await repository.saveProfile(partialProfile, generation)
+    generation = 'after-reset'
+    expect(await repository.loadProfile()).toBeNull()
+    await expect(repository.exportProfile()).rejects.toThrow(
+      'noch kein Unternehmensprofil',
+    )
+    await expect(
+      repository.saveProfile(partialProfile, 'before-reset'),
+    ).rejects.toThrow('zurückgesetzt')
+    await repository.saveProfile(
+      { ...partialProfile, businessName: 'Fresh business' },
+      generation,
+    )
+    await expect(repository.deleteProfile('before-reset')).rejects.toThrow(
+      'zurückgesetzt',
+    )
+    expect(await repository.loadProfile()).toEqual({
+      ...partialProfile,
+      businessName: 'Fresh business',
+    })
+    expect(JSON.parse(await repository.exportProfile())).toEqual({
+      format: 'regningen-business-profile',
+      version: 1,
+      profile: { ...partialProfile, businessName: 'Fresh business' },
+    })
+  })
+
   it('persists and reloads an incomplete profile without sending it elsewhere', async () => {
     const repository = createBusinessProfileRepository(createStorage())
 
@@ -37,14 +71,17 @@ describe('local business profile repository', () => {
     expect(await repository.loadProfile()).toEqual(partialProfile)
   })
 
-  it('exports and imports a partial profile', async () => {
+  it('parses an exported partial profile without persistence until an explicit save', async () => {
     const source = createBusinessProfileRepository(createStorage())
     const destination = createBusinessProfileRepository(createStorage())
     await source.saveProfile(partialProfile)
 
     const backup = await source.exportProfile()
-    await destination.importProfile(backup)
+    const parsed = parseBusinessProfileBackup(backup)
+    expect(parsed).toEqual(partialProfile)
+    expect(await destination.loadProfile()).toBeNull()
 
+    await destination.saveProfile(parsed)
     expect(await destination.loadProfile()).toEqual(partialProfile)
   })
 
@@ -52,9 +89,9 @@ describe('local business profile repository', () => {
     const repository = createBusinessProfileRepository(createStorage())
     await repository.saveProfile(partialProfile)
 
-    await expect(
-      repository.importProfile('{"format":"wrong"}'),
-    ).rejects.toThrow('ungültiges Format')
+    expect(() => parseBusinessProfileBackup('{"format":"wrong"}')).toThrow(
+      'ungültiges Format',
+    )
 
     expect(await repository.loadProfile()).toEqual(partialProfile)
   })
@@ -82,30 +119,32 @@ describe('local business profile repository', () => {
   it('deletes only the locally stored profile', async () => {
     const storage = createStorage()
     const repository = createBusinessProfileRepository(storage)
+    storage.setItem('regningen.invoice-draft', 'unsubmitted invoice inputs')
+    storage.setItem('theme', 'dark')
     await repository.saveProfile(partialProfile)
 
     await repository.deleteProfile()
 
     expect(await repository.loadProfile()).toBeNull()
+    expect(storage.getItem('regningen.invoice-draft')).toBe(
+      'unsubmitted invoice inputs',
+    )
+    expect(storage.getItem('theme')).toBe('dark')
   })
 
-  it('rejects malformed JSON, unsupported versions, and unexpected backup fields', async () => {
-    const repository = createBusinessProfileRepository(createStorage())
-
-    await expect(repository.importProfile('{')).rejects.toThrow(
-      'kein gültiges JSON',
-    )
-    await expect(
-      repository.importProfile(
+  it('rejects malformed JSON, unsupported versions, and unexpected backup fields', () => {
+    expect(() => parseBusinessProfileBackup('{')).toThrow('kein gültiges JSON')
+    expect(() =>
+      parseBusinessProfileBackup(
         JSON.stringify({
           format: 'regningen-business-profile',
           version: 2,
           profile: partialProfile,
         }),
       ),
-    ).rejects.toThrow('ungültiges Format')
-    await expect(
-      repository.importProfile(
+    ).toThrow('ungültiges Format')
+    expect(() =>
+      parseBusinessProfileBackup(
         JSON.stringify({
           format: 'regningen-business-profile',
           version: 1,
@@ -113,7 +152,7 @@ describe('local business profile repository', () => {
           extra: true,
         }),
       ),
-    ).rejects.toThrow('ungültiges Format')
+    ).toThrow('ungültiges Format')
   })
 
   it('reports missing, invalid, and unreadable stored profiles', async () => {

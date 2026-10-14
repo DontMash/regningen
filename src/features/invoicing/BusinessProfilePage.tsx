@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ComponentProps } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { useSelector } from '@tanstack/react-store'
-import { useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { FormInput, RequiredAlternativeFields } from './FormFields'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -27,19 +27,25 @@ import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
 import { businessProfileSchema, emptyBusinessProfile } from './business-profile'
 import type { BusinessProfileDraft } from './business-profile'
-import { createBrowserBusinessProfileRepository } from './business-profile-repository'
+import {
+  createBrowserBusinessProfileRepository,
+  parseBusinessProfileBackup,
+} from './business-profile-repository'
 import {
   useBusinessProfile,
   useDeleteBusinessProfile,
-  useImportBusinessProfile,
   useProfileStorageSync,
   useSaveBusinessProfile,
 } from './business-profile-query'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
+import { getApplicationResetGeneration } from '@/features/settings/reset-generation'
+import {
+  registerProfileDiscardHandler,
+  setUnsavedProfileChanges,
+} from '@/features/settings/unsaved-profile'
 import {
   IconDeviceFloppy,
   IconDownload,
-  IconReload,
   IconReplace,
   IconTrash,
   IconUpload,
@@ -92,13 +98,13 @@ export default function BusinessProfilePage() {
 
   if (!mounted || profileQuery.isPending) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-12" aria-live="polite">
+      <div className="py-6" aria-live="polite">
         Unternehmensprofil wird lokal geladen …
       </div>
     )
   }
 
-  if (profileQuery.isError) {
+  if (profileQuery.isError && profileQuery.data === undefined) {
     return (
       <AlertDialog defaultOpen>
         <AlertDialogContent>
@@ -122,42 +128,46 @@ export default function BusinessProfilePage() {
     )
   }
 
-  return <ProfileEditor profile={profileQuery.data ?? emptyBusinessProfile} />
+  return (
+    <ProfileEditor
+      profile={profileQuery.data ?? null}
+      retryProfileRead={async () => (await profileQuery.refetch()).isSuccess}
+    />
+  )
 }
 
-function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
-  const navigate = useNavigate()
-  const saveMutation = useSaveBusinessProfile()
-  const importMutation = useImportBusinessProfile()
-  const deleteMutation = useDeleteBusinessProfile()
+function ProfileEditor({
+  profile,
+  retryProfileRead,
+}: {
+  profile: BusinessProfileDraft | null
+  retryProfileRead: () => Promise<boolean>
+}) {
+  // Query refreshes update saved-profile actions, never this tab's working form.
+  const [initialProfile] = useState(profile ?? emptyBusinessProfile)
+  const savedBaseline = useRef(initialProfile)
+  const [resetGeneration] = useState(getApplicationResetGeneration)
+  const saveMutation = useSaveBusinessProfile(resetGeneration)
+  const deleteMutation = useDeleteBusinessProfile(resetGeneration)
   const storageError = useSelector(
     businessProfileStorageStatus,
     (state) => state.error,
   )
-  const [storageConflict, setStorageConflict] = useState(false)
   const [storageDialogOpen, setStorageDialogOpen] = useState(false)
+  const [retryingStorage, setRetryingStorage] = useState(false)
   const [pendingImport, setPendingImport] = useState<File | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
-  const handleExternalChange = useCallback(() => {
-    setStorageConflict(true)
-    setStorageDialogOpen(true)
-  }, [])
-  useProfileStorageSync(handleExternalChange)
+  useProfileStorageSync()
 
   useEffect(() => {
     if (storageError) setStorageDialogOpen(true)
   }, [storageError])
 
   const form = useForm({
-    defaultValues: profile,
+    defaultValues: initialProfile,
     onSubmit: async ({ value }) => {
-      if (
-        storageConflict ||
-        storageError ||
-        !businessProfileSchema.safeParse(value).success
-      )
-        return
+      if (!businessProfileSchema.safeParse(value).success) return
 
       try {
         await saveMutation.mutateAsync(value)
@@ -169,23 +179,47 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
         return
       }
 
+      if (resetGeneration !== getApplicationResetGeneration()) return
+      savedBaseline.current = { ...value }
+      updateUnsavedChanges()
       toast.add({ title: 'Profil gespeichert.', type: 'success' })
-      await navigate({ to: '/invoice' })
     },
   })
 
+  const updateUnsavedChanges = useCallback(() => {
+    setUnsavedProfileChanges(
+      Object.keys(savedBaseline.current).some(
+        (name) =>
+          form.state.values[name as ProfileFieldName] !==
+          savedBaseline.current[name as ProfileFieldName],
+      ),
+    )
+  }, [form])
+
+  useEffect(() => {
+    updateUnsavedChanges()
+    const subscription = form.store.subscribe(updateUnsavedChanges)
+    const unregisterDiscard = registerProfileDiscardHandler(() => {
+      form.reset(savedBaseline.current, { keepDefaultValues: true })
+      setUnsavedProfileChanges(false)
+    })
+    return () => {
+      subscription.unsubscribe()
+      unregisterDiscard()
+      setUnsavedProfileChanges(false)
+    }
+  }, [form, updateUnsavedChanges])
+
   const changeProfileField = (name: ProfileFieldName, value: string) => {
-    const nextProfile = { ...form.state.values, [name]: value }
     form.setFieldValue(name, value)
-    if (!storageConflict && !storageError) {
-      saveMutation.mutate(nextProfile, {
-        onError: () => {
-          toast.add({
-            title: 'Profil konnte nicht gespeichert werden.',
-            type: 'error',
-          })
-        },
-      })
+  }
+
+  async function recoverStorage() {
+    setRetryingStorage(true)
+    try {
+      if (await retryProfileRead()) setStorageDialogOpen(false)
+    } finally {
+      setRetryingStorage(false)
     }
   }
 
@@ -209,10 +243,10 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
 
   async function importProfile(file: File) {
     try {
-      const imported = await importMutation.mutateAsync(await file.text())
-      form.reset(imported)
+      const imported = parseBusinessProfileBackup(await file.text())
+      form.reset(imported, { keepDefaultValues: true })
       toast.add({
-        title: 'Profilsicherung wiederhergestellt.',
+        title: 'Profilsicherung geladen. Bitte Profil speichern.',
         type: 'success',
       })
     } catch (error) {
@@ -227,7 +261,10 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
   async function deleteProfile() {
     try {
       await deleteMutation.mutateAsync()
-      form.reset(emptyBusinessProfile)
+      if (resetGeneration !== getApplicationResetGeneration()) return
+      savedBaseline.current = emptyBusinessProfile
+      form.reset(emptyBusinessProfile, { keepDefaultValues: true })
+      updateUnsavedChanges()
       toast.add({
         title: 'Profil gelöscht.',
         description: 'Die Rechnungseingaben bleiben in diesem Tab erhalten.',
@@ -242,9 +279,9 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-10 sm:py-14">
+    <section className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <h1 className="heading-1">Unternehmensprofil</h1>
+        <h2 className="heading-2">Unternehmensprofil</h2>
         <p className="paragraph-large max-w-2xl text-muted-foreground">
           Die Angaben werden nur in diesem Browser gespeichert und für deine
           Rechnungen verwendet. Es gibt kein Benutzerkonto und keine
@@ -270,10 +307,7 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
               void form.handleSubmit()
             }}
           >
-            <fieldset
-              disabled={storageConflict || Boolean(storageError)}
-              className="min-w-0"
-            >
+            <fieldset disabled={Boolean(storageError)} className="min-w-0">
               <form.Subscribe
                 selector={(state) => ({
                   errors: getProfileErrors(state.values),
@@ -540,18 +574,21 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
                 {(valid) => (
                   <Button
                     type="submit"
-                    disabled={
-                      !valid ||
-                      storageConflict ||
-                      Boolean(storageError) ||
-                      saveMutation.isPending
-                    }
+                    disabled={!valid || saveMutation.isPending}
                   >
                     <IconDeviceFloppy data-icon="inline-start" />
                     Profil speichern
                   </Button>
                 )}
               </form.Subscribe>
+              {businessProfileSchema.safeParse(profile).success && (
+                <Link
+                  to="/invoice"
+                  className={buttonVariants({ variant: 'outline' })}
+                >
+                  Rechnung
+                </Link>
+              )}
             </div>
           </form>
         </CardContent>
@@ -569,32 +606,28 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
           <Button
             type="button"
             variant="outline"
-            disabled={
-              !Object.values(profile).some((value) => value.trim()) ||
-              storageConflict ||
-              Boolean(storageError)
-            }
+            disabled={!profile || Boolean(storageError)}
             onClick={() => void exportProfile()}
           >
-            <IconDownload data-icon="inline-start" />
+            <IconUpload data-icon="inline-start" />
             Sicherung exportieren
           </Button>
           <Field className="max-w-sm">
             <FieldLabel htmlFor="profile-import">
-              <IconUpload data-icon="inline-start" />
+              <IconDownload className='size-4' data-icon="inline-start" />
               Sicherung importieren
             </FieldLabel>
             <Input
               id="profile-import"
               type="file"
               accept="application/json,.json"
-              disabled={storageConflict || Boolean(storageError)}
+              disabled={Boolean(storageError)}
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0]
                 event.currentTarget.value = ''
                 if (!file) return
                 if (
-                  Object.values(profile).some((value) => value.trim()) ||
+                  profile ||
                   Object.values(form.state.values).some((value) => value.trim())
                 ) {
                   setPendingImport(file)
@@ -607,7 +640,7 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
         </CardContent>
       </Card>
 
-      {Object.values(profile).some((value) => value.trim()) && (
+      {profile && (
         <Card>
           <CardHeader>
             <CardTitle>Unternehmensprofil löschen</CardTitle>
@@ -619,7 +652,7 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
             <Button
               type="button"
               variant="destructive"
-              disabled={storageConflict || Boolean(storageError)}
+              disabled={Boolean(storageError)}
               onClick={() => setDeleteDialogOpen(true)}
             >
               <IconTrash data-icon="inline-start" />
@@ -639,19 +672,15 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Unternehmensprofil ersetzen?</AlertDialogTitle>
             <AlertDialogDescription>
-              Die importierte Sicherung überschreibt das vorhandene Profil auf
-              diesem Gerät.
+              Die importierte Sicherung ersetzt die aktuellen Formulareingaben.
+              Das gespeicherte Profil ändert sich erst mit Profil speichern.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Abbrechen</AlertDialogCancel>
             <AlertDialogAction
               type="button"
-              disabled={
-                storageConflict ||
-                Boolean(storageError) ||
-                importMutation.isPending
-              }
+              disabled={Boolean(storageError)}
               onClick={() => {
                 if (pendingImport) void importProfile(pendingImport)
                 setPendingImport(null)
@@ -669,7 +698,9 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Unternehmensprofil löschen?</AlertDialogTitle>
             <AlertDialogDescription>
-              Heruntergeladene PDFs bleiben erhalten.
+              Das gespeicherte Profil und die aktuellen Formulareingaben werden
+              gelöscht. Rechnungseingaben, Einstellungen und heruntergeladene
+              PDFs bleiben erhalten.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -677,11 +708,7 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
             <AlertDialogAction
               type="button"
               variant="destructive"
-              disabled={
-                storageConflict ||
-                Boolean(storageError) ||
-                deleteMutation.isPending
-              }
+              disabled={Boolean(storageError) || deleteMutation.isPending}
               onClick={() => {
                 setDeleteDialogOpen(false)
                 void deleteProfile()
@@ -698,28 +725,47 @@ function ProfileEditor({ profile }: { profile: BusinessProfileDraft }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {storageConflict
-                ? 'Profil in einem anderen Tab geändert'
-                : 'Profil konnte nicht gespeichert werden'}
+              Profil konnte nicht gespeichert werden
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {storageConflict
-                ? 'Lade das Profil neu, bevor du hier weiterarbeitest. Noch nicht gespeicherte Änderungen in diesem Formular gehen beim Neuladen verloren.'
-                : `${storageError} Prüfe die Speichereinstellungen des Browsers und lade die Seite erneut.`}
+              {storageError} Prüfe die Speichereinstellungen des Browsers und
+              versuche erneut zu speichern. Deine Änderungen bleiben in diesem
+              Formular erhalten; du musst die Seite nicht neu laden. Bei Lese-
+              oder Löschproblemen kannst du den Speicher erneut prüfen, ohne
+              Änderungen zu speichern.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Schließen</AlertDialogCancel>
-            <AlertDialogAction
+            <Button
               type="button"
-              onClick={() => window.location.reload()}
+              variant="outline"
+              disabled={retryingStorage || saveMutation.isPending}
+              onClick={() => void recoverStorage()}
             >
-              <IconReload data-icon="inline-start" />
-              Profil neu laden
-            </AlertDialogAction>
+              Speicher erneut prüfen
+            </Button>
+            <form.Subscribe
+              selector={(state) =>
+                businessProfileSchema.safeParse(state.values).success
+              }
+            >
+              {(valid) =>
+                valid && (
+                  <AlertDialogAction
+                    type="button"
+                    disabled={saveMutation.isPending || retryingStorage}
+                    onClick={() => void form.handleSubmit()}
+                  >
+                    <IconDeviceFloppy data-icon="inline-start" />
+                    Erneut speichern
+                  </AlertDialogAction>
+                )
+              }
+            </form.Subscribe>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </section>
   )
 }

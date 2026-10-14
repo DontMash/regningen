@@ -20,6 +20,7 @@ test('shows the Regningen shell with its application typography and header borde
   await releaseNotes.dismissReleaseNotes()
 
   await appShell.expectApplicationShell()
+  await appShell.expectSettingsEntry()
   const headerBorder = await layout.headerBorderColors()
   expect(headerBorder.actual).toBe(headerBorder.expected)
   await appShell.expectApplicationTypography()
@@ -31,7 +32,7 @@ test('uses smooth scrolling unless reduced motion is requested', async ({
   releaseNotes,
 }) => {
   await harness.useReducedMotion('no-preference')
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await appShell.expectSmoothScrollBehavior('smooth')
 
@@ -47,7 +48,7 @@ test('standalone typography matches typeset-default at mobile and desktop widths
   layout,
   releaseNotes,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await harness.waitForFonts()
 
@@ -58,6 +59,16 @@ test('standalone typography matches typeset-default at mobile and desktop widths
       expect(actual).toEqual(expected)
     }
   }
+})
+
+test('does not retain an alias for the removed Business Profile route', async ({
+  appShell,
+  harness,
+  releaseNotes,
+}) => {
+  await harness.open('/business-profile')
+  await releaseNotes.dismissReleaseNotes()
+  await appShell.expectUnknownRoute()
 })
 
 test('recovers from an unknown route to first-time Business Profile setup', async ({

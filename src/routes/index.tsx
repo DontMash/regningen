@@ -27,7 +27,7 @@ function Home() {
       businessProfileSchema.safeParse(profileQuery.data).success
 
     void navigate({
-      to: complete ? '/invoice' : '/business-profile',
+      to: complete ? '/invoice' : '/settings/profile',
       replace: true,
     })
   }, [navigate, profileQuery.data, profileQuery.isSuccess])

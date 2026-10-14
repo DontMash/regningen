@@ -76,8 +76,10 @@ const ssrDocumentPaths = [
   '/',
   '/invoice',
   '/invoice/',
-  '/business-profile',
-  '/business-profile/',
+  '/settings',
+  '/settings/',
+  '/settings/profile',
+  '/settings/profile/',
 ]
 function preparePwaWorker(options: ResolvedVitePWAOptions) {
   copyServerRenderedStyles()

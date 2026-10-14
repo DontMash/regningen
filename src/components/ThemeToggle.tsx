@@ -1,25 +1,19 @@
 import { useEffect, useState } from 'react'
 import { IconSun, IconMoon, IconDeviceDesktop } from '@tabler/icons-react'
 import { useSelector } from '@tanstack/react-store'
-import type { ThemeMode } from '@/lib/theme-store'
-import { themeModeLabels, themeStore } from '@/lib/theme-store'
+import { applyThemeMode, themeModeLabels, themeStore } from '@/lib/theme-store'
 import { Button } from '@/components/ui/button'
-
-function applyThemeMode(mode: ThemeMode) {
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const resolved = mode === 'auto' ? (prefersDark ? 'dark' : 'light') : mode
-
-  document.documentElement.setAttribute('data-theme', resolved)
-
-  document.documentElement.style.colorScheme = resolved
-}
 
 export default function ThemeToggle() {
   const mode = useSelector(themeStore.store, (state) => state.mode)
   const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
-    applyThemeMode(themeStore.restore(window.localStorage))
+    try {
+      applyThemeMode(themeStore.restore(window.localStorage))
+    } catch {
+      applyThemeMode('auto')
+    }
     setIsHydrated(true)
   }, [])
 

@@ -1,12 +1,11 @@
 import { Link } from '@tanstack/react-router'
-import { IconFile, IconUser } from '@tabler/icons-react'
+import { IconFile, IconSettings } from '@tabler/icons-react'
 import {
   useBusinessProfile,
   useProfileStorageSync,
 } from '@/features/invoicing/business-profile-query'
 import ThemeToggle from './ThemeToggle'
 import { buttonVariants } from './ui/button'
-import { InstallButton } from '@/features/pwa/PwaControls'
 
 export default function Header() {
   const { data: profile } = useBusinessProfile()
@@ -41,13 +40,13 @@ export default function Header() {
             Rechnung
           </Link>
           <Link
-            to="/business-profile"
-            className={buttonVariants({ variant: 'secondary' })}
+            to="/settings"
+            aria-label="Einstellungen"
+            title="Einstellungen"
+            className={buttonVariants({ variant: 'outline', size: 'icon' })}
           >
-            <IconUser data-icon="inline-start" />
-            Profile
+            <IconSettings aria-hidden="true" />
           </Link>
-          <InstallButton />
           <ThemeToggle />
         </div>
       </nav>

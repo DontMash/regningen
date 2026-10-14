@@ -28,6 +28,24 @@ export class LayoutMeasurements {
     return box.height
   }
 
+  async settingsArrangement() {
+    const [aside, content] = await Promise.all([
+      this.page.getByRole('complementary').boundingBox(),
+      this.page
+        .getByRole('heading', { name: 'Allgemein', exact: true })
+        .boundingBox(),
+    ])
+    if (!aside || !content)
+      throw new Error('Settings navigation and content must be visible.')
+    return {
+      aside,
+      content,
+      overflows: await this.page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      ),
+    }
+  }
+
   async bodyBackgroundColor() {
     return this.page
       .locator('body')

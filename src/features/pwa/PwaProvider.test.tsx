@@ -1,18 +1,24 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { InstallButton, NotificationControl } from './PwaControls'
 import { PwaProvider, usePwa } from './PwaProvider'
 import { disposeInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft-store'
 import {
+  discardUnsavedProfileChanges,
+  resolveProfileDiscardConfirmation,
+  setUnsavedProfileChanges,
+} from '@/features/settings/unsaved-profile'
+import {
   getPwaRegistration,
   getPwaUpdateServiceWorkerCalls,
   resetPwaRegisterMock,
   setPwaUpdateServiceWorkerError,
   triggerPwaOfflineReady,
+  triggerPwaNeedReload,
   triggerPwaRegisterError,
   triggerPwaUpdateAvailable,
 } from '../../../tests/support/vitest/pwa-register'
@@ -96,12 +102,42 @@ afterEach(async () => {
   cleanup()
   await disposeInvoiceDraftPersistence()
   resetPwaRegisterMock()
+  discardUnsavedProfileChanges()
   window.localStorage.clear()
   window.sessionStorage.clear()
   vi.unstubAllGlobals()
 })
 
 describe('application PWA controls', () => {
+  it('keeps a deferred local reload discoverable after unsaved profile discard is cancelled', async () => {
+    const user = userEvent.setup()
+    renderPwa()
+    await screen.findByRole('button', { name: 'Installieren' })
+    setUnsavedProfileChanges(true)
+    await act(async () => triggerPwaNeedReload())
+    await act(async () => resolveProfileDiscardConfirmation(false))
+    expect(await screen.findByText('update:true')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Update verfügbar' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Aktualisierung verfügbar' }),
+    ).toBeVisible()
+    expect(getPwaUpdateServiceWorkerCalls()).toBe(0)
+  })
+
+  it('does not request an update when abandoning unsaved Business Profile changes is cancelled', async () => {
+    const user = userEvent.setup()
+    renderPwa()
+    await screen.findByRole('button', { name: 'Installieren' })
+    triggerPwaUpdateAvailable()
+    await screen.findByRole('dialog', { name: 'Aktualisierung verfügbar' })
+    setUnsavedProfileChanges(true)
+    await user.click(screen.getByRole('button', { name: 'Update jetzt' }))
+    expect(getPwaUpdateServiceWorkerCalls()).toBe(0)
+    await act(async () => resolveProfileDiscardConfirmation(false))
+    expect(screen.getByRole('button', { name: 'Update jetzt' })).toBeEnabled()
+    expect(getPwaUpdateServiceWorkerCalls()).toBe(0)
+  })
+
   it('keeps installation explicit and offers manual browser guidance when no native event is available', async () => {
     const user = userEvent.setup()
     renderPwa()

@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BusinessProfileDraft } from './business-profile'
 import {
   BUSINESS_PROFILE_STORAGE_KEY,
-  InvalidBusinessProfileBackupError,
   createBrowserBusinessProfileRepository,
 } from './business-profile-repository'
 import {
@@ -11,6 +10,7 @@ import {
   markBusinessProfileStorageFailure,
 } from './business-profile-storage-status'
 import { runPwaCriticalOperation } from '@/features/pwa/pwa-critical-operations'
+import { getApplicationResetGeneration } from '@/features/settings/reset-generation'
 
 export const BUSINESS_PROFILE_QUERY_KEY = ['business-profile'] as const
 
@@ -45,59 +45,49 @@ export function useBusinessProfile() {
   })
 }
 
-export function useSaveBusinessProfile() {
+export function useSaveBusinessProfile(generation: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     networkMode: 'always',
     mutationFn: (profile: BusinessProfileDraft) =>
       runPwaCriticalOperation(async () => {
-        await createBrowserBusinessProfileRepository().saveProfile(profile)
+        await createBrowserBusinessProfileRepository().saveProfile(
+          profile,
+          generation,
+        )
         return profile
       }),
     onSuccess: (profile) => {
+      if (generation !== getApplicationResetGeneration()) return
       clearBusinessProfileStorageFailure()
       queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, profile)
     },
-    onError: markBusinessProfileStorageFailure,
-  })
-}
-
-export function useImportBusinessProfile() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    networkMode: 'always',
-    mutationFn: (backup: string) =>
-      runPwaCriticalOperation(() =>
-        createBrowserBusinessProfileRepository().importProfile(backup),
-      ),
-    onSuccess: (profile) => {
-      clearBusinessProfileStorageFailure()
-      queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, profile)
-    },
-    onError: (error) => {
-      if (!(error instanceof InvalidBusinessProfileBackupError)) {
+    onError: () => {
+      if (generation === getApplicationResetGeneration())
         markBusinessProfileStorageFailure()
-      }
     },
   })
 }
 
-export function useDeleteBusinessProfile() {
+export function useDeleteBusinessProfile(generation: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     networkMode: 'always',
     mutationFn: () =>
       runPwaCriticalOperation(() =>
-        createBrowserBusinessProfileRepository().deleteProfile(),
+        createBrowserBusinessProfileRepository().deleteProfile(generation),
       ),
     onSuccess: () => {
+      if (generation !== getApplicationResetGeneration()) return
       clearBusinessProfileStorageFailure()
       queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, null)
     },
-    onError: markBusinessProfileStorageFailure,
+    onError: () => {
+      if (generation === getApplicationResetGeneration())
+        markBusinessProfileStorageFailure()
+    },
   })
 }
 

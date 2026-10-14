@@ -4,7 +4,6 @@ import { cn } from 'cn'
 import { buttonVariants } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useReleaseNotes } from '@/features/release-notes/ReleaseNotesProvider'
-import { NotificationControl } from '@/features/pwa/PwaControls'
 import { useOptionalPwa } from '@/features/pwa/PwaProvider'
 
 export default function Footer() {
@@ -39,10 +38,10 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  to="/business-profile"
+                  to="/settings"
                   className="paragraph-small text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
                 >
-                  Profile
+                  Einstellungen
                 </Link>
               </li>
               <li>
@@ -90,7 +89,6 @@ export default function Footer() {
                 soren
               </a>
             </p>
-            <NotificationControl />
             {pwa?.offlineReady ? (
               <span
                 className="paragraph-small text-muted-foreground"

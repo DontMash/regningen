@@ -43,6 +43,14 @@ export class InvoiceRobot {
     ).toBeVisible()
   }
 
+  async expectStorageFailureAbsent() {
+    await expect(
+      this.page.getByRole('alertdialog', {
+        name: 'Profil konnte nicht gespeichert werden',
+      }),
+    ).toHaveCount(0)
+  }
+
   async expectProfileUpdateWarning() {
     await expect(
       this.page.getByRole('alertdialog', {
@@ -234,6 +242,7 @@ export class InvoiceRobot {
     const [year, month, day] = isoDate.split('-').map(Number)
     const expectedDate = new Date(year, month - 1, day).toLocaleDateString(
       'de-DE',
+      { day: '2-digit', month: '2-digit', year: 'numeric' },
     )
     await expect(
       this.page.getByRole('button', { name: /^Datum/ }),

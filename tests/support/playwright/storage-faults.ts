@@ -54,6 +54,8 @@ function installDraftStorageFault({
 
 export class StorageFaults {
   private draftFaultCleanup: JSHandle<() => void> | null = null
+  private profileRemovalCleanup: JSHandle<() => void> | null = null
+  private profileWriteCleanup: JSHandle<() => void> | null = null
 
   constructor(private readonly page: Page) {}
 
@@ -108,6 +110,49 @@ export class StorageFaults {
         return originalSetItem.call(this, key, value)
       }
     }, businessProfileStorageKey)
+  }
+
+  async preventProfilePersistence() {
+    this.profileWriteCleanup = await this.page.evaluateHandle((storageKey) => {
+      const setItem = Storage.prototype.setItem
+      Storage.prototype.setItem = function (key, value) {
+        if (this === window.localStorage && key === storageKey)
+          throw new Error('Injected profile write failure')
+        return setItem.call(this, key, value)
+      }
+      return () => {
+        Storage.prototype.setItem = setItem
+      }
+    }, businessProfileStorageKey)
+  }
+
+  async restoreProfilePersistence() {
+    await this.profileWriteCleanup?.evaluate((restore) => restore())
+    await this.profileWriteCleanup?.dispose()
+    this.profileWriteCleanup = null
+  }
+
+  async preventProfileRemoval() {
+    this.profileRemovalCleanup = await this.page.evaluateHandle(
+      (storageKey) => {
+        const removeItem = Storage.prototype.removeItem
+        Storage.prototype.removeItem = function (key) {
+          if (this === window.localStorage && key === storageKey)
+            throw new Error('Injected profile removal failure')
+          return removeItem.call(this, key)
+        }
+        return () => {
+          Storage.prototype.removeItem = removeItem
+        }
+      },
+      businessProfileStorageKey,
+    )
+  }
+
+  async restoreProfileRemoval() {
+    await this.profileRemovalCleanup?.evaluate((restore) => restore())
+    await this.profileRemovalCleanup?.dispose()
+    this.profileRemovalCleanup = null
   }
 
   async preventReleaseNotesWrites() {

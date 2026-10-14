@@ -75,6 +75,24 @@ export class PwaRobot {
     ).toBeVisible()
   }
 
+  async disableNotifications() {
+    await this.page
+      .getByRole('button', {
+        name: 'Benachrichtigungen deaktivieren',
+        exact: true,
+      })
+      .click()
+  }
+
+  async expectNotificationsDisabled() {
+    await expect(
+      this.page.getByRole('button', {
+        name: 'Benachrichtigungen aktivieren',
+        exact: true,
+      }),
+    ).toBeVisible()
+  }
+
   async expectReleaseBInvoiceAsset() {
     await expect(
       this.page.getByText('Release B lazy asset fixture'),

@@ -83,6 +83,12 @@ export class BusinessProfileRobot {
     ).toBeDisabled()
   }
 
+  async expectSaveEnabled() {
+    await expect(
+      this.page.getByRole('button', { name: 'Profil speichern' }),
+    ).toBeEnabled()
+  }
+
   async saveProfile() {
     await this.page.getByRole('button', { name: 'Profil speichern' }).click()
   }
@@ -114,22 +120,66 @@ export class BusinessProfileRobot {
       .click()
   }
 
-  async dismissExternalChangeWarning() {
+  async expectProfileSaved() {
+    await expect(
+      this.page.getByText('Profil gespeichert.', { exact: true }).first(),
+    ).toBeVisible()
+  }
+
+  async expectUnsavedChangesWarning() {
+    const dialog = this.page.getByRole('alertdialog', {
+      name: 'Ungespeicherte Änderungen verwerfen?',
+    })
+    await expect(dialog).toBeVisible()
+    await expect(
+      dialog.getByRole('button', { name: 'Bleiben', exact: true }),
+    ).toBeFocused()
+  }
+
+  async expectUnsavedChangesWarningAbsent() {
+    await expect(
+      this.page.getByRole('alertdialog', {
+        name: 'Ungespeicherte Änderungen verwerfen?',
+      }),
+    ).toHaveCount(0)
+  }
+
+  async keepUnsavedChanges() {
     await this.page
       .getByRole('alertdialog', {
-        name: 'Profil in einem anderen Tab geändert',
+        name: 'Ungespeicherte Änderungen verwerfen?',
       })
-      .getByRole('button', { name: 'Schließen' })
+      .getByRole('button', { name: 'Bleiben', exact: true })
       .click()
   }
 
-  async expectBusinessNameFieldDisabled() {
+  async discardUnsavedChanges() {
+    await this.page
+      .getByRole('alertdialog', {
+        name: 'Ungespeicherte Änderungen verwerfen?',
+      })
+      .getByRole('button', { name: 'Änderungen verwerfen', exact: true })
+      .click()
+  }
+
+  async expectBackupExportDisabled() {
     await expect(
-      this.page.getByRole('textbox', {
-        name: fieldLabels.businessName,
-        exact: true,
-      }),
+      this.page.getByRole('button', { name: 'Sicherung exportieren' }),
     ).toBeDisabled()
+  }
+
+  async cancelBackupReplacement() {
+    await this.page
+      .getByRole('alertdialog', { name: 'Unternehmensprofil ersetzen?' })
+      .getByRole('button', { name: 'Abbrechen', exact: true })
+      .click()
+  }
+
+  async openInvoiceEditor() {
+    await this.page
+      .getByRole('main')
+      .getByRole('link', { name: 'Rechnung', exact: true })
+      .click()
   }
 
   async expectBusinessNameFieldEnabled() {
@@ -200,16 +250,12 @@ export class BusinessProfileRobot {
     await expect(this.page.getByText(/Profil gelöscht/)).toBeVisible()
   }
 
-  async expectExternalChangeWarning() {
+  async expectNoExternalChangeWarning() {
     await expect(
       this.page.getByText('Profil in einem anderen Tab geändert', {
         exact: true,
       }),
-    ).toBeVisible()
-    await expect(
-      this.page.getByRole('alertdialog', {
-        name: 'Profil in einem anderen Tab geändert',
-      }),
-    ).toBeVisible()
+    ).toHaveCount(0)
+    await expect(this.page.getByRole('alertdialog')).toHaveCount(0)
   }
 }

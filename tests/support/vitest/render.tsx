@@ -11,7 +11,7 @@ import type { RouteComponent } from '@tanstack/react-router'
 import { render } from '@testing-library/react'
 import { Toaster } from '@/components/ui/toast'
 
-type TestPath = '/' | '/business-profile' | '/invoice'
+type TestPath = '/' | '/settings/profile' | '/settings' | '/invoice'
 
 const disposeHistories: Array<() => void> = []
 
@@ -47,9 +47,9 @@ export async function renderAtRoute(path: TestPath, page: RouteComponent) {
   })
   const profileRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/business-profile',
+    path: '/settings/profile',
     component:
-      path === '/business-profile'
+      path === '/settings/profile'
         ? page
         : destinationPage('Profilseite geöffnet'),
   })
@@ -59,8 +59,21 @@ export async function renderAtRoute(path: TestPath, page: RouteComponent) {
     component:
       path === '/invoice' ? page : destinationPage('Rechnungsseite geöffnet'),
   })
+  const settingsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/settings',
+    component:
+      path === '/settings'
+        ? page
+        : destinationPage('Allgemeine Einstellungen geöffnet'),
+  })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([homeRoute, profileRoute, invoiceRoute]),
+    routeTree: rootRoute.addChildren([
+      homeRoute,
+      profileRoute,
+      settingsRoute,
+      invoiceRoute,
+    ]),
     history: createMemoryHistory({ initialEntries: [path] }),
   })
   disposeHistories.push(() => router.history.destroy())

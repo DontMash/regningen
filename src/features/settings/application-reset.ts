@@ -1,0 +1,34 @@
+import { clearInvoiceDraftForApplicationReset } from '../invoicing/invoice-draft-store'
+import {
+  runPwaCriticalOperation,
+  waitForPwaCriticalOperations,
+} from '../pwa/pwa-critical-operations'
+import {
+  beginApplicationReset,
+  publishApplicationReset,
+} from './reset-generation'
+
+export {
+  getApplicationResetGeneration,
+  subscribeToApplicationReset,
+} from './reset-generation'
+
+const USER_DATA_KEYS = [
+  'regningen.business-profile',
+  'theme',
+  'regningen.pwa.pdf-notifications',
+  'regningen.release-notes.acknowledged-versions',
+]
+
+/** Browser-local, app-scoped deletion; a rejected attempt may have partly deleted data. */
+export async function resetApplication(): Promise<void> {
+  await waitForPwaCriticalOperations()
+  await runPwaCriticalOperation(async () => {
+    const generation = window.crypto.randomUUID()
+    const draftInvalidation = beginApplicationReset(generation)
+    await draftInvalidation
+    await clearInvoiceDraftForApplicationReset(generation)
+    for (const key of USER_DATA_KEYS) window.localStorage.removeItem(key)
+    await publishApplicationReset(generation)
+  })
+}

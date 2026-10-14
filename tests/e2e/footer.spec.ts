@@ -5,7 +5,7 @@ test('shows footer branding and feature destinations', async ({
   harness,
   releaseNotes,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await footer.expectFooterDestinations()
 })
@@ -15,7 +15,7 @@ test('links the footer attribution to soren in a new tab', async ({
   harness,
   releaseNotes,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await footer.expectAuthorAttribution()
 })
@@ -43,7 +43,7 @@ test('returns to the header through the keyboard-accessible footer link', async 
   layout,
   releaseNotes,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await footer.scrollToBackToTopLink()
   const scrollBefore = await layout.pageScrollPosition()

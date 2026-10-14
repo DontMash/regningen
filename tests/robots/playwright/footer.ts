@@ -39,8 +39,8 @@ export class FooterRobot {
       features.getByRole('link', { name: 'Rechnung' }),
     ).toHaveAttribute('href', '/invoice')
     await expect(
-      features.getByRole('link', { name: 'Profile' }),
-    ).toHaveAttribute('href', '/business-profile')
+      features.getByRole('link', { name: 'Einstellungen' }),
+    ).toHaveAttribute('href', '/settings')
   }
 
   async expectAuthorAttribution() {

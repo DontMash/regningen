@@ -8,6 +8,7 @@ import { LanguageRobot } from '../../robots/playwright/language'
 import { PwaRobot } from '../../robots/playwright/pwa'
 import { ReleaseNotesRobot } from '../../robots/playwright/release-notes'
 import { ThemeRobot } from '../../robots/playwright/theme'
+import { SettingsRobot } from '../../robots/playwright/settings'
 import { ArtifactSupport } from './artifacts'
 import { BrowserControls } from './browser'
 import { LayoutMeasurements } from './layout'
@@ -23,6 +24,7 @@ export type PlaywrightRobots = {
   releaseNotes: ReleaseNotesRobot
   pwa: PwaRobot
   theme: ThemeRobot
+  settings: SettingsRobot
 }
 
 export type TestFixtures = PlaywrightRobots & {
@@ -59,6 +61,9 @@ export const test = base.extend<TestFixtures>({
   theme: async ({ page }, use) => {
     await use(new ThemeRobot(page))
   },
+  settings: async ({ page }, use) => {
+    await use(new SettingsRobot(page))
+  },
   harness: async ({ page, context }, use) => {
     await use(new BrowserControls(page, context))
   },
@@ -84,6 +89,7 @@ export const test = base.extend<TestFixtures>({
       pwa: new PwaRobot(robotPage),
       releaseNotes: new ReleaseNotesRobot(robotPage),
       theme: new ThemeRobot(robotPage),
+      settings: new SettingsRobot(robotPage),
     }))
   },
 })

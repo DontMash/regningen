@@ -5,7 +5,7 @@ test('acknowledges the running release once and keeps its notes available from t
   harness,
   releaseNotes,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.expectReleaseNotesDialog()
   await releaseNotes.expectCurrentReleaseNotes()
   await releaseNotes.acknowledgeReleaseNotes()
@@ -26,7 +26,7 @@ test('postpones notes only for this launch and shares acknowledgments with anoth
   releaseNotes,
   robotsForPage,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.expectReleaseNotesDialog()
   await releaseNotes.dismissReleaseNotesWithEscape()
   await releaseNotes.expectReleaseNotesClosed()
@@ -35,7 +35,7 @@ test('postpones notes only for this launch and shares acknowledgments with anoth
 
   await harness.reload()
   await releaseNotes.expectReleaseNotesDialog()
-  const secondPage = await harness.openAdditionalPage('/business-profile')
+  const secondPage = await harness.openAdditionalPage('/settings/profile')
   const secondReleaseNotes = robotsForPage(secondPage).releaseNotes
   await secondReleaseNotes.expectReleaseNotesDialog()
   await secondReleaseNotes.acknowledgeReleaseNotes()
@@ -44,7 +44,7 @@ test('postpones notes only for this launch and shares acknowledgments with anoth
 
   await harness.reload()
   await releaseNotes.expectReleaseNotesClosed()
-  const thirdPage = await harness.openAdditionalPage('/business-profile')
+  const thirdPage = await harness.openAdditionalPage('/settings/profile')
   await robotsForPage(thirdPage).releaseNotes.expectReleaseNotesClosed()
 })
 
@@ -53,12 +53,12 @@ test('chooses the drawer below 768px and the dialog at 768px', async ({
   releaseNotes,
 }) => {
   await harness.setViewport(767, 900)
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.expectReleaseNotesPresentation('drawer-popup')
   await releaseNotes.dismissReleaseNotes()
 
   await harness.setViewport(768, 900)
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.expectReleaseNotesPresentation('dialog-popup')
   await releaseNotes.dismissReleaseNotesOutside()
   await releaseNotes.expectReleaseNotesClosed()
@@ -71,7 +71,7 @@ for (const width of [375, 1024]) {
     releaseNotes,
   }) => {
     await harness.setViewport(width, 600)
-    await harness.open('/business-profile')
+    await harness.open('/settings/profile')
     await releaseNotes.expectReleaseNotesDialog()
     await releaseNotes.selectReleaseVersion('v1.0.0')
     const before = await layout.releaseNotesScrollLayout()
@@ -104,7 +104,7 @@ test.describe('release notes at fractional pixel scaling', () => {
     releaseNotes,
   }) => {
     await harness.useSystemTheme('dark')
-    await harness.open('/business-profile')
+    await harness.open('/settings/profile')
     await releaseNotes.expectReleaseNotesDialog()
     await releaseNotes.selectReleaseVersion('v1.0.0')
     await harness.waitForFonts()
@@ -123,7 +123,7 @@ test('keeps profile editing available when release-note acknowledgment cannot be
   storageFaults,
 }) => {
   await storageFaults.preventReleaseNotesWrites()
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.expectReleaseNotesDialog()
   await releaseNotes.acknowledgeReleaseNotes()
   await releaseNotes.expectReleaseAcknowledgmentWarning()

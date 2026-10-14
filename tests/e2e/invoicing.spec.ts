@@ -29,9 +29,10 @@ for (const width of [320, 768, 1024, 1440]) {
     layout,
   }) => {
     await harness.setViewport(width, 900)
-    await harness.open('/business-profile')
+    await harness.open('/settings/profile')
     await releaseNotes.dismissReleaseNotes()
     await establishBusinessProfile(businessProfile)
+    await appShell.navigateToInvoice()
     await invoice.expectReady()
     await harness.waitForFonts()
 
@@ -143,6 +144,7 @@ for (const width of [375, 1024]) {
   for (const theme of ['light', 'dark'] as const) {
     test(`styles the date picker like an input in ${theme} mode at ${width}px`, async ({
       harness,
+      appShell,
       releaseNotes,
       businessProfile,
       invoice,
@@ -150,9 +152,10 @@ for (const width of [375, 1024]) {
     }) => {
       await harness.setViewport(width, 900)
       await harness.useSystemTheme(theme)
-      await harness.open('/business-profile')
+      await harness.open('/settings/profile')
       await releaseNotes.dismissReleaseNotes()
       await establishBusinessProfile(businessProfile)
+      await appShell.navigateToInvoice()
       await invoice.expectReady()
       await harness.waitForFonts()
 
@@ -168,14 +171,16 @@ for (const width of [375, 1024]) {
 
 test('submits new positions with Enter without downloading or validating the invoice form', async ({
   harness,
+  appShell,
   releaseNotes,
   businessProfile,
   invoice,
   artifacts,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
+  await appShell.navigateToInvoice()
   const scenario = createInvoiceScenario({
     number: 'keyboard-001',
     recipient: {
@@ -221,19 +226,33 @@ test('submits new positions with Enter without downloading or validating the inv
   )
 })
 
-test('shows an error instead of claiming the Business Profile was saved when storage fails', async ({
+test('reports failed profile Save and retains edits for retry without reloading or retyping', async ({
   harness,
   releaseNotes,
   businessProfile,
+  invoice,
   storageFaults,
 }) => {
-  await storageFaults.preventProfileWrites()
   await harness.open('/')
   await releaseNotes.dismissReleaseNotes()
+  await businessProfile.configureBusinessProfile(
+    createBusinessProfileScenario(),
+  )
+  await storageFaults.preventProfilePersistence()
   await businessProfile.enterDetails({ businessName: 'Lokaler Betrieb' })
+  await businessProfile.saveProfile()
   await businessProfile.expectStorageSaveError()
   await businessProfile.closeStorageError()
-  await businessProfile.expectSaveDisabled()
+  await businessProfile.expectFieldValue('businessName', 'Lokaler Betrieb')
+  await businessProfile.expectSaveEnabled()
+  await storageFaults.restoreProfilePersistence()
+  await businessProfile.saveProfile()
+  await businessProfile.expectProfileSaved()
+  await businessProfile.expectFieldValue('businessName', 'Lokaler Betrieb')
+  await businessProfile.expectBusinessNameFieldEnabled()
+  await businessProfile.openInvoiceEditor()
+  await invoice.expectReady()
+  await invoice.expectStorageFailureAbsent()
 })
 
 test('stops at an error screen when browser storage cannot load the Business Profile', async ({
@@ -242,7 +261,7 @@ test('stops at an error screen when browser storage cannot load the Business Pro
   releaseNotes,
   storageFaults,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.expectReleaseNotesDialog()
   await releaseNotes.acknowledgeReleaseNotes()
   await storageFaults.preventProfileReads()
@@ -258,19 +277,20 @@ test('keeps invoicing blocked after an existing Business Profile fails to save',
   invoice,
   storageFaults,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
-  await appShell.navigateToBusinessProfile()
   await storageFaults.preventProfileWrites()
   await harness.reload()
   await releaseNotes.dismissReleaseNotes()
   await businessProfile.enterDetails({
     businessName: 'Nicht gespeicherter Name',
   })
+  await businessProfile.saveProfile()
   await businessProfile.expectStorageSaveError()
   await businessProfile.closeStorageError()
   await appShell.navigateToInvoice()
+  await businessProfile.discardUnsavedChanges()
   await invoice.expectBlockedByStorageFailure()
   await invoice.closeBlockingNotice()
   await invoice.expectPdfDisabled()
@@ -309,6 +329,9 @@ test('configures a Business Profile through its UI before opening Invoices', asy
     'Bitte eine gültige IBAN eingeben.',
   )
   await businessProfile.saveProfile()
+  await businessProfile.expectProfileSaved()
+  await appShell.expectProfilePage()
+  await appShell.navigateToInvoice()
   await invoice.expectReady()
 
   await harness.reload()
@@ -330,6 +353,9 @@ test('configures a Business Profile through its UI before opening Invoices', asy
   const requests = observedRequests.snapshot()
   expect(
     requests.every(({ method, body }) => method === 'GET' && body === null),
+    JSON.stringify(
+      requests.filter(({ method, body }) => method !== 'GET' || body !== null),
+    ),
   ).toBe(true)
   const requestData = requests
     .map(({ url, body }) => `${decodeURIComponent(url)} ${body ?? ''}`)
@@ -353,15 +379,17 @@ test('configures a Business Profile through its UI before opening Invoices', asy
 
 test('creates and downloads a one-page invoice PDF in the browser', async ({
   harness,
+  appShell,
   releaseNotes,
   businessProfile,
   invoice,
   artifacts,
 }) => {
   const profile = createBusinessProfileScenario()
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile, profile)
+  await appShell.navigateToInvoice()
   await invoice.expectPdfDisabled()
 
   const scenario = createInvoiceScenario({
@@ -436,16 +464,18 @@ test('creates and downloads a one-page invoice PDF in the browser', async ({
 
 test('can read release notes from the footer without losing the in-memory invoice', async ({
   harness,
+  appShell,
   releaseNotes,
   footer,
   businessProfile,
   invoice,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await businessProfile.configureBusinessProfile(
     createBusinessProfileScenario(),
   )
+  await appShell.navigateToInvoice()
   await invoice.expectReady()
   await invoice.enterInvoiceNumber('release-notes-001')
   await invoice.addPosition({ description: 'Catering', amount: '107,00' })
@@ -458,13 +488,15 @@ test('can read release notes from the footer without losing the in-memory invoic
 
 test('caps invoices at 16 line items and confirms starting a new invoice', async ({
   harness,
+  appShell,
   releaseNotes,
   businessProfile,
   invoice,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
+  await appShell.navigateToInvoice()
   const scenario = createInvoiceScenario({
     number: '2026-001',
     positions: Array.from({ length: 16 }, (_, index) => ({
@@ -510,15 +542,17 @@ test('caps invoices at 16 line items and confirms starting a new invoice', async
 
 test('reflects a Business Profile change from another tab without discarding Invoice entries', async ({
   harness,
+  appShell,
   releaseNotes,
   businessProfile,
   invoice,
   robotsForPage,
   artifacts,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
+  await appShell.navigateToInvoice()
   const scenario = createInvoiceScenario({
     number: 'tab-2026-001',
     positions: [{ description: 'Catering', amount: '107,00' }],
@@ -526,12 +560,14 @@ test('reflects a Business Profile change from another tab without discarding Inv
   await enterInvoiceScenario(invoice, scenario)
 
   const profileTab = robotsForPage(
-    await harness.openAdditionalPage('/business-profile'),
+    await harness.openAdditionalPage('/settings/profile'),
   )
   await profileTab.releaseNotes.dismissReleaseNotes()
   await profileTab.businessProfile.enterDetails({
     businessName: 'Nordlicht Partyservice',
   })
+  await invoice.expectBusinessName('Nordlicht Catering')
+  await profileTab.businessProfile.saveProfile()
 
   await invoice.expectBusinessName('Nordlicht Partyservice')
   await invoice.expectProfileUpdateWarning()
@@ -557,11 +593,9 @@ test('rejects invalid Business Profile backups without locking the editor and re
   businessProfile,
   artifacts,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
-  await harness.open('/business-profile')
-  await releaseNotes.dismissReleaseNotes()
   await businessProfile.expectBackupGuidance()
 
   const backupDownload = await artifacts.captureDownload(() =>
@@ -592,15 +626,14 @@ test('rejects invalid Business Profile backups without locking the editor and re
   await businessProfile.expectFieldValue('businessName', 'Nordlicht Catering')
 })
 
-test('exports an imported partial Business Profile without unlocking invoicing', async ({
+test('stages an incomplete Business Profile backup without saving or unlocking invoicing', async ({
   harness,
   appShell,
   releaseNotes,
   businessProfile,
   invoice,
-  artifacts,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await businessProfile.expectEditorReady()
   const partialProfile = {
@@ -628,25 +661,24 @@ test('exports an imported partial Business Profile without unlocking invoicing',
   await businessProfile.expectFieldValue('businessName', 'Teilprofil Betrieb')
   await businessProfile.expectSaveDisabled()
 
-  const download = await artifacts.captureDownload(() =>
-    businessProfile.exportBackup(),
-  )
-  const exported = JSON.parse(await artifacts.readText(download))
-  expect(exported.profile).toEqual(partialProfile)
+  await businessProfile.expectBackupExportDisabled()
 
   await appShell.navigateToInvoice()
+  await businessProfile.discardUnsavedChanges()
   await invoice.expectProfileSetupPrompt()
 })
 
 test('restores incomplete Invoice Draft inputs after an ordinary reload', async ({
   harness,
+  appShell,
   releaseNotes,
   businessProfile,
   invoice,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
+  await appShell.navigateToInvoice()
 
   await invoice.enterInvoiceNumber('  draft-reload  ')
   await invoice.enterSubject('  unfinished subject  ')
@@ -686,14 +718,16 @@ test('restores incomplete Invoice Draft inputs after an ordinary reload', async 
 
 test('retains unsaved Invoice Draft edits when a native reload warning is cancelled and saves again after storage recovers', async ({
   harness,
+  appShell,
   releaseNotes,
   businessProfile,
   invoice,
   storageFaults,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.acknowledgeReleaseNotes()
   await establishBusinessProfile(businessProfile)
+  await appShell.navigateToInvoice()
   const scenario = createInvoiceScenario({ number: 'storage-recovered' })
 
   await storageFaults.preventDraftPersistence('write')
@@ -713,14 +747,16 @@ test('retains unsaved Invoice Draft edits when a native reload warning is cancel
 
 test('refuses to discard the Invoice Draft when session removal fails and can reset after recovery', async ({
   harness,
+  appShell,
   releaseNotes,
   businessProfile,
   invoice,
   storageFaults,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.acknowledgeReleaseNotes()
   await establishBusinessProfile(businessProfile)
+  await appShell.navigateToInvoice()
   const scenario = createInvoiceScenario({
     number: 'keep-on-failed-reset',
     positions: [{ description: '  unfinished  ', amount: 'not-money' }],
@@ -750,14 +786,16 @@ test('refuses to discard the Invoice Draft when session removal fails and can re
 for (const fault of ['access', 'read'] as const) {
   test(`keeps the Invoice editor usable when draft-session ${fault} fails`, async ({
     harness,
+    appShell,
     releaseNotes,
     businessProfile,
     invoice,
     storageFaults,
   }) => {
-    await harness.open('/business-profile')
+    await harness.open('/settings/profile')
     await releaseNotes.acknowledgeReleaseNotes()
     await establishBusinessProfile(businessProfile)
+    await appShell.navigateToInvoice()
     await storageFaults.preventDraftRecovery(fault)
     await harness.reload()
     await invoice.expectReady()
@@ -773,14 +811,16 @@ for (const fault of ['access', 'read'] as const) {
 for (const kind of ['malformed', 'unsupported'] as const) {
   test(`warns and opens an empty Invoice Draft for ${kind} session data`, async ({
     harness,
+    appShell,
     releaseNotes,
     businessProfile,
     invoice,
     storageFaults,
   }) => {
-    await harness.open('/business-profile')
+    await harness.open('/settings/profile')
     await releaseNotes.acknowledgeReleaseNotes()
     await establishBusinessProfile(businessProfile)
+    await appShell.navigateToInvoice()
     const scenario = createInvoiceScenario({ number: 'never-guess-recovery' })
     await invoice.enterInvoiceNumber(scenario.input.number)
     await storageFaults.supplyInvalidDraft(kind)
@@ -793,13 +833,15 @@ for (const kind of ['malformed', 'unsupported'] as const) {
 
 test('shows validation feedback for a missing recipient and an invalid line amount', async ({
   harness,
+  appShell,
   releaseNotes,
   businessProfile,
   invoice,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
+  await appShell.navigateToInvoice()
   const scenario = createInvoiceScenario({
     number: 'invalid-001',
     recipient: { name: '' },
@@ -835,9 +877,10 @@ test('keeps Invoice entries while the Business Profile is deleted and set up aga
   businessProfile,
   invoice,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
+  await appShell.navigateToInvoice()
   await invoice.enterInvoiceNumber('preserved-001')
   await invoice.addPosition({ description: 'Catering', amount: '107,00' })
 
@@ -862,35 +905,48 @@ test('keeps Invoice entries while the Business Profile is deleted and set up aga
   })
   await businessProfile.enterDetails(replacement)
   await businessProfile.saveProfile()
+  await appShell.navigateToInvoice()
   await invoice.expectInvoiceEntriesPreserved('preserved-001', 'Catering')
 })
 
-test('warns a Business Profile editor when another tab changes the Business Profile', async ({
+test('preserves independent profile edits and silently lets the last successful tab save win', async ({
   harness,
   releaseNotes,
   businessProfile,
   robotsForPage,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
   await establishBusinessProfile(businessProfile)
-  await harness.open('/business-profile')
-  await releaseNotes.dismissReleaseNotes()
+  await businessProfile.enterDetails({ businessName: 'Lokale Firma' })
 
   const otherProfileTab = robotsForPage(
-    await harness.openAdditionalPage('/business-profile'),
+    await harness.openAdditionalPage('/settings/profile'),
   )
   await otherProfileTab.releaseNotes.dismissReleaseNotes()
   await otherProfileTab.businessProfile.enterDetails({
     businessName: 'Aktualisierte Firma',
   })
+  await otherProfileTab.businessProfile.saveProfile()
+  await otherProfileTab.businessProfile.expectProfileSaved()
 
-  await businessProfile.expectExternalChangeWarning()
-  await businessProfile.dismissExternalChangeWarning()
-  await businessProfile.expectBusinessNameFieldDisabled()
-
+  await businessProfile.expectNoExternalChangeWarning()
+  await businessProfile.expectFieldValue('businessName', 'Lokale Firma')
+  await businessProfile.expectBusinessNameFieldEnabled()
+  await businessProfile.saveProfile()
+  await businessProfile.expectProfileSaved()
   await harness.reload()
   await releaseNotes.dismissReleaseNotes()
-  await businessProfile.expectFieldValue('businessName', 'Aktualisierte Firma')
-  await businessProfile.expectBusinessNameFieldEnabled()
+  await businessProfile.expectFieldValue('businessName', 'Lokale Firma')
+
+  await otherProfileTab.businessProfile.deleteProfile()
+  await otherProfileTab.businessProfile.confirmProfileDeletion()
+  await otherProfileTab.businessProfile.expectProfileDeleted()
+  await businessProfile.expectNoExternalChangeWarning()
+  await businessProfile.expectFieldValue('businessName', 'Lokale Firma')
+  await businessProfile.saveProfile()
+  await businessProfile.expectProfileSaved()
+  await harness.reload()
+  await releaseNotes.dismissReleaseNotes()
+  await businessProfile.expectFieldValue('businessName', 'Lokale Firma')
 })

@@ -394,7 +394,7 @@ function InvoicePage() {
         <p className="paragraph">
           Richte dein Profil ein, bevor du die erste Rechnung ausfüllst.
         </p>
-        <Link to="/business-profile" className={buttonVariants()}>
+        <Link to="/settings/profile" className={buttonVariants()}>
           Unternehmensprofil öffnen
         </Link>
       </div>
@@ -657,7 +657,7 @@ function InvoiceEditor({
             <AlertDialogFooter>
               <AlertDialogCancel>Schließen</AlertDialogCancel>
               {blocker === 'profile' ? (
-                <Link to="/business-profile" className={buttonVariants()}>
+                <Link to="/settings/profile" className={buttonVariants()}>
                   Unternehmensprofil öffnen
                 </Link>
               ) : blocker === 'storage' ? (

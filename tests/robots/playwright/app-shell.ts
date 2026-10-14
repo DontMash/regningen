@@ -33,7 +33,7 @@ export class AppShellRobot {
   }
 
   async expectProfilePage() {
-    await expect(this.page).toHaveURL(/\/business-profile$/)
+    await expect(this.page).toHaveURL(/\/settings\/profile\/?$/)
     await expect(
       this.page.getByRole('heading', {
         name: 'Unternehmensprofil',
@@ -49,11 +49,34 @@ export class AppShellRobot {
       .click()
   }
 
-  async navigateToBusinessProfile() {
+  async navigateToSettings() {
     await this.page
       .getByRole('navigation', { name: 'Hauptnavigation' })
-      .getByRole('link', { name: 'Profile', exact: true })
+      .getByRole('link', { name: 'Einstellungen', exact: true })
       .click()
+  }
+
+  async navigateToBusinessProfile() {
+    await this.navigateToSettings()
+    await this.page
+      .getByRole('navigation', { name: 'Einstellungen' })
+      .getByRole('link', { name: 'Profil', exact: true })
+      .click()
+  }
+
+  async expectSettingsEntry() {
+    const link = this.page
+      .getByRole('navigation', { name: 'Hauptnavigation' })
+      .getByRole('link', { name: 'Einstellungen', exact: true })
+    await expect(link).toHaveAttribute('href', '/settings')
+    await expect(link).toHaveText('')
+    await expect(link.locator('svg')).toBeVisible()
+    await expect(
+      this.page.getByRole('link', { name: 'Profile', exact: true }),
+    ).toHaveCount(0)
+    await expect(this.page.locator('a[href="/business-profile"]')).toHaveCount(
+      0,
+    )
   }
 
   async expectRootStorageError() {

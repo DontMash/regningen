@@ -11,6 +11,8 @@ import Header from '../components/Header'
 import { ReleaseNotesProvider } from '@/features/release-notes/ReleaseNotesProvider'
 import { PwaProvider } from '@/features/pwa/PwaProvider'
 import { Toaster } from '@/components/ui/toast'
+import SettingsGuards from '@/features/settings/SettingsGuards'
+import ApplicationResetListener from '@/features/settings/ApplicationResetListener'
 import StoreDevtools from '../lib/theme-store-devtools'
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 import appCss from '../styles.css?url'
@@ -22,7 +24,7 @@ interface MyRouterContext {
   queryClient: QueryClient
 }
 
-// Keep this pre-hydration bootstrap aligned with ThemeToggle.applyThemeMode.
+// Keep this pre-hydration bootstrap aligned with the shared theme runtime.
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;}catch(e){}})();`
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
@@ -100,6 +102,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body className="relative min-h-screen antialiased">
         <PwaProvider>
           <ReleaseNotesProvider>
+            <ApplicationResetListener />
+            <SettingsGuards />
             <Header />
             <main id="hauptinhalt" className="min-h-screen">
               {children}

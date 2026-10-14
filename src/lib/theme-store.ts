@@ -50,7 +50,14 @@ export function createThemeStore() {
     return nextMode
   }
 
-  return { store, restore, cycle }
+  return { store, restore, cycle, setMode }
 }
 
 export const themeStore = createThemeStore()
+
+export function applyThemeMode(mode: ThemeMode) {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  const resolved = mode === 'auto' ? (prefersDark ? 'dark' : 'light') : mode
+  document.documentElement.setAttribute('data-theme', resolved)
+  document.documentElement.style.colorScheme = resolved
+}

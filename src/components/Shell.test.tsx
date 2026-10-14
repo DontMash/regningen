@@ -102,9 +102,9 @@ describe('application shell', () => {
       'href',
       '/invoice',
     )
-    expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Einstellungen' })).toHaveAttribute(
       'href',
-      '/business-profile',
+      '/settings',
     )
     expect(screen.queryByText('Nordlicht Catering')).not.toBeInTheDocument()
 

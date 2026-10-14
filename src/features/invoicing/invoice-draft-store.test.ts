@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { subscribeToApplicationReset } from '../settings/application-reset'
 import {
   createEmptyInvoiceDraft,
   disposeInvoiceDraftPersistence,
@@ -56,12 +57,16 @@ const storedDraft = {
 }
 
 beforeEach(() => {
+  localStorage.clear()
+  sessionStorage.clear()
   resetInvoiceDraft()
 })
 
-afterEach(() => {
-  disposeInvoiceDraftPersistence()
+afterEach(async () => {
+  await disposeInvoiceDraftPersistence()
   resetInvoiceDraft()
+  localStorage.clear()
+  sessionStorage.clear()
 })
 
 describe('empty invoice drafts', () => {
@@ -83,6 +88,225 @@ describe('empty invoice drafts', () => {
 })
 
 describe('session-autosaved Invoice Drafts', () => {
+  it('does not announce remote reset success when a missed reset is discovered by a write but local deletion fails', async () => {
+    const storage = createSessionStorage({
+      'regningen.invoice-draft': storedDraft,
+    })
+    await initializeInvoiceDraftPersistence(storage)
+    storage.removeItem = async () => {
+      throw new Error('session deletion blocked')
+    }
+    const success = vi.fn()
+    const unsubscribe = subscribeToApplicationReset(success)
+    localStorage.setItem(
+      'regningen.application-reset.generation',
+      'missed-reset',
+    )
+    localStorage.setItem(
+      'regningen.application-reset.completed',
+      'missed-reset',
+    )
+
+    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'stale edit' }))
+    expect(await waitForInvoiceDraftPersistence()).toBe(false)
+    window.dispatchEvent(new Event('focus'))
+    // Let the browser resume event's promise callbacks complete.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+
+    expect(success).not.toHaveBeenCalled()
+    expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
+    unsubscribe()
+  })
+
+  it('fences a pending restoration and clears the unload warning before any reset success subscriber runs', async () => {
+    const storage = createSessionStorage({
+      'regningen.invoice-draft': storedDraft,
+    })
+    const get = storage.getItem
+    let finishRead = () => {}
+    let markStarted = () => {}
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const blockedRead = new Promise<void>((resolve) => {
+      finishRead = resolve
+    })
+    storage.getItem = async (key) => {
+      const value = await get(key)
+      if (key === 'regningen.invoice-draft') {
+        markStarted()
+        await blockedRead
+      }
+      return value
+    }
+    const outcomes: Array<{
+      warned: boolean
+      number: string
+      savedDraft: unknown
+    }> = []
+    // Deliberately subscribe before draft persistence: callback order must not
+    // let the application's hard reload bypass cleanup.
+    const unsubscribe = subscribeToApplicationReset(() => {
+      const event = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(event)
+      outcomes.push({
+        warned: event.defaultPrevented,
+        number: invoiceDraftStore.state.number,
+        savedDraft: storage.values.get('regningen.invoice-draft'),
+      })
+    })
+    const initializing = initializeInvoiceDraftPersistence(storage)
+    await started
+    localStorage.setItem(
+      'regningen.application-reset.generation',
+      'during-restore',
+    )
+    localStorage.setItem(
+      'regningen.application-reset.completed',
+      'during-restore',
+    )
+    window.dispatchEvent(new Event('focus'))
+    expect(outcomes).toEqual([])
+    finishRead()
+    await initializing
+    await waitForInvoiceDraftPersistence()
+    await vi.waitFor(() => {
+      expect(outcomes).toEqual([
+        { warned: false, number: '', savedDraft: undefined },
+      ])
+    })
+    unsubscribe()
+
+    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'new work' }))
+    await waitForInvoiceDraftPersistence()
+    expect(storage.values.get('regningen.invoice-draft')).toMatchObject({
+      invoice: { number: 'new work' },
+    })
+  })
+
+  it('discards obsolete queued callbacks as well as saved inputs during reset', async () => {
+    const storage = createSessionStorage()
+    await initializeInvoiceDraftPersistence(storage)
+    invoiceDraftStore.setState((draft) => ({
+      ...draft,
+      number: 'queued old work',
+    }))
+    localStorage.setItem(
+      'regningen.application-reset.generation',
+      'reset-fence',
+    )
+    window.dispatchEvent(new Event('focus'))
+    invoicePositionDraftStore.setState(() => ({
+      description: 'late obsolete callback',
+      amount: '0,',
+    }))
+
+    await waitForInvoiceDraftPersistence()
+
+    expect(storage.values.has('regningen.invoice-draft')).toBe(false)
+    expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
+    expect(invoicePositionDraftStore.state).toEqual({
+      description: '',
+      amount: '',
+    })
+  })
+
+  it('does not restore a stale session after a reset, but restores new work on later reloads', async () => {
+    localStorage.setItem(
+      'regningen.application-reset.generation',
+      'new-generation',
+    )
+    const storage = createSessionStorage({
+      'regningen.invoice-draft': storedDraft,
+      'regningen.invoice-draft.reset-generation': 'old-generation',
+    })
+
+    await initializeInvoiceDraftPersistence(storage)
+
+    expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
+    expect(invoicePositionDraftStore.state).toEqual({
+      description: '',
+      amount: '',
+    })
+    expect(storage.values.has('regningen.invoice-draft')).toBe(false)
+
+    invoiceDraftStore.setState((draft) => ({
+      ...draft,
+      number: 'fresh after reset',
+    }))
+    await waitForInvoiceDraftPersistence()
+    await disposeInvoiceDraftPersistence()
+    resetInvoiceDraft()
+    await initializeInvoiceDraftPersistence(storage)
+
+    expect(invoiceDraftStore.state.number).toBe('fresh after reset')
+    expect(invoiceDraftPersistenceStore.state.restored).toBe(true)
+  })
+
+  it('invalidates working inputs and fences pending old writes when another tab resets', async () => {
+    const storage = createSessionStorage()
+    let finishWrite = () => {}
+    let markStarted = () => {}
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const blockedWrite = new Promise<void>((resolve) => {
+      finishWrite = resolve
+    })
+    storage.setItem = async (key, value) => {
+      if (key === 'regningen.invoice-draft') {
+        markStarted()
+        await blockedWrite
+      }
+      storage.values.set(key, value)
+    }
+    await initializeInvoiceDraftPersistence(storage)
+    invoiceDraftStore.setState((draft) => ({ ...draft, number: 'obsolete' }))
+    await started
+    invoicePositionDraftStore.setState(() => ({
+      description: 'also obsolete',
+      amount: '0,',
+    }))
+
+    const warningsAtSuccess: Array<boolean> = []
+    const unsubscribe = subscribeToApplicationReset(() => {
+      const event = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(event)
+      warningsAtSuccess.push(event.defaultPrevented)
+    })
+    localStorage.setItem(
+      'regningen.application-reset.generation',
+      'remote-reset',
+    )
+    localStorage.setItem(
+      'regningen.application-reset.completed',
+      'remote-reset',
+    )
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'regningen.application-reset.generation',
+        storageArea: localStorage,
+      }),
+    )
+    invoiceDraftStore.setState((draft) => ({
+      ...draft,
+      number: 'late obsolete callback',
+    }))
+    finishWrite()
+    await waitForInvoiceDraftPersistence()
+
+    expect(storage.values.has('regningen.invoice-draft')).toBe(false)
+    expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
+    expect(invoicePositionDraftStore.state).toEqual({
+      description: '',
+      amount: '',
+    })
+    await vi.waitFor(() => {
+      expect(warningsAtSuccess).toEqual([false])
+    })
+    unsubscribe()
+  })
+
   it('restores incomplete values exactly, including a blank date and the unsubmitted position', async () => {
     const storage = createSessionStorage({
       'regningen.invoice-draft': storedDraft,

@@ -3,11 +3,17 @@ import { createStorage } from 'unstorage'
 import sessionStorageDriver from 'unstorage/drivers/session-storage'
 import type { InvoiceDraft, InvoiceLineDraft } from './invoice'
 import { z } from 'zod'
+import {
+  getApplicationResetGeneration,
+  INITIAL_APPLICATION_RESET_GENERATION,
+  subscribeToApplicationResetInvalidation,
+} from '../settings/reset-generation'
 
 export type { InvoiceDraft, InvoiceLineDraft } from './invoice'
 
 export const INVOICE_DRAFT_STORAGE_KEY = 'regningen.invoice-draft'
 const INVOICE_DRAFT_SCHEMA_VERSION = 1
+const INVOICE_DRAFT_RESET_STAMP_KEY = 'regningen.invoice-draft.reset-generation'
 
 const invoiceLineDraftSchema = z
   .object({ description: z.string(), amount: z.string() })
@@ -96,6 +102,10 @@ let positionSubscription: { unsubscribe: () => void } | null = null
 let writes: Promise<void> = Promise.resolve()
 let revision = 0
 let beforeUnloadAttached = false
+let resetSubscription: (() => void) | null = null
+let applicationResetGeneration = getApplicationResetGeneration()
+let applicationResetting = false
+let resetWork: Promise<void> | null = null
 
 function setPersistenceState(next: Partial<InvoiceDraftPersistenceState>) {
   invoiceDraftPersistenceStore.setState((current) => ({ ...current, ...next }))
@@ -142,6 +152,12 @@ function markStorageFailure(error: unknown) {
 }
 
 function scheduleSave() {
+  if (applicationResetting) return writes
+  const generation = getApplicationResetGeneration()
+  if (generation !== applicationResetGeneration) {
+    void invalidateInvoiceDraft(generation).catch(() => {})
+    return writes
+  }
   const saveRevision = ++revision
   const envelope = createEnvelope()
   setPersistenceState({ saved: false, pending: true, error: null })
@@ -150,8 +166,29 @@ function scheduleSave() {
     // Discard obsolete queued work; an in-flight write is followed by this
     // newest revision in sequence, so it cannot become the final stored value.
     if (saveRevision !== revision) return
+    if (generation !== getApplicationResetGeneration()) {
+      void invalidateInvoiceDraft(getApplicationResetGeneration()).catch(
+        () => {},
+      )
+      return
+    }
     if (!storage) throw new Error('Der Sitzungsspeicher ist nicht verfügbar.')
+    await storage.setItem(INVOICE_DRAFT_RESET_STAMP_KEY, generation)
+    if (saveRevision !== revision) return
+    if (generation !== getApplicationResetGeneration()) {
+      void invalidateInvoiceDraft(getApplicationResetGeneration()).catch(
+        () => {},
+      )
+      return
+    }
     await storage.setItem(INVOICE_DRAFT_STORAGE_KEY, envelope)
+    if (saveRevision !== revision) return
+    if (generation !== getApplicationResetGeneration()) {
+      void invalidateInvoiceDraft(getApplicationResetGeneration()).catch(
+        () => {},
+      )
+      return
+    }
     if (saveRevision === revision) {
       setPersistenceState({ saved: true, pending: false, error: null })
     }
@@ -184,6 +221,15 @@ export function initializeInvoiceDraftPersistence(
 ): Promise<void> {
   if (initialization) return initialization
 
+  const initializationRevision = revision
+  applicationResetGeneration = getApplicationResetGeneration()
+  resetSubscription = subscribeToApplicationResetInvalidation(() => {
+    const generation = getApplicationResetGeneration()
+    if (generation !== applicationResetGeneration) {
+      return invalidateInvoiceDraft(generation)
+    }
+    return resetWork ?? writes
+  })
   initialization = (async () => {
     try {
       if (suppliedStorage) {
@@ -200,7 +246,30 @@ export function initializeInvoiceDraftPersistence(
       }
 
       const encoded = await storage.getItem(INVOICE_DRAFT_STORAGE_KEY)
-      if (encoded !== null) {
+      const stamp = await storage.getItem(INVOICE_DRAFT_RESET_STAMP_KEY)
+      if (initializationRevision !== revision) {
+        setPersistenceState({ initialized: true })
+        return
+      }
+      const generation = getApplicationResetGeneration()
+      const stale =
+        generation !== applicationResetGeneration ||
+        (stamp !== generation &&
+          (stamp !== null ||
+            generation !== INITIAL_APPLICATION_RESET_GENERATION))
+      if (stale) {
+        applicationResetGeneration = generation
+        resetInvoiceDraft()
+        await storage.removeItem(INVOICE_DRAFT_STORAGE_KEY)
+        await storage.setItem(INVOICE_DRAFT_RESET_STAMP_KEY, generation)
+        setPersistenceState({
+          initialized: true,
+          restored: false,
+          saved: true,
+          pending: false,
+          error: null,
+        })
+      } else if (encoded !== null) {
         const parsed = invoiceDraftEnvelopeSchema.safeParse(encoded)
         if (!parsed.success) {
           try {
@@ -247,9 +316,9 @@ export function initializeInvoiceDraftPersistence(
         pending: false,
         error: `Der Sitzungsspeicher für den Invoice Draft ist nicht verfügbar. ${messageFor(error, 'Bitte prüfe die Browserspeichereinstellungen.')}`,
       })
+    } finally {
+      subscribeToDraftChanges()
     }
-
-    subscribeToDraftChanges()
   })()
   return initialization
 }
@@ -266,6 +335,7 @@ export async function waitForInvoiceDraftPersistence() {
 
 /** Clear the old draft before the caller resets visible and in-memory inputs. */
 export async function clearStoredInvoiceDraft() {
+  const generation = getApplicationResetGeneration()
   const clearRevision = ++revision
   setPersistenceState({ saved: false, pending: true, error: null })
   try {
@@ -278,22 +348,81 @@ export async function clearStoredInvoiceDraft() {
     if (!storage) throw new Error('Der Sitzungsspeicher ist nicht verfügbar.')
     await storage.removeItem(INVOICE_DRAFT_STORAGE_KEY)
     if (clearRevision !== revision) {
-      await scheduleSave()
+      if (generation === getApplicationResetGeneration()) await scheduleSave()
       throw new Error(
         'Der Invoice Draft wurde während des Zurücksetzens geändert.',
       )
     }
     setPersistenceState({ saved: true, pending: false, error: null })
   } catch (error) {
-    markStorageFailure(error)
+    if (clearRevision === revision) markStorageFailure(error)
     throw error
   }
+}
+
+function invalidateInvoiceDraft(generation: string): Promise<void> {
+  if (
+    applicationResetting &&
+    generation === applicationResetGeneration &&
+    resetWork
+  ) {
+    return resetWork
+  }
+  applicationResetting = true
+  applicationResetGeneration = generation
+  const resetRevision = ++revision
+  resetInvoiceDraft()
+  setPersistenceState({
+    restored: false,
+    saved: false,
+    pending: true,
+    error: null,
+  })
+  const clearing = writes.then(async () => {
+    await initialization
+    if (!storage) {
+      if (typeof window === 'undefined') {
+        throw new Error('Der Sitzungsspeicher ist nicht verfügbar.')
+      }
+      // Reset must be retryable after a failed hydration, and needs deletion,
+      // not a readable or compatible saved envelope.
+      storage = createStorage({ driver: sessionStorageDriver({ window }) })
+      ownsStorage = true
+    }
+    await storage.removeItem(INVOICE_DRAFT_STORAGE_KEY)
+    await storage.setItem(INVOICE_DRAFT_RESET_STAMP_KEY, generation)
+    if (resetRevision === revision) {
+      resetInvoiceDraft()
+      setPersistenceState({ saved: true, pending: false, error: null })
+    }
+  })
+  writes = clearing.catch((error: unknown) => {
+    if (resetRevision === revision) markStorageFailure(error)
+  })
+  resetWork = clearing.finally(() => {
+    if (resetRevision === revision) applicationResetting = false
+  })
+  // Ordinary autosaving consumes errors through the persistence state. Reset
+  // completion consumes this unswallowed promise instead, so it cannot reload
+  // after a failed deletion discovered before the browser's storage event.
+  void resetWork.catch(() => {})
+  return resetWork
+}
+
+/** Application reset discards working inputs without autosaving an empty envelope. */
+export async function clearInvoiceDraftForApplicationReset(generation: string) {
+  await initializeInvoiceDraftPersistence()
+  await invalidateInvoiceDraft(generation)
 }
 
 /** Dispose the browser connection; useful when the owning app/test is unmounted. */
 export async function disposeInvoiceDraftPersistence() {
   revision += 1
   clearSubscriptions()
+  resetSubscription?.()
+  resetSubscription = null
+  applicationResetting = false
+  resetWork = null
   if (beforeUnloadAttached && typeof window !== 'undefined') {
     window.removeEventListener('beforeunload', onBeforeUnload)
     beforeUnloadAttached = false

@@ -44,6 +44,42 @@ export class PwaBrowserControls {
     }, pathname)
   }
 
+  async observeWorkerActivation(page: Page) {
+    await page.evaluate(() => {
+      const observation = { controllerChanges: 0 }
+      ;(
+        window as Window & { workerObservation?: typeof observation }
+      ).workerObservation = observation
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        observation.controllerChanges += 1
+      })
+    })
+  }
+
+  async workerState(page: Page) {
+    return page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration()
+      return {
+        controlled: Boolean(navigator.serviceWorker.controller),
+        active: registration?.active?.state ?? null,
+        waiting: registration?.waiting?.state ?? null,
+        controllerChanges:
+          (
+            window as Window & {
+              workerObservation?: { controllerChanges: number }
+            }
+          ).workerObservation?.controllerChanges ?? 0,
+      }
+    })
+  }
+
+  async requestWorkerUpdate(page: Page) {
+    await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration()
+      await registration?.update()
+    })
+  }
+
   async announceOffline(page: Page) {
     await page.evaluate(() => window.dispatchEvent(new Event('offline')))
   }

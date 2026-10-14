@@ -10,17 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as BusinessProfileRouteImport } from './routes/business-profile'
 import { Route as InvoiceRouteImport } from './routes/invoice'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SettingsIndexRouteImport } from './routes/settings.index'
+import { Route as SettingsProfileRouteImport } from './routes/settings.profile'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BusinessProfileRoute = BusinessProfileRouteImport.update({
-  id: '/business-profile',
-  path: '/business-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InvoiceRoute = InvoiceRouteImport.update({
@@ -28,35 +25,61 @@ const InvoiceRoute = InvoiceRouteImport.update({
   path: '/invoice',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsProfileRoute = SettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => SettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/business-profile': typeof BusinessProfileRoute
   '/invoice': typeof InvoiceRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/business-profile': typeof BusinessProfileRoute
   '/invoice': typeof InvoiceRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings': typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/business-profile': typeof BusinessProfileRoute
   '/invoice': typeof InvoiceRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/business-profile' | '/invoice'
+  fullPaths: '/' | '/invoice' | '/settings' | '/settings/profile' | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/business-profile' | '/invoice'
-  id: '__root__' | '/' | '/business-profile' | '/invoice'
+  to: '/' | '/invoice' | '/settings/profile' | '/settings'
+  id:
+    | '__root__'
+    | '/'
+    | '/invoice'
+    | '/settings'
+    | '/settings/profile'
+    | '/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  BusinessProfileRoute: typeof BusinessProfileRoute
   InvoiceRoute: typeof InvoiceRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -68,13 +91,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/business-profile': {
-      id: '/business-profile'
-      path: '/business-profile'
-      fullPath: '/business-profile'
-      preLoaderRoute: typeof BusinessProfileRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/invoice': {
       id: '/invoice'
       path: '/invoice'
@@ -82,13 +98,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InvoiceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/profile': {
+      id: '/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof SettingsProfileRouteImport
+      parentRoute: typeof SettingsRoute
+    }
   }
 }
 
+interface SettingsRouteChildren {
+  SettingsProfileRoute: typeof SettingsProfileRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsProfileRoute: SettingsProfileRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  BusinessProfileRoute: BusinessProfileRoute,
   InvoiceRoute: InvoiceRoute,
+  SettingsRoute: SettingsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
