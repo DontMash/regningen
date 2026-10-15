@@ -37,14 +37,6 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link
-                  to="/settings"
-                  className="paragraph-small text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
-                >
-                  Einstellungen
-                </Link>
-              </li>
-              <li>
                 <a
                   href="https://www.soren.codes/de/impressum"
                   target="_blank"

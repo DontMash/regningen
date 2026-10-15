@@ -34,13 +34,19 @@ export class FooterRobot {
     const features = footer.getByRole('navigation', {
       name: 'Funktionsnavigation',
     })
-    await expect(features.locator('a[href^="/"]')).toHaveCount(2)
+    await expect(features.locator('a[href^="/"]')).toHaveCount(1)
     await expect(
       features.getByRole('link', { name: 'Rechnung' }),
     ).toHaveAttribute('href', '/invoice')
-    await expect(
-      features.getByRole('link', { name: 'Einstellungen' }),
-    ).toHaveAttribute('href', '/settings')
+    for (const [name, href] of [
+      ['Impressum', 'https://www.soren.codes/de/impressum'],
+      ['Datenschutz', 'https://www.soren.codes/de/datenschutz'],
+    ]) {
+      const link = features.getByRole('link', { name })
+      expect((await link.getAttribute('href'))?.trim()).toBe(href)
+      await expect(link).toHaveAttribute('target', '_blank')
+      await expect(link).toHaveAttribute('rel', /noopener/)
+    }
   }
 
   async expectAuthorAttribution() {

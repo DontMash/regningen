@@ -1,6 +1,6 @@
 'use client'
 
-import { IconDownload } from '@tabler/icons-react'
+import { IconShare3 } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { usePwa } from './PwaProvider'
 
@@ -15,7 +15,7 @@ export function InstallButton() {
       aria-label="Installieren"
       onClick={() => void requestInstallation()}
     >
-      <IconDownload aria-hidden="true" data-icon="inline-start" />
+      <IconShare3 aria-hidden="true" data-icon="inline-start" />
       <span>Installieren</span>
     </Button>
   )

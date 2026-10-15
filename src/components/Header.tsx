@@ -143,7 +143,7 @@ export default function Header() {
                 <InvoiceLink onClick={closeForNavigation} />
               </nav>
             </div>
-            <div className="flex shrink-0 items-center gap-3 p-4">
+            <div className="flex shrink-0 items-center justify-end gap-3 p-4">
               <SettingsShortcut onClick={closeForNavigation} />
               <ThemeToggle />
             </div>
