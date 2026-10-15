@@ -85,19 +85,23 @@ export const test = base.extend<TestFixtures>({
     await use(new StorageFaults(page))
   },
   robotsForPage: async ({ page }, use) => {
-    await use((robotPage = page) => ({
-      landing: new LandingRobot(robotPage),
-      appShell: new AppShellRobot(robotPage),
-      businessProfile: new BusinessProfileRobot(robotPage),
-      footer: new FooterRobot(robotPage),
-      invoice: new InvoiceRobot(robotPage),
-      language: new LanguageRobot(robotPage),
-      pwa: new PwaRobot(robotPage),
-      releaseNotes: new ReleaseNotesRobot(robotPage),
-      theme: new ThemeRobot(robotPage),
-      settings: new SettingsRobot(robotPage),
-    }))
+    await use((robotPage = page) => createRobotsForPage(robotPage))
   },
 })
+
+export function createRobotsForPage(page: Page): PlaywrightRobots {
+  return {
+    landing: new LandingRobot(page),
+    appShell: new AppShellRobot(page),
+    businessProfile: new BusinessProfileRobot(page),
+    footer: new FooterRobot(page),
+    invoice: new InvoiceRobot(page),
+    language: new LanguageRobot(page),
+    pwa: new PwaRobot(page),
+    releaseNotes: new ReleaseNotesRobot(page),
+    theme: new ThemeRobot(page),
+    settings: new SettingsRobot(page),
+  }
+}
 
 export { expect }

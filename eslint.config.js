@@ -22,6 +22,7 @@ export default [
       '.nitro/**',
       'playwright-report/**',
       'test-results/**',
+      '.vitals/**',
     ],
   },
 ]

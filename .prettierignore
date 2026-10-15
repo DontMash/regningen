@@ -1,6 +1,7 @@
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
+.vitals/
 
 # Agent skills follow their own authoring format.
 .agents/

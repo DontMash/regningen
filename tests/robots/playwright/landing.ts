@@ -4,15 +4,16 @@ import type { Page } from '@playwright/test'
 export class LandingRobot {
   constructor(private readonly page: Page) {}
 
-  async expectIntroduction() {
+  async expectIntroduction({ obscured = false }: { obscured?: boolean } = {}) {
     await expect(this.page).toHaveURL(/\/$/)
-    await expect(this.page.getByRole('heading', { level: 1 })).toHaveText(
-      'Rechnungen erstellen. Direkt im Browser.',
-    )
+    await expect(
+      this.page.getByRole('heading', { level: 1, includeHidden: obscured }),
+    ).toHaveText('Rechnungen erstellen. Direkt im Browser.')
     await expect(
       this.page.getByRole('button', {
         name: 'Rechnung erstellen',
         exact: true,
+        includeHidden: obscured,
       }),
     ).toHaveCount(2)
   }

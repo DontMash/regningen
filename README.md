@@ -18,18 +18,27 @@ See the [testing guide](docs/testing.md) for test architecture and contribution 
 ## Checks
 
 ```bash
-pnpm typecheck
+pnpm format
 pnpm lint
-pnpm test
-pnpm test:e2e
+pnpm typecheck
 pnpm build
+pnpm test:coverage
+pnpm test:e2e
 ```
 
-Unit and module-level integration tests use Vitest. Browser-level integration tests use Playwright with Chromium; install it once with:
+Unit and module-level integration tests use Vitest (`pnpm test` for a run without coverage). Browser-level integration tests use Playwright with Chromium; install it through normal project tooling before testing:
 
 ```bash
 pnpm exec playwright install chromium
 ```
+
+Lighthouse lab audits use a separate Playwright suite, excluded from ordinary E2E:
+
+```bash
+pnpm test:vitals
+```
+
+The design uses a fresh full production build in place (replacing `.output`), five UI-prepared states, actual mobile/desktop Lighthouse presets, and three sequential measurements each: 30 audits. Default runs gate LCP/CLS/TBT medians against committed calibrated budgets; all four categories remain in local Playwright reports. No Docker, preparation command, or hidden test downloads are involved. Local execution does **not** enforce outbound network isolation or certify field INP/Core Web Vitals. See [native lab audits](docs/vitals.md) for installation, calibration-only mode, latest-run reports, privacy limits, and same-machine comparison guidance.
 
 ## Production
 
