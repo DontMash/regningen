@@ -23,25 +23,27 @@ The sole inline concession is `style-src-attr 'unsafe-inline'`, for existing ser
 
 ## Deployment inputs and cached updates
 
-Use the same `ORIGIN`, `TRUST_PROXY`, and `HSTS_STAGE` values at **build and runtime**. Prepared-document revisions include built assets, the security/proxy policy source, and these deployment inputs. A policy-only change therefore prepares new documents through the existing worker update flow even without a version or visible-content change. Rebuild when changing policy or configuration; a runtime-only change cannot revise an already shipped worker.
+See [environment configuration](configuration.md) for accepted inputs, t3-env validation, local file loading, and explicit production injection. Absent or empty settings retain safe defaults; explicitly malformed nonempty settings fail development/build/server startup before readiness instead of silently selecting fallback policy.
+
+Use the same effective validated `ORIGIN`, `TRUST_PROXY`, and `HSTS_STAGE` values at **build and runtime**. Prepared-document revisions include built assets, the security/proxy policy source, and these deployment inputs. A policy-only change therefore prepares new documents through the existing worker update flow even without a version or visible-content change. Rebuild and restart when changing policy or configuration; a runtime-only change cannot revise an already shipped worker. A separately launched server does not inherit the build's environment. Matching is an operational requirement, not an artifact lock.
 
 Disconnected clients keep the policy they previously received. Postponing updates keeps the old complete response while its worker remains active. Normal browser lifecycle activation after old clients close, and another tab's accepted update, still apply; there is no new cross-tab veto or update protocol. Existing unsaved-change guards and per-tab Invoice Draft recovery remain in place. Security deployment does not reset user data, delete unrelated caches, or erase downloaded files.
 
-Public protocol uses the **same** `src/lib/public-request.ts` contract as visibility. `ORIGIN=https://…` is not evidence that a request used HTTPS. `TRUST_PROXY` is disabled unless exactly `true`. Opting in requires a protected backend and a trusted proxy that overwrites both `X-Forwarded-Host` and `X-Forwarded-Proto` with one sanitized host and `http` or `https`. Lists, missing counterparts, empty values, or malformed values cannot establish HTTPS. Do not expose the trusted backend directly. See [visibility deployment](visibility.md).
+Public protocol uses the **same** `src/lib/public-request.ts` contract as visibility. `ORIGIN=https://…` is not evidence that a request used HTTPS. `TRUST_PROXY` accepts exactly `true` or `false`, yielding a typed boolean; absent or empty defaults to `false`, and other nonempty values fail validation. Opting in requires a protected backend and a trusted proxy that overwrites both `X-Forwarded-Host` and `X-Forwarded-Proto` with one sanitized host and `http` or `https`. Lists, missing counterparts, empty values, or malformed values cannot establish HTTPS. Do not expose the trusted backend directly. See [visibility deployment](visibility.md).
 
 ## HSTS rollout and rollback
 
 Leave HSTS off until public HTTPS prerequisites are verified. HSTS does not issue or renew certificates: Let's Encrypt provides the certificate independently.
 
-| `HSTS_STAGE`   | HTTPS response                                   |
-| -------------- | ------------------------------------------------ |
-| unset or `off` | Header omitted; not yet enabled                  |
-| `one-day`      | `max-age=86400`                                  |
-| `one-week`     | `max-age=604800`                                 |
-| `one-year`     | `max-age=31536000`                               |
-| `reset`        | `max-age=0` to clear a previously learned policy |
+| `HSTS_STAGE`           | HTTPS response                                   |
+| ---------------------- | ------------------------------------------------ |
+| unset, empty, or `off` | Header omitted; not yet enabled                  |
+| `one-day`              | `max-age=86400`                                  |
+| `one-week`             | `max-age=604800`                                 |
+| `one-year`             | `max-age=31536000`                               |
+| `reset`                | `max-age=0` to clear a previously learned policy |
 
-Unknown stage values fail closed by omitting HSTS. No stage includes `includeSubDomains` or `preload`. Promotion is an explicit build/deployment action, never a timer: observe one day for at least one day, then one week for at least one week before considering one year. Record observations and recheck certificate-renewal arrangements before each promotion.
+Unknown nonempty stage values fail configuration validation before startup; only absent, empty, or `off` selects the disabled default. With accepted settings, request-level HTTPS verification still fails closed by omitting HSTS when public HTTPS cannot be established. No stage includes `includeSubDomains` or `preload`. Promotion is an explicit build/deployment action, never a timer: observe one day for at least one day, then one week for at least one week before considering one year. Record observations and recheck certificate-renewal arrangements before each promotion.
 
 Each received HSTS header refreshes the browser's remembered duration. During that period the browser upgrades future HTTP navigations and certificate failures become hard connection failures. Maintain HTTP-to-HTTPS redirection for first visits: without preloading, HSTS cannot protect an initial insecure visit before the policy is learned.
 

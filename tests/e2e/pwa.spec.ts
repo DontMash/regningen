@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import type { Page } from '@playwright/test'
 import { expect, test } from '../support/playwright/playwright'
 import { createBusinessProfileScenario } from '../scenarios/business-profile'
@@ -443,6 +443,70 @@ test('generated production workers prepare offline routes and prompt for same-ve
     } finally {
       await deployment.dispose()
     }
+  }
+})
+
+test('a configuration-only rebuild refreshes offline visibility through the existing update flow', async ({
+  browser,
+  robotsForPage,
+}) => {
+  test.setTimeout(240_000)
+  const updatedOrigin = 'https://configuration.example'
+  const deployment = await PwaDeployment.create({
+    updateKind: 'configuration',
+    updateEnvironment: { ORIGIN: updatedOrigin },
+  })
+  const controls = await PwaBrowserControls.create(browser)
+  const page = await controls.openPage()
+  const { landing, pwa } = robotsForPage(page)
+  try {
+    expect(deployment.version('a')).toBe(deployment.version('b'))
+    // The fixture changes configuration only, not client source or content.
+    expect(
+      await readdir(deployment.artifactPath('b', 'public/assets')),
+    ).toEqual(await readdir(deployment.artifactPath('a', 'public/assets')))
+    await deployment.deploy('a')
+    await page.goto(deployment.baseUrl)
+    await pwa.acknowledgeRunningReleaseNotes()
+    await pwa.expectOfflineReady()
+    const heldPage = await controls.openPage(deployment.baseUrl)
+    await robotsForPage(heldPage).landing.expectIntroduction()
+    await expectActiveMetadata(
+      page,
+      landingTitle,
+      `${deployment.baseUrl}/`,
+      true,
+    )
+
+    await deployment.deploy('b', { ORIGIN: updatedOrigin })
+    await controls.requestWorkerUpdate(page)
+    await pwa.expectUpdateAvailable()
+    await pwa.postponeUpdate()
+    await controls.setOffline(true)
+    await page.reload()
+    await landing.expectIntroduction()
+    await expectActiveMetadata(
+      page,
+      landingTitle,
+      `${deployment.baseUrl}/`,
+      true,
+    )
+
+    await controls.setOffline(false)
+    const reloaded = page.waitForEvent('framenavigated', {
+      predicate: (frame) => frame === page.mainFrame(),
+      timeout: 15_000,
+    })
+    await pwa.applyUpdate()
+    await reloaded
+    await landing.expectIntroduction()
+    await controls.setOffline(true)
+    await page.reload()
+    await landing.expectIntroduction()
+    await expectActiveMetadata(page, landingTitle, `${updatedOrigin}/`, false)
+  } finally {
+    await controls.dispose()
+    await deployment.dispose()
   }
 })
 

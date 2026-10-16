@@ -352,19 +352,8 @@ test.describe('server-delivered visibility', () => {
     await expectExcludedDiscovery(deployment, { host: 'regningen.soren.codes' })
   })
 
-  test('missing or invalid ORIGIN fails closed instead of adopting forwarded request identity', async () => {
-    for (const origin of [
-      undefined,
-      '',
-      'regningen.soren.codes',
-      'not a URL',
-      'ftp://regningen.soren.codes',
-      'https://user:secret@regningen.soren.codes',
-      'https://regningen.soren.codes/preview',
-      'https://regningen.soren.codes/?query=1',
-      'https://regningen.soren.codes/#fragment',
-      'https://[invalid',
-    ]) {
+  test('omitted or empty ORIGIN disables public visibility instead of adopting forwarded request identity', async () => {
+    for (const origin of [undefined, '']) {
       await test.step(`ORIGIN=${String(origin)}`, async () => {
         await deployment.deploy('a', { ORIGIN: origin, TRUST_PROXY: 'true' })
         const response = await readHttp(
@@ -380,9 +369,9 @@ test.describe('server-delivered visibility', () => {
     }
   })
 
-  test('forwarded headers cannot enable publication without explicit trust, including invalid trust values', async () => {
+  test('forwarded headers cannot enable publication without explicit trust', async () => {
     const forged = { ...productionHeaders, host: 'preview.example' }
-    for (const trust of [undefined, 'false', '', 'TRUE', '1', 'invalid']) {
+    for (const trust of [undefined, 'false', '']) {
       await test.step(`TRUST_PROXY=${String(trust)}`, async () => {
         await deployment.deploy('a', {
           ORIGIN: productionOrigin,

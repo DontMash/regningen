@@ -379,8 +379,7 @@ test.describe('production browser security', () => {
     for (const [stage, expected] of [
       [undefined, undefined],
       ['off', undefined],
-      ['invalid', undefined],
-      ['toString', undefined],
+      ['', undefined],
       ['one-day', 'max-age=86400'],
       ['one-week', 'max-age=604800'],
       ['one-year', 'max-age=31536000'],

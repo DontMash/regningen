@@ -7,9 +7,10 @@ import {
   readdirSync,
 } from 'node:fs'
 import { resolve } from 'node:path'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import { validateReleaseData } from './src/lib/release-data-validation.ts'
+import { readEnvironment } from './src/env.ts'
 import { devtools } from '@tanstack/devtools-vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import type { ResolvedVitePWAOptions } from 'vite-plugin-pwa'
@@ -54,7 +55,10 @@ function outputFiles(directory: string): string[] {
   })
 }
 
-function applicationBuildOutputRevision(rootDirectory: string) {
+function applicationBuildOutputRevision(
+  rootDirectory: string,
+  environment: ReturnType<typeof readEnvironment>,
+) {
   const outputDirectories = [
     resolve(rootDirectory, '.output/public/assets'),
     resolve(rootDirectory, '.nitro/vite/services/ssr/assets'),
@@ -67,15 +71,15 @@ function applicationBuildOutputRevision(rootDirectory: string) {
   const hash = createHash('sha256')
   // Runtime visibility changes must invalidate cached SSR documents on the next
   // normal build/update too. ORIGIN is deliberately not bundled into the client.
-  hash.update(process.env.ORIGIN ?? '')
-  hash.update(process.env.TRUST_PROXY === 'true' ? 'true' : 'false')
+  hash.update(environment.ORIGIN ?? '')
+  hash.update(String(environment.TRUST_PROXY))
   // Nitro-only header changes may not change SSR/client asset hashes. Include
   // the policy contract and its runtime rollout input in prepared-document keys.
   hash.update(
     readFileSync(resolve(rootDirectory, 'src/lib/security-policy.ts')),
   )
   hash.update(readFileSync(resolve(rootDirectory, 'src/lib/public-request.ts')))
-  hash.update(process.env.HSTS_STAGE ?? 'off')
+  hash.update(environment.HSTS_STAGE)
   for (const file of files) {
     hash.update(file.slice(rootDirectory.length))
     hash.update(readFileSync(file))
@@ -92,9 +96,12 @@ const ssrDocumentPaths = [
   '/settings/profile',
   '/settings/profile/',
 ]
-function preparePwaWorker(options: ResolvedVitePWAOptions) {
+function preparePwaWorker(
+  options: ResolvedVitePWAOptions,
+  environment: ReturnType<typeof readEnvironment>,
+) {
   copyServerRenderedStyles()
-  const revision = applicationBuildOutputRevision(process.cwd())
+  const revision = applicationBuildOutputRevision(process.cwd(), environment)
   const generatedEntries = (
     options.workbox.additionalManifestEntries ?? []
   ).filter(
@@ -125,77 +132,83 @@ function copyServerRenderedStyles() {
   }
 }
 
-const config = defineConfig(({ command }) => ({
-  envPrefix: ['VITE_', 'PUBLIC_'],
-  resolve: { tsconfigPaths: true },
-  // Fonts and artwork remain origin-served resources under the enforced CSP.
-  build: { assetsInlineLimit: 0 },
-  plugins: [
-    releaseDataValidation(),
-    VitePWA({
-      strategies: 'generateSW',
-      outDir: '.output/public',
-      registerType: 'prompt',
-      injectRegister: false,
-      scope: '/',
-      filename: 'sw.js',
-      manifestFilename: 'manifest.webmanifest',
-      includeAssets: ['favicon.svg'],
-      includeManifestIcons: true,
-      manifest: {
-        name: 'regningen',
-        short_name: 'regningen',
-        lang: 'de',
-        description: 'Rechnungen erstellen und als PDF herunterladen.',
-        start_url: '/',
+const config = defineConfig(({ command, mode }) => {
+  // Load before validating or starting Nitro's worker. Vite preserves even empty
+  // shell values; Nitro's later dev/build loader must not reinterpret them.
+  Object.assign(process.env, loadEnv(mode, process.cwd(), ''))
+  const environment = readEnvironment(process.env)
+  return {
+    resolve: { tsconfigPaths: true },
+    // Fonts and artwork remain origin-served resources under the enforced CSP.
+    build: { assetsInlineLimit: 0 },
+    plugins: [
+      releaseDataValidation(),
+      VitePWA({
+        strategies: 'generateSW',
+        outDir: '.output/public',
+        registerType: 'prompt',
+        injectRegister: false,
         scope: '/',
-        display: 'standalone',
-        background_color: '#ffffff',
-        theme_color: '#ec003f',
-      },
-      pwaAssets: {
-        config: './pwa-assets.config.ts',
-        overrideManifestIcons: true,
-        includeHtmlHeadLinks: true,
-        injectThemeColor: false,
+        filename: 'sw.js',
+        manifestFilename: 'manifest.webmanifest',
+        includeAssets: ['favicon.svg'],
+        includeManifestIcons: true,
+        manifest: {
+          name: 'regningen',
+          short_name: 'regningen',
+          lang: 'de',
+          description: 'Rechnungen erstellen und als PDF herunterladen.',
+          start_url: '/',
+          scope: '/',
+          display: 'standalone',
+          background_color: '#ffffff',
+          theme_color: '#ec003f',
+        },
+        pwaAssets: {
+          config: './pwa-assets.config.ts',
+          overrideManifestIcons: true,
+          includeHtmlHeadLinks: true,
+          injectThemeColor: false,
+          integration: {
+            publicDir: resolve(process.cwd(), 'public'),
+            outDir: resolve(process.cwd(), '.output/public'),
+          },
+        },
         integration: {
-          publicDir: resolve(process.cwd(), 'public'),
-          outDir: resolve(process.cwd(), '.output/public'),
+          beforeBuildServiceWorker: (options) =>
+            preparePwaWorker(options, environment),
         },
-      },
-      integration: {
-        beforeBuildServiceWorker: preparePwaWorker,
-      },
-      workbox: {
-        navigateFallback: null,
-        globPatterns: [
-          '**/*.{js,mjs,css,html,ico,png,svg,webp,woff,woff2,ttf,eot}',
-        ],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        cleanupOutdatedCaches: true,
-      },
-    }),
-    devtools(),
-    nitro({
-      buildDir: resolve(process.cwd(), '.nitro'),
-      rollupConfig: { external: [/^@sentry\//] },
-      // The built runtime (including preview) owns enforcement. Development
-      // serves Vite's inline bootstrap/HMR instead and must not use its fallback.
-      plugins:
-        command === 'build'
-          ? [resolve(process.cwd(), 'src/server/plugins/security.ts')]
-          : [],
-      routeRules: {
-        '/sw.js': {
-          headers: { 'cache-control': 'no-cache, no-store, must-revalidate' },
+        workbox: {
+          navigateFallback: null,
+          globPatterns: [
+            '**/*.{js,mjs,css,html,ico,png,svg,webp,woff,woff2,ttf,eot}',
+          ],
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          cleanupOutdatedCaches: true,
         },
-      },
-    }),
-    tailwindcss(),
-    tanstackStart(),
-    viteReact(),
-    babel({ presets: [reactCompilerPreset()] }),
-  ],
-}))
+      }),
+      devtools(),
+      nitro({
+        buildDir: resolve(process.cwd(), '.nitro'),
+        rollupConfig: { external: [/^@sentry\//] },
+        // The built runtime (including preview) owns enforcement. Development
+        // serves Vite's inline bootstrap/HMR instead and must not use its fallback.
+        plugins:
+          command === 'build'
+            ? [resolve(process.cwd(), 'src/server/plugins/security.ts')]
+            : [],
+        routeRules: {
+          '/sw.js': {
+            headers: { 'cache-control': 'no-cache, no-store, must-revalidate' },
+          },
+        },
+      }),
+      tailwindcss(),
+      tanstackStart(),
+      viteReact(),
+      babel({ presets: [reactCompilerPreset()] }),
+    ],
+  }
+})
 
 export default config

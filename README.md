@@ -11,7 +11,7 @@ pnpm install
 pnpm dev
 ```
 
-The app is available at <http://localhost:3000>.
+The app is available at <http://localhost:3000>. No environment file is required. Optionally copy `.env.example` to `.env.local`; the safe defaults leave public identity, proxy trust, and HSTS disabled. See [environment configuration](docs/configuration.md) for supported settings, validation, file precedence, and mode selection.
 
 See the [testing guide](docs/testing.md) for test architecture and contribution conventions, and the [release guide](docs/releasing.md) for preparing a local release.
 
@@ -42,9 +42,13 @@ The design uses a fresh full production build in place (replacing `.output`), fi
 
 ## Production
 
-Build the application with `ORIGIN=https://regningen.soren.codes pnpm build`. Set the same server-runtime `ORIGIN` when serving production. To preview the production build locally, run `pnpm preview`; its different origin is deliberately noindex. See [public visibility and deployment](docs/visibility.md) for origin validation, explicit `TRUST_PROXY` opt-in, proxy sanitization, cache isolation, discovery endpoints, and offline metadata updates.
+Build with `pnpm build`, then preview with `pnpm preview` at <http://127.0.0.1:4173>. Preview runs the built Node server with production HTTP/security behavior, loads the selected mode's local environment files, and fails if its requested port is unavailable. It supports `--host HOST`, `--port PORT`, and `--mode MODE`.
 
-Production and production-style previews enforce repository-owned browser security headers. HSTS is **off by default** until public HTTPS, redirection, and automated renewal are verified. Use matching build/runtime `HSTS_STAGE`, `ORIGIN`, and `TRUST_PROXY`; see [browser security and the HTTPS deployment checklist](docs/security.md) for policy ownership, CSP/offline behavior, explicit HSTS rollout/rollback, and hosting responsibilities. Local tests do not verify the public deployment.
+For deployment, run `node .output/server/index.mjs` with host-injected configuration, or explicitly load a file with `node --env-file=/path/to/file .output/server/index.mjs`. Direct Node startup loads no environment files automatically, and a separate server invocation does not inherit values loaded by the build. Use matching effective `ORIGIN`, `TRUST_PROXY`, and `HSTS_STAGE` at build and runtime; configuration changes require rebuilding and restarting for PWA document revisions. See [environment configuration](docs/configuration.md) for accepted values, safe defaults, startup failures, and production examples.
+
+An absent or empty `ORIGIN` leaves the deployment noindex with no public identity; a foreign preview origin also remains noindex. See [public visibility and deployment](docs/visibility.md) for explicit `TRUST_PROXY` opt-in, proxy sanitization, cache isolation, discovery endpoints, and offline metadata updates.
+
+Production and production-style previews enforce repository-owned browser security headers. HSTS is **off by default** until public HTTPS, redirection, and automated renewal are verified. See [browser security and the HTTPS deployment checklist](docs/security.md) for policy ownership, CSP/offline behavior, explicit HSTS rollout/rollback, and hosting responsibilities. Local tests do not verify the public deployment.
 
 ## Settings
 

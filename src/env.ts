@@ -1,39 +1,41 @@
 import { createEnv } from '@t3-oss/env-core'
-import { z } from '@/lib/validation'
+import { z } from './lib/validation.ts'
+import { resolveDeployment } from './lib/visibility.ts'
 
-export const env = createEnv({
-  server: {
-    SERVER_URL: z.url().optional(),
-  },
-
-  /**
-   * The prefix that client-side variables must have. This is enforced both at
-   * a type-level and at runtime.
-   */
-  clientPrefix: 'PUBLIC_',
-
-  client: {
-    PUBLIC_APP_TITLE: z.string().min(1).optional(),
-  },
-
-  /**
-   * What object holds the environment variables at runtime. This is usually
-   * `process.env` or `import.meta.env`.
-   */
-  runtimeEnv: import.meta.env,
-
-  /**
-   * By default, this library will feed the environment variables directly to
-   * the Zod validator.
-   *
-   * This means that if you have an empty string for a value that is supposed
-   * to be a number (e.g. `PORT=` in a ".env" file), Zod will incorrectly flag
-   * it as a type mismatch violation. Additionally, if you have an empty string
-   * for a value that is supposed to be a string with a default value (e.g.
-   * `DOMAIN=` in an ".env" file), the default value will never be applied.
-   *
-   * In order to solve these issues, we recommend that all new projects
-   * explicitly specify this option as true.
-   */
-  emptyStringAsUndefined: true,
-})
+/** Validate loaded server/build inputs; this module never loads environment files. */
+export function readEnvironment(values: Record<string, string | undefined>) {
+  return createEnv({
+    server: {
+      ORIGIN: z
+        .string()
+        .transform((value, context) => {
+          const origin = resolveDeployment(value, undefined).canonicalOrigin
+          if (origin !== null) return origin
+          context.addIssue({
+            code: 'custom',
+            message:
+              'Expected a bare HTTP(S) origin without credentials, path, query or fragment.',
+          })
+          return z.NEVER
+        })
+        .optional(),
+      TRUST_PROXY: z
+        .enum(['true', 'false'])
+        .default('false')
+        .transform((value) => value === 'true'),
+      HSTS_STAGE: z
+        .enum(['off', 'one-day', 'one-week', 'one-year', 'reset'])
+        .default('off'),
+    },
+    runtimeEnv: { ...values },
+    isServer: true,
+    emptyStringAsUndefined: true,
+    onValidationError(issues) {
+      throw new Error(
+        `Invalid deployment configuration: ${issues
+          .map((issue) => `${issue.path?.join('.')}: ${issue.message}`)
+          .join('; ')}`,
+      )
+    },
+  })
+}
