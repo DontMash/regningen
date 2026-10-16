@@ -2,7 +2,7 @@ import { Store } from '@tanstack/store'
 import { createStorage } from 'unstorage'
 import sessionStorageDriver from 'unstorage/drivers/session-storage'
 import type { InvoiceDraft, InvoiceLineDraft } from './invoice'
-import { z } from 'zod'
+import { z } from '@/lib/validation'
 import {
   getApplicationResetGeneration,
   INITIAL_APPLICATION_RESET_GENERATION,

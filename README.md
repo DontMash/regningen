@@ -44,6 +44,8 @@ The design uses a fresh full production build in place (replacing `.output`), fi
 
 Build the application with `ORIGIN=https://regningen.soren.codes pnpm build`. Set the same server-runtime `ORIGIN` when serving production. To preview the production build locally, run `pnpm preview`; its different origin is deliberately noindex. See [public visibility and deployment](docs/visibility.md) for origin validation, explicit `TRUST_PROXY` opt-in, proxy sanitization, cache isolation, discovery endpoints, and offline metadata updates.
 
+Production and production-style previews enforce repository-owned browser security headers. HSTS is **off by default** until public HTTPS, redirection, and automated renewal are verified. Use matching build/runtime `HSTS_STAGE`, `ORIGIN`, and `TRUST_PROXY`; see [browser security and the HTTPS deployment checklist](docs/security.md) for policy ownership, CSP/offline behavior, explicit HSTS rollout/rollback, and hosting responsibilities. Local tests do not verify the public deployment.
+
 ## Settings
 
 Open **Einstellungen** using the cogwheel in the header. The settings aside links to **Allgemein** (`/settings`) and **Profil** (`/settings/profile`); the old profile address is no longer available. Allgemein contains appearance, installation, local PDF notifications, and application reset. The header theme shortcut remains synchronized with the System/Hell/Dunkel selection.

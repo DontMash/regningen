@@ -1,5 +1,5 @@
 import { isValidIBAN } from 'ibantools'
-import { z } from 'zod'
+import { z } from '@/lib/validation'
 
 export const businessProfileDraftSchema = z
   .object({

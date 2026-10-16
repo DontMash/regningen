@@ -11,5 +11,27 @@ export function pageHead(
   const successful = matches.every(
     (match) => match.status === 'success' && !match._notFound,
   )
-  return pageVisibility(policy).head(successful ? page.canonicalPath : null)
+  const { meta, links } = pageVisibility(policy).head(
+    successful ? page.canonicalPath : null,
+  )
+  // Router's JSON-LD meta helper does not propagate the SSR nonce to scripts.
+  // Native head scripts do, including on client navigation. Keep script-boundary
+  // encoding without interpolating raw JSON into HTML.
+  return {
+    meta: meta.filter((entry) => !('script:ld+json' in entry)),
+    links,
+    scripts: meta.flatMap((entry) =>
+      'script:ld+json' in entry
+        ? [
+            {
+              type: 'application/ld+json',
+              children: JSON.stringify(entry['script:ld+json']).replace(
+                /</g,
+                '\\u003c',
+              ),
+            },
+          ]
+        : [],
+    ),
+  }
 }

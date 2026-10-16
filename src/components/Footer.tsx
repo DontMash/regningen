@@ -73,7 +73,7 @@ export default function Footer() {
               <span className="sr-only">love </span>
               by{' '}
               <a
-                href="https://www.soren.codes/"
+                href="https://www.soren.codes/?utm_source=regningen&utm_medium=referral"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"

@@ -55,9 +55,20 @@ export class FooterRobot {
       'Made with love by soren',
     )
     const author = footer.getByRole('link', { name: 'soren' })
-    await expect(author).toHaveAttribute('href', 'https://www.soren.codes/')
+    await expect(author).toHaveAttribute(
+      'href',
+      'https://www.soren.codes/?utm_source=regningen&utm_medium=referral',
+    )
+    await expect(author).toHaveAttribute('rel', /noreferrer/)
     await expect(author).toHaveAttribute('target', '_blank')
     await expect(author).toHaveAttribute('rel', /noopener/)
+  }
+
+  async followAuthorCredit() {
+    await this.page
+      .getByRole('contentinfo')
+      .getByRole('link', { name: 'soren' })
+      .click()
   }
 
   async expectFooterBelowViewport() {

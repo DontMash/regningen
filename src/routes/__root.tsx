@@ -3,9 +3,11 @@ import {
   Link,
   Scripts,
   createRootRouteWithContext,
+  useRouter,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { CSPProvider } from '@base-ui/react/csp-provider'
 import Footer from '../components/Footer'
 import Header from '../components/Header'
 import { ReleaseNotesProvider } from '@/features/release-notes/ReleaseNotesProvider'
@@ -104,39 +106,45 @@ function UnavailablePage({ title }: { title: string }) {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const nonce = useRouter().options.ssr?.nonce
   return (
     <html lang="de" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
         <HeadContent />
       </head>
       <body className="relative min-h-screen antialiased">
-        <PwaProvider>
-          <ReleaseNotesProvider>
-            <ApplicationResetListener />
-            <SettingsGuards />
-            <Header />
-            <main id="hauptinhalt" tabIndex={-1} className="min-h-screen">
-              {children}
-            </main>
-            <Footer />
-            <Toaster />
-            <TanStackDevtools
-              config={{
-                position: 'bottom-right',
-              }}
-              plugins={[
-                {
-                  name: 'Tanstack Router',
-                  render: <TanStackRouterDevtoolsPanel />,
-                },
-                StoreDevtools,
-                TanStackQueryDevtools,
-              ]}
-            />
-            <Scripts />
-          </ReleaseNotesProvider>
-        </PwaProvider>
+        <CSPProvider nonce={nonce}>
+          <PwaProvider>
+            <ReleaseNotesProvider>
+              <ApplicationResetListener />
+              <SettingsGuards />
+              <Header />
+              <main id="hauptinhalt" tabIndex={-1} className="min-h-screen">
+                {children}
+              </main>
+              <Footer />
+              <Toaster />
+              <TanStackDevtools
+                config={{
+                  position: 'bottom-right',
+                }}
+                plugins={[
+                  {
+                    name: 'Tanstack Router',
+                    render: <TanStackRouterDevtoolsPanel />,
+                  },
+                  StoreDevtools,
+                  TanStackQueryDevtools,
+                ]}
+              />
+              <Scripts />
+            </ReleaseNotesProvider>
+          </PwaProvider>
+        </CSPProvider>
       </body>
     </html>
   )

@@ -24,8 +24,10 @@ Foreign or unverifiable requests remain crawlable, with noindex in HTML and `X-R
 
 The resolved non-secret origin/publication policy is serialized with the server-rendered router state and retained across hydration and client navigation, including prepared offline routes. Client head evaluation never guesses publication from browser location or requires a server call. Discovery endpoints are not precached as public documents.
 
-The existing service-worker document revision includes built client/server assets and the build's `ORIGIN` and `TRUST_PROXY` values. When changing origin/proxy configuration, rebuild with those same values and deploy matching runtime configuration; normal update acceptance refreshes cached documents. Do not change runtime identity while retaining an old worker indefinitely. Landing copy and page declarations affect built asset hashes, including same-version content updates.
+The existing service-worker document revision includes built client/server assets the security/proxy policy source, and the build's `ORIGIN`, `TRUST_PROXY`, and `HSTS_STAGE` values. When changing origin/proxy configuration, rebuild with those same values and deploy matching runtime configuration; normal update acceptance refreshes cached documents. Do not change runtime identity while retaining an old worker indefinitely. Landing copy and page declarations affect built asset hashes, including same-version content updates.
 
 `public/social-preview.png` is a shared 1200×630 image using fictional data. Regenerate it with `node scripts/generate-social-preview.mjs` (requires the installed Playwright Chromium). Its artwork is static and anonymously fetchable; pages can override image information in their own declaration.
+
+See [browser security and HTTPS deployment](security.md) for the shared proxy contract, CSP authorization, HSTS rollout, and policy-only offline updates.
 
 Tests prove delivered HTML, HTTP contracts, browser navigation and offline updates. They do not prove actual search indexing, rich results, social-platform cache refresh timing, ranking, or agent uptake.

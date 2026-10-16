@@ -19,6 +19,7 @@ type ReleaseName = 'a' | 'b'
 type DeploymentEnvironment = {
   ORIGIN?: string | undefined
   TRUST_PROXY?: string | undefined
+  HSTS_STAGE?: string | undefined
 }
 
 export class PwaDeployment {
@@ -44,7 +45,12 @@ export class PwaDeployment {
   static async create({
     updates = true,
     failedPage = false,
-  }: { updates?: boolean; failedPage?: boolean } = {}) {
+    updateKind = 'content',
+  }: {
+    updates?: boolean
+    failedPage?: boolean
+    updateKind?: 'content' | 'security-policy'
+  } = {}) {
     const temporaryDirectory = await mkdtemp(
       join(tmpdir(), 'regningen-pwa-deployment-'),
     )
@@ -56,6 +62,7 @@ export class PwaDeployment {
         ...process.env,
         ORIGIN: `http://127.0.0.1:${port}`,
         TRUST_PROXY: 'false',
+        HSTS_STAGE: 'off',
       }
       const releaseASource = join(temporaryDirectory, 'release-a-source')
       await createReleaseSource(releaseASource, failedPage)
@@ -74,12 +81,25 @@ export class PwaDeployment {
       const releases: Partial<Record<ReleaseName, string>> = { a: releaseA }
       if (updates) {
         const releaseBSource = join(temporaryDirectory, 'release-b-source')
-        await createReleaseBSource(
-          releaseBSource,
-          versionB,
-          changelog,
-          failedPage,
-        )
+        if (updateKind === 'security-policy') {
+          await createReleaseSource(releaseBSource, failedPage)
+          const policyPath = join(releaseBSource, 'src/lib/security-policy.ts')
+          const policy = await readFile(policyPath, 'utf8')
+          const permissions = 'camera=(), microphone=(), geolocation=()'
+          if (!policy.includes(permissions))
+            throw new Error('Could not locate policy-only update fixture.')
+          await writeFile(
+            policyPath,
+            policy.replace(permissions, `${permissions}, display-capture=()`),
+          )
+        } else {
+          await createReleaseBSource(
+            releaseBSource,
+            versionB,
+            changelog,
+            failedPage,
+          )
+        }
         await runCommand('pnpm', ['build'], releaseBSource, buildEnvironment)
         const releaseB = join(temporaryDirectory, 'release-b')
         await cp(join(releaseBSource, '.output'), releaseB, { recursive: true })
@@ -118,6 +138,7 @@ export class PwaDeployment {
       ...process.env,
       ORIGIN: this.baseUrl,
       TRUST_PROXY: 'false',
+      HSTS_STAGE: 'off',
       ...overrides,
       NITRO_HOST: '127.0.0.1',
       NITRO_PORT: String(this.port),

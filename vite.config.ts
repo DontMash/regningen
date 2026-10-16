@@ -69,6 +69,13 @@ function applicationBuildOutputRevision(rootDirectory: string) {
   // normal build/update too. ORIGIN is deliberately not bundled into the client.
   hash.update(process.env.ORIGIN ?? '')
   hash.update(process.env.TRUST_PROXY === 'true' ? 'true' : 'false')
+  // Nitro-only header changes may not change SSR/client asset hashes. Include
+  // the policy contract and its runtime rollout input in prepared-document keys.
+  hash.update(
+    readFileSync(resolve(rootDirectory, 'src/lib/security-policy.ts')),
+  )
+  hash.update(readFileSync(resolve(rootDirectory, 'src/lib/public-request.ts')))
+  hash.update(process.env.HSTS_STAGE ?? 'off')
   for (const file of files) {
     hash.update(file.slice(rootDirectory.length))
     hash.update(readFileSync(file))
@@ -118,9 +125,11 @@ function copyServerRenderedStyles() {
   }
 }
 
-const config = defineConfig({
+const config = defineConfig(({ command }) => ({
   envPrefix: ['VITE_', 'PUBLIC_'],
   resolve: { tsconfigPaths: true },
+  // Fonts and artwork remain origin-served resources under the enforced CSP.
+  build: { assetsInlineLimit: 0 },
   plugins: [
     releaseDataValidation(),
     VitePWA({
@@ -170,6 +179,12 @@ const config = defineConfig({
     nitro({
       buildDir: resolve(process.cwd(), '.nitro'),
       rollupConfig: { external: [/^@sentry\//] },
+      // The built runtime (including preview) owns enforcement. Development
+      // serves Vite's inline bootstrap/HMR instead and must not use its fallback.
+      plugins:
+        command === 'build'
+          ? [resolve(process.cwd(), 'src/server/plugins/security.ts')]
+          : [],
       routeRules: {
         '/sw.js': {
           headers: { 'cache-control': 'no-cache, no-store, must-revalidate' },
@@ -181,6 +196,6 @@ const config = defineConfig({
     viteReact(),
     babel({ presets: [reactCompilerPreset()] }),
   ],
-})
+}))
 
 export default config

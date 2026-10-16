@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '@/lib/validation'
 
 export type VatRate = 7 | 19
 

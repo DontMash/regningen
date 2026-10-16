@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '@/lib/validation'
 import { businessProfileDraftSchema } from './business-profile'
 import type { BusinessProfileDraft } from './business-profile'
 import {

@@ -8,6 +8,8 @@ import { PwaBrowserControls } from '../support/playwright/pwa-browser'
 import { PwaBrowserCapabilities } from '../support/playwright/pwa-capabilities'
 import { PwaDeployment } from '../support/playwright/pwa-deployment'
 import { inspectHtml } from '../support/playwright/http-documents'
+import { SecurityDiagnostics } from '../support/playwright/security'
+import { RequestObserver } from '../support/playwright/requests'
 import {
   landingVisibilityExample,
   applicationVisibilityExamples,
@@ -25,11 +27,14 @@ test('generated production workers prepare offline routes and prompt for same-ve
   const deployment = await PwaDeployment.create()
   const pwaBrowser = await PwaBrowserControls.create(browser)
   const capabilities = new PwaBrowserCapabilities(pwaBrowser.context)
+  const diagnostics = new SecurityDiagnostics()
+  await diagnostics.observe(pwaBrowser.context)
   const releaseA = deployment.version('a')
   const releaseB = deployment.version('b')
   await capabilities.observeNotifications(deployment.baseUrl)
   const pageA = await pwaBrowser.openPage()
   const pageB = await pwaBrowser.openPage()
+  const requests = new RequestObserver(pageA).observeRequests()
   const robotsA = robotsForPage(pageA)
   const robotsB = robotsForPage(pageB)
   const {
@@ -180,7 +185,6 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await shellA.navigateToSettings()
     await pwaA.enableNotifications()
     await pwaA.expectNotificationsEnabled()
-    await capabilities.failNotificationDelivery(pageA)
     await pwaBrowser.createUnrelatedOriginCache(pageA)
 
     await pageA.goto(deployment.baseUrl)
@@ -210,6 +214,9 @@ test('generated production workers prepare offline routes and prompt for same-ve
       amount: 'not-money',
     })
 
+    // Capability controls are document-local; inject the failure only after
+    // the last full navigation, so this really exercises notification failure.
+    await capabilities.failNotificationDelivery(pageA)
     const download = await new ArtifactSupport(pageA).captureDownload(() =>
       invoiceA.createPdf(),
     )
@@ -230,6 +237,9 @@ test('generated production workers prepare offline routes and prompt for same-ve
           (await capabilities.notificationObservation(pageA)).notifications,
       )
       .toHaveLength(1)
+    expect(
+      (await capabilities.notificationObservation(pageA)).failDelivery,
+    ).toBe(true)
     const notification = (await capabilities.notificationObservation(pageA))
       .notifications[0]
     expect(notification.title).toBe('PDF wurde erstellt')
@@ -378,6 +388,16 @@ test('generated production workers prepare offline routes and prompt for same-ve
     expect(await pwaBrowser.cacheNames(pageA)).toContain(
       pwaBrowser.unrelatedCacheName,
     )
+
+    expect(diagnostics.violations).toEqual([])
+    expect(diagnostics.errors).toEqual([])
+    for (const request of requests.snapshot()) {
+      expect(new URL(request.url).origin).toBe(deployment.baseUrl)
+      expect(request.method).toBe('GET')
+      expect(request.body).toBeNull()
+      expect(request.url).not.toContain('draft-tab-a')
+      expect(request.url).not.toContain(profile.businessName)
+    }
 
     // User-data reset must not uninstall the production worker or erase downloads.
     await test.step('reset offline user data while preserving the worker and downloads', async () => {
