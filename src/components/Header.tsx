@@ -91,10 +91,10 @@ export default function Header() {
         <div className="flex items-center gap-3">
           <div className="hidden items-center gap-3 lg:flex">
             <InvoiceLink />
-            <LanguageSelect compact />
-            <ThemeToggle />
             <SettingsShortcut />
+            <ThemeToggle />
           </div>
+          <LanguageSelect compact />
           <Drawer
             open={menuOpen}
             onOpenChange={(open) => {
@@ -153,9 +153,8 @@ export default function Header() {
                 </nav>
               </div>
               <div className="flex shrink-0 items-center justify-end gap-3 p-4">
-                <LanguageSelect compact />
-                <ThemeToggle />
                 <SettingsShortcut onClick={closeForNavigation} />
+                <ThemeToggle />
               </div>
             </DrawerContent>
           </Drawer>

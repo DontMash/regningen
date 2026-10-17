@@ -453,7 +453,7 @@ export class InvoiceRobot {
         exact: true,
       }),
       'new position amount': this.page.getByRole('textbox', {
-        name: /^(Brutto in €|Gross amount €)$/,
+        name: /^(Brutto in Euro|Gross amount in euros)$/,
         exact: true,
       }),
       'add position': this.page.getByRole('button', {

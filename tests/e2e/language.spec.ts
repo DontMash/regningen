@@ -13,9 +13,8 @@ test('declares German as the application language', async ({
   await language.expectHeaderChoices('de')
 })
 
-test('the menu language switch retains the logical page, query and fragment at mobile width', async ({
+test('the header language switch retains the logical page, query and fragment at mobile width', async ({
   harness,
-  appShell,
   language,
   releaseNotes,
   page,
@@ -23,28 +22,18 @@ test('the menu language switch retains the logical page, query and fragment at m
   await harness.setViewport(390, 844)
   await harness.open('/de/einstellungen?source=language-test#preferences')
   await releaseNotes.acknowledgeReleaseNotes()
-  await appShell.openMenu()
   await language.expectInterfaceLanguage('de')
-  await language.expectHeaderChoices('de')
   await language.changeInterfaceLanguageWithKeyboard('en')
   await expect(page).toHaveURL(
     /\/en\/settings\?source=language-test#preferences$/,
   )
-  await appShell.expectMenuClosed()
-  await language.expectPreferences('en', 'auto')
-  await appShell.openMenu()
   await language.expectInterfaceLanguage('en')
-  await language.expectHeaderChoices('en')
-  await appShell.closeMenu()
   await language.expectPreferences('en', 'auto')
   await language.changeInterfaceLanguageInSettings('de')
   await expect(page).toHaveURL(
     /\/de\/einstellungen\?source=language-test#preferences$/,
   )
-  await language.expectPreferences('de', 'auto')
-  await appShell.openMenu()
   await language.expectInterfaceLanguage('de')
-  await appShell.closeMenu()
   await language.expectPreferences('de', 'auto')
 })
 

@@ -284,7 +284,7 @@ export class InvoiceRobot {
       'PLZ',
       'Ort',
       'Beschreibung',
-      'Brutto in €',
+      'Brutto in Euro',
     ]) {
       expect(screen.getByRole('textbox', { name: label })).toBeRequired()
       expect(screen.getByText(label, { selector: 'label' })).toHaveTextContent(
@@ -310,7 +310,7 @@ export class InvoiceRobot {
     expect(
       screen.getByText('MwSt.-Satz', { selector: 'label' }),
     ).toHaveTextContent(/\*/)
-    for (const label of ['Beschreibung', 'Brutto in €']) {
+    for (const label of ['Beschreibung', 'Brutto in Euro']) {
       expect(
         screen.getByRole('columnheader', { name: label }),
       ).toHaveTextContent(/\*/)
@@ -344,7 +344,7 @@ export class InvoiceRobot {
       name:
         field === 'description'
           ? /^(?:Beschreibung|Description)$/
-          : /^(?:Brutto in €|Gross amount €)$/,
+          : /^(?:Brutto in Euro|Gross amount in euros)$/,
     })
   }
 

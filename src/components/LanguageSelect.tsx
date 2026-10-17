@@ -63,7 +63,7 @@ export function LanguageSelect({
     >
       {compact ? (
         <SelectPrimitive.Trigger
-          render={<Button variant="outline" size="icon" />}
+          render={<Button variant="ghost" size="icon" />}
           aria-label={label}
           title={label}
         >

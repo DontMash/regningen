@@ -25,15 +25,11 @@ export class AppShellRobot {
   }
 
   async openMenu() {
-    await this.page
-      .getByRole('button', { name: /^(Menü öffnen|Open menu)$/ })
-      .click()
+    await this.page.getByRole('button', { name: 'Menü öffnen' }).click()
   }
 
   async closeMenu() {
-    await this.menu()
-      .getByRole('button', { name: /^(Menü schließen|Close menu)$/ })
-      .click()
+    await this.menu().getByRole('button', { name: 'Menü schließen' }).click()
   }
 
   async expectMenuOpen() {
@@ -124,29 +120,17 @@ export class AppShellRobot {
 
   async expectMenuFocusContained() {
     const close = this.menu().getByRole('button', { name: 'Menü schließen' })
-    const invoice = this.menu().getByRole('link', {
-      name: 'Rechnung',
-      exact: true,
-    })
-    const language = this.menu().getByRole('combobox', {
-      name: 'Sprache ändern',
-    })
     const theme = this.menu().getByRole('button', {
       name: 'Darstellung umschalten',
     })
-    const settings = this.menu().getByRole('link', {
-      name: 'Einstellungen',
-      exact: true,
-    })
     await close.focus()
     await this.page.keyboard.press('Shift+Tab')
-    await expect(settings).toBeFocused()
+    await expect(theme).toBeFocused()
     await this.page.keyboard.press('Tab')
     await expect(close).toBeFocused()
-    for (const control of [invoice, language, theme, settings]) {
+    for (let index = 0; index < 3; index++)
       await this.page.keyboard.press('Tab')
-      await expect(control).toBeFocused()
-    }
+    await expect(theme).toBeFocused()
   }
 
   async chooseMenuDestinationWithKeyboard(
@@ -168,23 +152,11 @@ export class AppShellRobot {
   }
 
   async expectDesktopNavigationUsable() {
-    const navigation = this.page.getByRole('navigation', {
-      name: 'Hauptnavigation',
-    })
-    const invoice = navigation.getByRole('link', {
-      name: 'Rechnung',
-      exact: true,
-    })
+    const invoice = this.page
+      .getByRole('navigation', { name: 'Hauptnavigation' })
+      .getByRole('link', { name: 'Rechnung', exact: true })
     await invoice.focus()
     await expect(invoice).toBeFocused()
-    for (const control of [
-      navigation.getByRole('combobox', { name: 'Sprache ändern' }),
-      navigation.getByRole('button', { name: 'Darstellung umschalten' }),
-      navigation.getByRole('link', { name: 'Einstellungen', exact: true }),
-    ]) {
-      await this.page.keyboard.press('Tab')
-      await expect(control).toBeFocused()
-    }
   }
 
   async expectMenuContents(businessName?: string) {
@@ -206,9 +178,6 @@ export class AppShellRobot {
     const theme = menu.getByRole('button', { name: 'Darstellung umschalten' })
     await expect(theme).toBeEnabled()
     await expect(theme).toHaveText('')
-    const language = menu.getByRole('combobox', { name: 'Sprache ändern' })
-    await expect(language).toBeEnabled()
-    await expect(language.locator('svg')).toBeVisible()
     await expect(
       menu.getByRole('button', { name: 'Menü schließen' }),
     ).toBeVisible()

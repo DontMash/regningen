@@ -144,7 +144,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               <Toaster />
               <TanStackDevtools
                 config={{
-                  position: 'bottom-left',
+                  position: 'bottom-right',
                 }}
                 plugins={[
                   {

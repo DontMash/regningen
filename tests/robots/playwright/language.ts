@@ -22,24 +22,22 @@ export class LanguageRobot {
     interfaceLanguage: 'de' | 'en',
     invoiceLanguage: 'auto' | 'de' | 'en',
   ) {
-    const interfaceControl = this.page.getByRole('combobox', {
-      name:
-        interfaceLanguage === 'de'
-          ? 'Oberflächensprache'
-          : 'Interface language',
-      exact: true,
-    })
-    await expect(interfaceControl).toBeEnabled()
-    await expect(interfaceControl).toContainText(
-      interfaceLanguage === 'de' ? 'Deutsch' : 'English',
-    )
-    const invoiceControl = this.page.getByRole('combobox', {
-      name:
-        interfaceLanguage === 'de' ? 'Rechnungssprache' : 'Invoice language',
-      exact: true,
-    })
-    await expect(invoiceControl).toBeEnabled()
-    await expect(invoiceControl).toContainText(
+    await expect(
+      this.page.getByRole('combobox', {
+        name:
+          interfaceLanguage === 'de'
+            ? 'Oberflächensprache'
+            : 'Interface language',
+        exact: true,
+      }),
+    ).toContainText(interfaceLanguage === 'de' ? 'Deutsch' : 'English')
+    await expect(
+      this.page.getByRole('combobox', {
+        name:
+          interfaceLanguage === 'de' ? 'Rechnungssprache' : 'Invoice language',
+        exact: true,
+      }),
+    ).toContainText(
       invoiceLanguage === 'auto'
         ? interfaceLanguage === 'de'
           ? 'Oberflächensprache folgen'

@@ -23,7 +23,7 @@
   "invoice_remove_position": "Position {position} entfernen",
   "invoice_position_number": "Nr.",
   "invoice_description": "Beschreibung",
-  "invoice_amount": "Brutto in €",
+  "invoice_amount": "Brutto in Euro",
   "invoice_amount_hint": "Positiver Bruttopreis in Euro, z. B. 107,00.",
   "invoice_amount_source_de": "Diese Eingabe verwendet deutsche Trennzeichen (z. B. 1.234,56). Zum Wechseln in das aktuelle Zahlenformat das Feld leeren und den Betrag neu eingeben.",
   "invoice_amount_source_en": "Diese Eingabe verwendet englische Trennzeichen (z. B. 1,234.56). Zum Wechseln in das aktuelle Zahlenformat das Feld leeren und den Betrag neu eingeben.",
