@@ -215,13 +215,13 @@ async function expectConfiguration(
   hsts: string | undefined,
   publish = false,
 ) {
-  const response = await readHttp(deployment.baseUrl, '/', {
+  const response = await readHttp(deployment.baseUrl, '/de', {
     ...forwardedHttps,
     'x-forwarded-host': origin ? new URL(origin).host : 'public.example',
   })
   expect(response.status, response.body.toString()).toBe(200)
   const document = inspectHtml(response.body.toString())
-  expect(document.canonicals).toEqual(origin ? [`${origin}/`] : [])
+  expect(document.canonicals).toEqual(origin ? [`${origin}/de`] : [])
   expect(document.metas.robots).toEqual([
     publish ? 'index, follow' : 'noindex, follow',
   ])

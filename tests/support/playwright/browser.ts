@@ -12,8 +12,21 @@ export class BrowserControls {
     await this.page.goto(path)
   }
 
+  async openNegotiated(path: string) {
+    await this.page.goto(path)
+  }
+
   async reload() {
     await this.page.reload()
+  }
+
+  observePageErrors() {
+    const errors: string[] = []
+    this.page.on('pageerror', (error) => errors.push(error.message))
+    this.page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text())
+    })
+    return errors
   }
 
   async cancelReloadAtUnsavedWarning() {
@@ -104,6 +117,12 @@ export class BrowserControls {
         await caches.match('/unrelated-settings-resource')
       )?.text(),
     }))
+  }
+
+  async openAdditionalNegotiatedPage(path: string) {
+    const page = await this.context.newPage()
+    await page.goto(path)
+    return page
   }
 
   async openAdditionalPage(path?: string) {

@@ -11,6 +11,7 @@ import {
   applicationVersion,
 } from '@/lib/application-release'
 import ReleaseNotesDialog from './ReleaseNotesDialog'
+import * as m from '@/paraglide/messages'
 
 const ACKNOWLEDGED_VERSIONS_STORAGE_KEY =
   'regningen.release-notes.acknowledged-versions'
@@ -39,9 +40,8 @@ function parseAcknowledgedVersions(value: unknown): string[] {
 
 function warnAcknowledgmentStorageFailure() {
   toast.add({
-    title: 'Gelesene Versionshinweise konnten nicht gespeichert werden.',
-    description:
-      'Die Versionshinweise können beim nächsten Start erneut erscheinen.',
+    title: m.release_acknowledgment_error(),
+    description: m.release_acknowledgment_error_description(),
     type: 'warning',
   })
 }

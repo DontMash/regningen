@@ -18,7 +18,7 @@ try { new Function('window.prohibitedEvaluation = true')(); } catch { window.sec
 fetch('https://blocked.security.invalid/connect').catch(() => { window.securityProbe.connectionBlocked = true; });`,
     }),
   )
-  await context.route(`${origin}/?security-probes`, async (route) => {
+  await context.route(`${origin}/de?security-probes`, async (route) => {
     const response = await route.fetch()
     const html = await response.text()
     await route.fulfill({
@@ -71,7 +71,7 @@ export async function frameApplication(page: Page, origin: string) {
   await page.route(`${origin}/security-frame`, (route) =>
     route.fulfill({
       contentType: 'text/html',
-      body: '<!doctype html><title>Controlled parent</title><iframe src="/invoice"></iframe>',
+      body: '<!doctype html><title>Controlled parent</title><iframe src="/de/rechnung"></iframe>',
     }),
   )
   await page.goto(`${origin}/security-frame`)

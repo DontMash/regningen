@@ -7,6 +7,8 @@ import {
   useProfileStorageSync,
 } from '@/features/invoicing/business-profile-query'
 import ThemeToggle from './ThemeToggle'
+import { LanguageSelect } from '@/components/LanguageSelect'
+import * as m from '@/paraglide/messages'
 import { buttonVariants } from './ui/button'
 import {
   Drawer,
@@ -20,7 +22,7 @@ function InvoiceLink({ onClick }: { onClick?: () => void }) {
   return (
     <Link to="/invoice" onClick={onClick} className={buttonVariants()}>
       <IconFile data-icon="inline-start" />
-      Rechnung
+      {m.shell_invoice()}
     </Link>
   )
 }
@@ -30,8 +32,8 @@ function SettingsShortcut({ onClick }: { onClick?: () => void }) {
     <Link
       to="/settings"
       onClick={onClick}
-      aria-label="Einstellungen"
-      title="Einstellungen"
+      aria-label={m.shell_settings()}
+      title={m.shell_settings()}
       className={buttonVariants({ variant: 'outline', size: 'icon' })}
     >
       <IconSettings aria-hidden="true" />
@@ -67,7 +69,7 @@ export default function Header() {
   return (
     <header id="top" className="border-b bg-background">
       <nav
-        aria-label="Hauptnavigation"
+        aria-label={m.shell_main_navigation()}
         className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4"
       >
         <div className="flex min-w-0 items-center gap-3">
@@ -86,69 +88,78 @@ export default function Header() {
             </span>
           )}
         </div>
-        <div className="hidden items-center gap-3 lg:flex">
-          <InvoiceLink />
-          <SettingsShortcut />
-          <ThemeToggle />
-        </div>
-        <Drawer
-          open={menuOpen}
-          onOpenChange={(open) => {
-            if (open) closeFocus.current = 'trigger'
-            setMenuOpen(open)
-          }}
-          swipeDirection="right"
-          onOpenChangeComplete={(open) => {
-            if (
-              !open &&
-              closeFocus.current === 'content' &&
-              !document.querySelector('[role="alertdialog"]')
-            ) {
-              // Focus the stable main region, not a child replaced by route loading.
-              document
-                .getElementById('hauptinhalt')
-                ?.focus({ preventScroll: true })
-            }
-          }}
-        >
-          <DrawerTrigger
-            aria-label="Menü öffnen"
-            className={cn(
-              buttonVariants({ variant: 'outline', size: 'icon' }),
-              'lg:hidden',
-            )}
+        <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-3 lg:flex">
+            <InvoiceLink />
+            <LanguageSelect compact />
+            <ThemeToggle />
+            <SettingsShortcut />
+          </div>
+          <Drawer
+            open={menuOpen}
+            onOpenChange={(open) => {
+              if (open) closeFocus.current = 'trigger'
+              setMenuOpen(open)
+            }}
+            swipeDirection="right"
+            onOpenChangeComplete={(open) => {
+              if (
+                !open &&
+                closeFocus.current === 'content' &&
+                !document.querySelector('[role="alertdialog"]')
+              ) {
+                // Focus the stable main region, not a child replaced by route loading.
+                document
+                  .getElementById('hauptinhalt')
+                  ?.focus({ preventScroll: true })
+              }
+            }}
           >
-            <IconMenu2 aria-hidden="true" />
-          </DrawerTrigger>
-          <DrawerContent
-            finalFocus={() => closeFocus.current === 'trigger'}
-            className="h-dvh data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:24rem] max-sm:data-[swipe-direction=right]:rounded-none"
-          >
-            <div className="flex shrink-0 items-center justify-end p-4">
-              <DrawerTitle className="sr-only">Navigation</DrawerTitle>
-              <DrawerClose
-                aria-label="Menü schließen"
-                className={buttonVariants({ variant: 'ghost', size: 'icon' })}
-              >
-                <IconX aria-hidden="true" />
-              </DrawerClose>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pb-4">
-              {businessName && (
-                <p className="paragraph-small wrap-anywhere text-muted-foreground">
-                  {businessName}
-                </p>
+            <DrawerTrigger
+              aria-label={m.shell_open_menu()}
+              className={cn(
+                buttonVariants({ variant: 'outline', size: 'icon' }),
+                'lg:hidden',
               )}
-              <nav aria-label="Menünavigation" className="flex flex-col gap-3">
-                <InvoiceLink onClick={closeForNavigation} />
-              </nav>
-            </div>
-            <div className="flex shrink-0 items-center justify-end gap-3 p-4">
-              <SettingsShortcut onClick={closeForNavigation} />
-              <ThemeToggle />
-            </div>
-          </DrawerContent>
-        </Drawer>
+            >
+              <IconMenu2 aria-hidden="true" />
+            </DrawerTrigger>
+            <DrawerContent
+              finalFocus={() => closeFocus.current === 'trigger'}
+              className="h-dvh data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:24rem] max-sm:data-[swipe-direction=right]:rounded-none"
+            >
+              <div className="flex shrink-0 items-center justify-end p-4">
+                <DrawerTitle className="sr-only">
+                  {m.shell_navigation()}
+                </DrawerTitle>
+                <DrawerClose
+                  aria-label={m.shell_close_menu()}
+                  className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+                >
+                  <IconX aria-hidden="true" />
+                </DrawerClose>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pb-4">
+                {businessName && (
+                  <p className="paragraph-small wrap-anywhere text-muted-foreground">
+                    {businessName}
+                  </p>
+                )}
+                <nav
+                  aria-label={m.shell_menu_navigation()}
+                  className="flex flex-col gap-3"
+                >
+                  <InvoiceLink onClick={closeForNavigation} />
+                </nav>
+              </div>
+              <div className="flex shrink-0 items-center justify-end gap-3 p-4">
+                <LanguageSelect compact />
+                <ThemeToggle />
+                <SettingsShortcut onClick={closeForNavigation} />
+              </div>
+            </DrawerContent>
+          </Drawer>
+        </div>
       </nav>
     </header>
   )

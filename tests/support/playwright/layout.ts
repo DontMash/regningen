@@ -42,6 +42,9 @@ export class LayoutMeasurements {
       theme: await box(
         menu.getByRole('button', { name: 'Darstellung umschalten' }),
       ),
+      language: await box(
+        menu.getByRole('combobox', { name: 'Sprache ändern' }),
+      ),
       overflows: await menu
         .locator('[data-slot="drawer-content"]')
         .evaluate(
@@ -253,7 +256,7 @@ export class LayoutMeasurements {
         exact: true,
       }),
       'new position amount': this.page.getByRole('textbox', {
-        name: 'Brutto in Euro',
+        name: 'Brutto in €',
         exact: true,
       }),
       'add position': this.page.getByRole('button', {

@@ -1,11 +1,18 @@
 import { Store } from '@tanstack/store'
+import * as m from '@/paraglide/messages'
 
 export type ThemeMode = 'auto' | 'light' | 'dark'
 
 export const themeModeLabels: Record<ThemeMode, string> = {
-  auto: 'System',
-  light: 'Hell',
-  dark: 'Dunkel',
+  get auto() {
+    return m.shell_theme_system()
+  },
+  get light() {
+    return m.shell_theme_light()
+  },
+  get dark() {
+    return m.shell_theme_dark()
+  },
 }
 
 type ThemeState = {

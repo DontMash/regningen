@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Toaster } from '@/components/ui/toast'
 import { ReleaseNotesProvider, useReleaseNotes } from './ReleaseNotesProvider'
+import { setLocale } from '@/paraglide/runtime'
 
 vi.mock('@/lib/application-release', () => ({
   applicationVersion: '2.0.0',
@@ -52,6 +53,7 @@ function acknowledgeInAnotherTab(versions: string[]) {
 }
 
 beforeEach(() => {
+  setLocale('de', { reload: false })
   window.localStorage.clear()
   window.sessionStorage.clear()
   vi.stubGlobal(
@@ -76,6 +78,38 @@ afterEach(() => {
 })
 
 describe('release-notes application state', () => {
+  it('explains failed acknowledgment persistence in English without keeping the notes open', async () => {
+    setLocale('en', { reload: false })
+    const user = userEvent.setup()
+    const originalSetItem = Storage.prototype.setItem
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === storageKey) throw new Error('storage unavailable')
+      return originalSetItem.call(this, key, value)
+    })
+    renderProvider()
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Release notes' }),
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Understood' }))
+
+    expect(
+      await screen.findByText('Read release notes could not be saved.'),
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        'The release notes may appear again the next time you open the application.',
+      ),
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('dialog', { name: 'Release notes' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('opens unacknowledged notes, saves acknowledgment, and resets history on reopening', async () => {
     const user = userEvent.setup()
     renderProvider()

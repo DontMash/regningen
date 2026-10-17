@@ -4,23 +4,33 @@ import type { Page } from '@playwright/test'
 export class LandingRobot {
   constructor(private readonly page: Page) {}
 
-  async expectIntroduction({ obscured = false }: { obscured?: boolean } = {}) {
-    await expect(this.page).toHaveURL(/\/$/)
+  async expectIntroduction({
+    obscured = false,
+    locale = 'de',
+  }: { obscured?: boolean; locale?: 'de' | 'en' } = {}) {
+    await expect(this.page).toHaveURL(locale === 'de' ? /\/de$/ : /\/en$/)
     await expect(
       this.page.getByRole('heading', { level: 1, includeHidden: obscured }),
-    ).toHaveText('Rechnungen erstellen. Direkt im Browser.')
+    ).toHaveText(
+      locale === 'de'
+        ? 'Rechnungen erstellen. Direkt im Browser.'
+        : 'Create invoices. Directly in your browser.',
+    )
     await expect(
       this.page.getByRole('button', {
-        name: 'Rechnung erstellen',
+        name: locale === 'de' ? 'Rechnung erstellen' : 'Create invoice',
         exact: true,
         includeHidden: obscured,
       }),
     ).toHaveCount(2)
   }
 
-  async startInvoice(position: 'hero' | 'final' = 'hero') {
+  async startInvoice(
+    position: 'hero' | 'final' = 'hero',
+    locale: 'de' | 'en' = 'de',
+  ) {
     const actions = this.page.getByRole('button', {
-      name: 'Rechnung erstellen',
+      name: locale === 'de' ? 'Rechnung erstellen' : 'Create invoice',
       exact: true,
     })
     await (position === 'hero' ? actions.first() : actions.last()).click()
@@ -55,7 +65,7 @@ export class LandingRobot {
 
   async returnHome() {
     await this.page
-      .getByRole('navigation', { name: 'Hauptnavigation' })
+      .getByRole('navigation', { name: /^(Hauptnavigation|Main navigation)$/ })
       .getByRole('link', { name: 'regningen', exact: true })
       .click()
   }
@@ -88,7 +98,7 @@ export class LandingRobot {
       this.page.locator('head meta[name="twitter:title"]'),
     ).toHaveAttribute('content', title)
     await expect(this.page.locator('head link[rel="alternate"]')).toHaveCount(
-      indexable ? 2 : 0,
+      indexable ? 3 : 0,
     )
     await expect(
       this.page.locator('head script[type="application/ld+json"]'),

@@ -25,6 +25,7 @@ import {
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
+import * as m from '@/paraglide/messages'
 import { businessProfileSchema, emptyBusinessProfile } from './business-profile'
 import type { BusinessProfileDraft } from './business-profile'
 import {
@@ -58,12 +59,11 @@ function ProfileInput({
   maxLength,
   ...props
 }: Omit<ComponentProps<typeof FormInput>, 'id'> & { id: ProfileFieldName }) {
-  const inputHint = [
-    hint,
-    maxLength ? `Maximal ${maxLength} Zeichen.` : undefined,
-  ]
-    .filter(Boolean)
-    .join(' ')
+  const inputHint = maxLength
+    ? hint
+      ? m.form_hint_with_maximum_characters({ hint, limit: maxLength })
+      : m.form_maximum_characters({ limit: maxLength })
+    : hint
   return (
     <FormInput {...props} maxLength={maxLength} hint={inputHint || undefined} />
   )
@@ -84,7 +84,7 @@ function downloadBackup(contents: string) {
   )
   const link = document.createElement('a')
   link.href = url
-  link.download = 'regningen-unternehmensprofil.json'
+  link.download = m.profile_backup_filename()
   document.body.append(link)
   link.click()
   link.remove()
@@ -99,7 +99,7 @@ export default function BusinessProfilePage() {
   if (!mounted || profileQuery.isPending) {
     return (
       <div className="py-6" aria-live="polite">
-        Unternehmensprofil wird lokal geladen …
+        {m.profile_loading()}
       </div>
     )
   }
@@ -109,18 +109,15 @@ export default function BusinessProfilePage() {
       <AlertDialog defaultOpen>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              Unternehmensprofil nicht verfügbar
-            </AlertDialogTitle>
+            <AlertDialogTitle>{m.profile_unavailable_title()}</AlertDialogTitle>
             <AlertDialogDescription>
-              Der Browser kann das Profil nicht lesen. Prüfe die lokalen
-              Speichereinstellungen und lade die Seite erneut.
+              {m.profile_unavailable_description()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Schließen</AlertDialogCancel>
+            <AlertDialogCancel>{m.profile_close()}</AlertDialogCancel>
             <AlertDialogAction onClick={() => window.location.reload()}>
-              Erneut laden
+              {m.profile_reload()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -173,7 +170,7 @@ function ProfileEditor({
         await saveMutation.mutateAsync(value)
       } catch {
         toast.add({
-          title: 'Profil konnte nicht gespeichert werden.',
+          title: m.profile_save_failed(),
           type: 'error',
         })
         return
@@ -182,7 +179,7 @@ function ProfileEditor({
       if (resetGeneration !== getApplicationResetGeneration()) return
       savedBaseline.current = { ...value }
       updateUnsavedChanges()
-      toast.add({ title: 'Profil gespeichert.', type: 'success' })
+      toast.add({ title: m.profile_saved(), type: 'success' })
     },
   })
 
@@ -229,13 +226,13 @@ function ProfileEditor({
         await createBrowserBusinessProfileRepository().exportProfile()
       downloadBackup(contents)
       toast.add({
-        title: 'Sicherung erstellt.',
-        description: 'Die Datei enthält sensible, unverschlüsselte Daten.',
+        title: m.profile_backup_created(),
+        description: m.profile_backup_sensitive(),
         type: 'success',
       })
     } catch {
       toast.add({
-        title: 'Die Profilsicherung konnte nicht erstellt werden.',
+        title: m.profile_backup_export_failed(),
         type: 'error',
       })
     }
@@ -246,12 +243,12 @@ function ProfileEditor({
       const imported = parseBusinessProfileBackup(await file.text())
       form.reset(imported, { keepDefaultValues: true })
       toast.add({
-        title: 'Profilsicherung geladen. Bitte Profil speichern.',
+        title: m.profile_backup_loaded(),
         type: 'success',
       })
     } catch (error) {
       toast.add({
-        title: 'Die Profilsicherung konnte nicht importiert werden.',
+        title: m.profile_backup_import_failed(),
         description: error instanceof Error ? error.message : undefined,
         type: 'error',
       })
@@ -266,13 +263,13 @@ function ProfileEditor({
       form.reset(emptyBusinessProfile, { keepDefaultValues: true })
       updateUnsavedChanges()
       toast.add({
-        title: 'Profil gelöscht.',
-        description: 'Die Rechnungseingaben bleiben in diesem Tab erhalten.',
+        title: m.profile_deleted(),
+        description: m.profile_deleted_draft_retained(),
         type: 'success',
       })
     } catch {
       toast.add({
-        title: 'Das Profil konnte nicht aus diesem Browser gelöscht werden.',
+        title: m.profile_delete_failed(),
         type: 'error',
       })
     }
@@ -281,22 +278,16 @@ function ProfileEditor({
   return (
     <section className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <h2 className="heading-2">Unternehmensprofil</h2>
+        <h2 className="heading-2">{m.profile_title()}</h2>
         <p className="paragraph-large max-w-2xl text-muted-foreground">
-          Die Angaben werden nur in diesem Browser gespeichert und für deine
-          Rechnungen verwendet. Es gibt kein Benutzerkonto und keine
-          Rechnungsablage.
+          {m.profile_intro()}
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Angaben für den Rechnungsaussteller</CardTitle>
-          <CardDescription>
-            Pflichtangaben sind mit * markiert. Eine deutsche USt-IdNr. hat das
-            Format DE plus neun Ziffern; alternativ kann eine Steuernummer
-            angegeben werden.
-          </CardDescription>
+          <CardTitle>{m.profile_issuer_details()}</CardTitle>
+          <CardDescription>{m.profile_required_guidance()}</CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -326,7 +317,7 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="businessName"
-                          label="Unternehmensname"
+                          label={m.profile_business_name()}
                           value={field.state.value}
                           required
                           maxLength={70}
@@ -347,7 +338,7 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="serviceDescription"
-                          label="Leistungsbeschreibung"
+                          label={m.profile_service_description()}
                           value={field.state.value}
                           maxLength={70}
                           autoComplete="off"
@@ -367,7 +358,7 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="ownerName"
-                          label="Inhaber/in"
+                          label={m.profile_owner_name()}
                           value={field.state.value}
                           required
                           maxLength={70}
@@ -388,7 +379,7 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="street"
-                          label="Straße und Hausnummer"
+                          label={m.profile_street()}
                           value={field.state.value}
                           required
                           maxLength={85}
@@ -409,7 +400,7 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="postalCode"
-                          label="Postleitzahl"
+                          label={m.profile_postal_code()}
                           value={field.state.value}
                           required
                           maxLength={20}
@@ -430,7 +421,7 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="town"
-                          label="Ort"
+                          label={m.profile_town()}
                           value={field.state.value}
                           required
                           maxLength={50}
@@ -449,7 +440,7 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="phone"
-                          label="Telefon"
+                          label={m.profile_phone()}
                           value={field.state.value}
                           type="tel"
                           maxLength={40}
@@ -470,7 +461,7 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="mobile"
-                          label="Mobiltelefon"
+                          label={m.profile_mobile()}
                           value={field.state.value}
                           type="tel"
                           maxLength={40}
@@ -491,12 +482,12 @@ function ProfileEditor({
                       {(field) => (
                         <ProfileInput
                           id="iban"
-                          label="IBAN"
+                          label={m.profile_iban()}
                           value={field.state.value}
                           maxLength={42}
                           required
                           autoComplete="off"
-                          hint="Die IBAN muss gültig sein. Leerzeichen sind erlaubt."
+                          hint={m.profile_iban_hint()}
                           error={
                             field.state.meta.isTouched ? errors.iban : undefined
                           }
@@ -509,7 +500,7 @@ function ProfileEditor({
                     </form.Field>
                     <RequiredAlternativeFields
                       id="profile-tax-identifiers"
-                      label="USt-IdNr. oder Steuernummer"
+                      label={m.profile_tax_identifiers()}
                       error={
                         taxIdentifiersMissing && taxIdentifiersTouched
                           ? errors.vatId
@@ -520,11 +511,11 @@ function ProfileEditor({
                         {(field) => (
                           <ProfileInput
                             id="vatId"
-                            label="USt-IdNr."
+                            label={m.profile_vat_id()}
                             value={field.state.value}
                             maxLength={14}
                             autoComplete="off"
-                            hint="Eine deutsche USt-IdNr. besteht aus DE und neun Ziffern. Alternativ kannst du eine Steuernummer angeben."
+                            hint={m.profile_vat_id_hint()}
                             error={
                               !taxIdentifiersMissing &&
                               field.state.meta.isTouched
@@ -542,10 +533,10 @@ function ProfileEditor({
                         {(field) => (
                           <ProfileInput
                             id="taxNumber"
-                            label="Steuernummer"
+                            label={m.profile_tax_number()}
                             value={field.state.value}
                             autoComplete="off"
-                            hint="Optional, wenn eine USt-IdNr. angegeben wird."
+                            hint={m.profile_tax_number_hint()}
                             maxLength={30}
                             error={
                               field.state.meta.isTouched
@@ -577,7 +568,7 @@ function ProfileEditor({
                     disabled={!valid || saveMutation.isPending}
                   >
                     <IconDeviceFloppy data-icon="inline-start" />
-                    Profil speichern
+                    {m.profile_save()}
                   </Button>
                 )}
               </form.Subscribe>
@@ -586,7 +577,7 @@ function ProfileEditor({
                   to="/invoice"
                   className={buttonVariants({ variant: 'outline' })}
                 >
-                  Rechnung
+                  {m.profile_invoice()}
                 </Link>
               )}
             </div>
@@ -596,11 +587,8 @@ function ProfileEditor({
 
       <Card>
         <CardHeader>
-          <CardTitle>Profil sichern</CardTitle>
-          <CardDescription>
-            Sicherungen sind unverschlüsselte JSON-Dateien mit sensiblen
-            Unternehmensdaten. Bewahre sie geschützt auf.
-          </CardDescription>
+          <CardTitle>{m.profile_backup_title()}</CardTitle>
+          <CardDescription>{m.profile_backup_description()}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <Button
@@ -610,12 +598,12 @@ function ProfileEditor({
             onClick={() => void exportProfile()}
           >
             <IconUpload data-icon="inline-start" />
-            Sicherung exportieren
+            {m.profile_backup_export()}
           </Button>
           <Field className="max-w-sm">
             <FieldLabel htmlFor="profile-import">
               <IconDownload className="size-4" data-icon="inline-start" />
-              Sicherung importieren
+              {m.profile_backup_import()}
             </FieldLabel>
             <Input
               id="profile-import"
@@ -643,10 +631,8 @@ function ProfileEditor({
       {profile && (
         <Card>
           <CardHeader>
-            <CardTitle>Unternehmensprofil löschen</CardTitle>
-            <CardDescription>
-              Bereits heruntergeladene PDFs werden dadurch nicht gelöscht.
-            </CardDescription>
+            <CardTitle>{m.profile_delete_title()}</CardTitle>
+            <CardDescription>{m.profile_delete_description()}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button
@@ -656,7 +642,7 @@ function ProfileEditor({
               onClick={() => setDeleteDialogOpen(true)}
             >
               <IconTrash data-icon="inline-start" />
-              Profil löschen
+              {m.profile_delete()}
             </Button>
           </CardContent>
         </Card>
@@ -670,14 +656,15 @@ function ProfileEditor({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unternehmensprofil ersetzen?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {m.profile_replace_confirmation_title()}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Die importierte Sicherung ersetzt die aktuellen Formulareingaben.
-              Das gespeicherte Profil ändert sich erst mit Profil speichern.
+              {m.profile_replace_confirmation_description()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{m.profile_cancel()}</AlertDialogCancel>
             <AlertDialogAction
               type="button"
               disabled={Boolean(storageError)}
@@ -687,7 +674,7 @@ function ProfileEditor({
               }}
             >
               <IconReplace data-icon="inline-start" />
-              Profil ersetzen
+              {m.profile_replace()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -696,15 +683,15 @@ function ProfileEditor({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unternehmensprofil löschen?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {m.profile_delete_confirmation_title()}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Das gespeicherte Profil und die aktuellen Formulareingaben werden
-              gelöscht. Rechnungseingaben, Einstellungen und heruntergeladene
-              PDFs bleiben erhalten.
+              {m.profile_delete_confirmation_description()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{m.profile_cancel()}</AlertDialogCancel>
             <AlertDialogAction
               type="button"
               variant="destructive"
@@ -715,7 +702,7 @@ function ProfileEditor({
               }}
             >
               <IconTrash data-icon="inline-start" />
-              Profil löschen
+              {m.profile_delete()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -725,25 +712,23 @@ function ProfileEditor({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Profil konnte nicht gespeichert werden
+              {m.profile_storage_failure_title()}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {storageError} Prüfe die Speichereinstellungen des Browsers und
-              versuche erneut zu speichern. Deine Änderungen bleiben in diesem
-              Formular erhalten; du musst die Seite nicht neu laden. Bei Lese-
-              oder Löschproblemen kannst du den Speicher erneut prüfen, ohne
-              Änderungen zu speichern.
+              {m.profile_storage_failure_description({
+                error: storageError ?? '',
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Schließen</AlertDialogCancel>
+            <AlertDialogCancel>{m.profile_close()}</AlertDialogCancel>
             <Button
               type="button"
               variant="outline"
               disabled={retryingStorage || saveMutation.isPending}
               onClick={() => void recoverStorage()}
             >
-              Speicher erneut prüfen
+              {m.profile_storage_retry_read()}
             </Button>
             <form.Subscribe
               selector={(state) =>
@@ -758,7 +743,7 @@ function ProfileEditor({
                     onClick={() => void form.handleSubmit()}
                   >
                     <IconDeviceFloppy data-icon="inline-start" />
-                    Erneut speichern
+                    {m.profile_storage_retry_save()}
                   </AlertDialogAction>
                 )
               }

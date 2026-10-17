@@ -1,0 +1,20 @@
+{
+  "meta_default_description": "Create invoices and download PDFs. Directly in your browser.",
+  "meta_landing_title": "regningen – Create invoices and download PDFs",
+  "meta_landing_description": "Create invoices and download PDFs. Directly in your browser, without an account.",
+  "meta_landing_agent": "Home",
+  "meta_invoice_title": "Create invoice – regningen",
+  "meta_invoice_description": "Enter recipient details and invoice positions, then download an invoice as a PDF.",
+  "meta_profile_title": "Business profile – regningen",
+  "meta_profile_description": "Save business details in this browser and export or import your saved profile.",
+  "meta_settings_title": "Settings – regningen",
+  "meta_settings_description": "Manage language, appearance, installation and notifications for regningen.",
+  "meta_social_alt": "regningen – Create invoices and download PDFs.",
+  "meta_manifest_description": "Create invoices and download PDFs.",
+  "meta_feature_profile": "Reuse a business profile in this browser",
+  "meta_feature_positions": "Up to 16 positions with positive gross amounts in euros; one VAT rate of 7% or 19% per invoice",
+  "meta_feature_pdf": "Create and download a PDF in the browser; one A4 page with limited space",
+  "meta_feature_draft": "Keep a temporary invoice draft for this tab's session; not an invoice archive",
+  "meta_feature_backup": "Export and import the saved business profile as an unencrypted JSON file; save after importing",
+  "meta_feature_offline": "Optionally install and use offline after initial online preparation and the Offline ready indication"
+}

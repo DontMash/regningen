@@ -8,6 +8,8 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:3000',
+    // Existing journeys use German; detection scenarios override this explicitly.
+    locale: 'de-DE',
     trace: 'on-first-retry',
   },
   projects: [

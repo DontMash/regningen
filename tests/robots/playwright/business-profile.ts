@@ -6,18 +6,18 @@ export type BusinessProfileInput = BusinessProfileScenarioInput
 
 export type BusinessProfileField = keyof BusinessProfileInput
 
-const fieldLabels: Record<BusinessProfileField, string> = {
-  businessName: 'Unternehmensname',
-  serviceDescription: 'Leistungsbeschreibung',
-  ownerName: 'Inhaber/in',
-  street: 'Straße und Hausnummer',
-  postalCode: 'Postleitzahl',
-  town: 'Ort',
-  phone: 'Telefon',
-  mobile: 'Mobiltelefon',
-  iban: 'IBAN',
-  vatId: 'USt-IdNr.',
-  taxNumber: 'Steuernummer',
+const fieldLabels: Record<BusinessProfileField, RegExp> = {
+  businessName: /^(Unternehmensname|Business name)$/,
+  serviceDescription: /^(Leistungsbeschreibung|Service description)$/,
+  ownerName: /^(Inhaber\/in|Owner)$/,
+  street: /^(Straße und Hausnummer|Street and house number)$/,
+  postalCode: /^(Postleitzahl|Postal code)$/,
+  town: /^(Ort|Town or city)$/,
+  phone: /^(Telefon|Phone)$/,
+  mobile: /^(Mobiltelefon|Mobile phone)$/,
+  iban: /^IBAN$/,
+  vatId: /^(USt-IdNr\.|VAT ID)$/,
+  taxNumber: /^(Steuernummer|Tax number)$/,
 }
 
 export class BusinessProfileRobot {
@@ -54,10 +54,10 @@ export class BusinessProfileRobot {
     await this.page.keyboard.press('Escape')
   }
 
-  async expectEditorReady() {
+  async expectEditorReady(locale: 'de' | 'en' = 'de') {
     await expect(
       this.page.getByRole('heading', {
-        name: 'Unternehmensprofil',
+        name: locale === 'de' ? 'Unternehmensprofil' : 'Business Profile',
         exact: true,
       }),
     ).toBeVisible()
@@ -90,7 +90,9 @@ export class BusinessProfileRobot {
   }
 
   async saveProfile() {
-    await this.page.getByRole('button', { name: 'Profil speichern' }).click()
+    await this.page
+      .getByRole('button', { name: /^(Profil speichern|Save profile)$/ })
+      .click()
   }
 
   async openIbanGuidance() {
@@ -122,7 +124,7 @@ export class BusinessProfileRobot {
 
   async expectProfileSaved() {
     await expect(
-      this.page.getByText('Profil gespeichert.', { exact: true }).first(),
+      this.page.getByText(/^(Profil gespeichert\.|Profile saved\.)$/).first(),
     ).toBeVisible()
   }
 

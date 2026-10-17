@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import AdaptiveDialog from '@/components/AdaptiveDialog'
 import type { ReleaseEntry } from '@/lib/release-catalog'
+import * as m from '@/paraglide/messages'
 
 interface ReleaseNotesDialogProps {
   open: boolean
@@ -52,13 +53,18 @@ function ReleaseNotesDialog({
     <AdaptiveDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Versionshinweise"
-      footer={<Button onClick={acknowledgeRunningVersion}>Verstanden</Button>}
+      title={m.release_title()}
+      footer={
+        <Button onClick={acknowledgeRunningVersion}>
+          {m.release_acknowledge()}
+        </Button>
+      }
       stickyHeader={
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="paragraph-small text-muted-foreground">
-            Version {selectedVersion}
-            {selectedVersion === currentVersion ? ' · laufend' : ''}
+            {selectedVersion === currentVersion
+              ? m.release_version_current({ version: selectedVersion })
+              : m.release_version_historical({ version: selectedVersion })}
           </p>
           <Select
             value={selectedVersion}
@@ -67,7 +73,7 @@ function ReleaseNotesDialog({
             }}
           >
             <SelectTrigger
-              aria-label="Version auswählen"
+              aria-label={m.release_select_version()}
               className="w-full sm:w-40"
             >
               <SelectValue>v{selectedVersion}</SelectValue>
@@ -76,8 +82,11 @@ function ReleaseNotesDialog({
               <SelectGroup>
                 {releases.map((release) => (
                   <SelectItem key={release.version} value={release.version}>
-                    v{release.version}
-                    {release.version === currentVersion ? ' (laufend)' : ''}
+                    {release.version === currentVersion
+                      ? m.release_option_current({ version: release.version })
+                      : m.release_option_historical({
+                          version: release.version,
+                        })}
                   </SelectItem>
                 ))}
               </SelectGroup>

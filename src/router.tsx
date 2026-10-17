@@ -2,6 +2,7 @@ import { createRouter as createTanStackRouter } from '@tanstack/react-router'
 import { getGlobalStartContext } from '@tanstack/react-start'
 import type { DeploymentPolicy } from './lib/visibility'
 import { routeTree } from './routeTree.gen'
+import { deLocalizeUrl, localizeUrl } from './paraglide/runtime'
 
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
 import { getContext } from './integrations/tanstack-query/root-provider'
@@ -11,6 +12,11 @@ export function getRouter() {
 
   const router = createTanStackRouter({
     routeTree,
+    trailingSlash: 'never',
+    rewrite: {
+      input: ({ url }) => deLocalizeUrl(url),
+      output: ({ url }) => localizeUrl(url),
+    },
     ssr: { nonce: getGlobalStartContext()?.securityNonce },
     context: {
       ...context,

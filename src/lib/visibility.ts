@@ -1,7 +1,11 @@
-export type DeploymentPolicy = {
-  canonicalOrigin: string | null
-  publish: boolean
-}
+import { getLocale } from '@/paraglide/runtime'
+import type { Locale } from '@/paraglide/runtime'
+import * as m from '@/paraglide/messages'
+
+import type { DeploymentPolicy } from './deployment-policy'
+
+export type { DeploymentPolicy } from './deployment-policy'
+export { resolveDeployment } from './deployment-policy'
 
 type SocialImage = {
   path: string
@@ -27,57 +31,28 @@ export type PageVisibility = {
   agentSummary?: string
 }
 
-const defaults = {
-  brand: 'regningen',
-  title: 'regningen',
-  description:
-    'Rechnungen erstellen und als PDF herunterladen. Direkt im Browser.',
-  noIndex: false,
-  language: 'de',
-  socialLocale: 'de_DE',
-  socialImage: {
-    path: '/social-preview.png',
-    alt: 'regningen – Rechnungen erstellen und als PDF herunterladen.',
-    type: 'image/png',
-    width: 1200,
-    height: 630,
-  },
-}
-
-function httpUrl(value: string | undefined) {
-  try {
-    const url = new URL(value ?? '')
-    if (
-      !['http:', 'https:'].includes(url.protocol) ||
-      url.username ||
-      url.password
-    )
-      return null
-    return url
-  } catch {
-    return null
+export function localizedSocialMetadata(locale: Locale) {
+  return {
+    socialLocale: locale === 'en' ? 'en_GB' : 'de_DE',
+    socialImage: {
+      path: locale === 'en' ? '/social-preview-en.png' : '/social-preview.png',
+      alt: m.meta_social_alt({}, { locale }),
+      type: 'image/png',
+      width: 1200,
+      height: 630,
+    },
   }
 }
 
-/** Invalid configuration is represented explicitly and can never publish. */
-export function resolveDeployment(
-  origin: string | undefined,
-  requestOrigin: string | undefined,
-): DeploymentPolicy {
-  const configured = httpUrl(origin)
-  const canonicalOrigin =
-    configured &&
-    /^https?:\/\/[^\s\\/?#]+\/?$/i.test(origin ?? '') &&
-    configured.pathname === '/' &&
-    !configured.search &&
-    !configured.hash
-      ? configured.origin
-      : null
+function visibilityDefaults() {
+  const language = getLocale()
   return {
-    canonicalOrigin,
-    publish:
-      canonicalOrigin !== null &&
-      canonicalOrigin === httpUrl(requestOrigin)?.origin,
+    brand: 'regningen',
+    title: 'regningen',
+    description: m.meta_default_description(),
+    noIndex: false,
+    language,
+    ...localizedSocialMetadata(language),
   }
 }
 
@@ -100,6 +75,7 @@ export function createVisibility(
   policy: DeploymentPolicy,
   declarations: ReadonlyArray<PageVisibility>,
 ) {
+  const defaults = visibilityDefaults()
   const pages = declarations.map((page) => ({ ...defaults, ...page }))
   const eligible = pages.filter((page) => policy.publish && !page.noIndex)
   const url = (page: PageVisibility) =>
@@ -110,7 +86,7 @@ export function createVisibility(
       const indexable = page !== undefined && eligible.includes(page)
       const { title, description, socialImage, socialLocale } = page ?? {
         ...defaults,
-        title: 'Seite nicht verfügbar – regningen',
+        title: m.common_unavailable_title(),
       }
       const canonical = page && policy.canonicalOrigin ? url(page) : null
       const image = policy.canonicalOrigin
@@ -224,7 +200,7 @@ export function createVisibility(
     },
     guide() {
       if (!policy.publish) return null
-      return `# regningen\n\n> A German-language browser-based tool for creating invoices and downloading PDFs.\n\nInvoice content is processed in the browser. Offline use requires initial online preparation.\n\n## Website\n\n${eligible.map((page) => `- [${page.agentTitle ?? page.title}](${url(page)}): ${page.agentSummary ?? page.description}`).join('\n')}\n`
+      return `# regningen\n\n> A German- and English-language browser-based tool for creating invoices and downloading PDFs.\n\nInvoice content is processed in the browser. Offline use requires initial online preparation.\n\n## Website\n\n${eligible.map((page) => `- [${page.agentTitle ?? page.title}](${url(page)}): ${page.agentSummary ?? page.description}`).join('\n')}\n`
     },
   }
 }

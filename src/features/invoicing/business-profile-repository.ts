@@ -1,4 +1,5 @@
 import { z } from '@/lib/validation'
+import * as m from '@/paraglide/messages'
 import { businessProfileDraftSchema } from './business-profile'
 import type { BusinessProfileDraft } from './business-profile'
 import {
@@ -43,9 +44,7 @@ function readBackup(text: string, stored = false) {
   try {
     decoded = JSON.parse(text)
   } catch {
-    throw new InvalidBusinessProfileBackupError(
-      'Die Profilsicherung enthält kein gültiges JSON.',
-    )
+    throw new InvalidBusinessProfileBackupError(m.profile_backup_invalid_json())
   }
 
   const result = (stored ? storedProfileSchema : backupSchema).safeParse(
@@ -53,7 +52,7 @@ function readBackup(text: string, stored = false) {
   )
   if (!result.success) {
     throw new InvalidBusinessProfileBackupError(
-      'Die Profilsicherung hat ein ungültiges Format.',
+      m.profile_backup_invalid_format(),
     )
   }
 
@@ -89,9 +88,7 @@ export function createBusinessProfileRepository(
     ): Promise<void> {
       const normalized = businessProfileDraftSchema.parse(profile)
       if (generation !== getGeneration())
-        throw new Error(
-          'Die Anwendung wurde zurückgesetzt. Lade die Seite neu, bevor du das Profil speicherst.',
-        )
+        throw new Error(m.profile_reset_before_save())
       storage.setItem(
         BUSINESS_PROFILE_STORAGE_KEY,
         JSON.stringify({
@@ -100,24 +97,20 @@ export function createBusinessProfileRepository(
         }),
       )
       if (generation !== getGeneration())
-        throw new Error(
-          'Die Anwendung wurde während des Speicherns zurückgesetzt.',
-        )
+        throw new Error(m.profile_reset_during_save())
     },
 
     async exportProfile(): Promise<string> {
       const profile = loadProfile()
       if (profile === null) {
-        throw new Error('Es gibt noch kein Unternehmensprofil zum Exportieren.')
+        throw new Error(m.profile_backup_missing())
       }
       return JSON.stringify(createBackup(profile), null, 2)
     },
 
     async deleteProfile(generation = getGeneration()): Promise<void> {
       if (generation !== getGeneration())
-        throw new Error(
-          'Die Anwendung wurde zurückgesetzt. Lade die Seite neu, bevor du das Profil löschst.',
-        )
+        throw new Error(m.profile_reset_before_delete())
       storage.removeItem(BUSINESS_PROFILE_STORAGE_KEY)
     },
   }
@@ -125,7 +118,7 @@ export function createBusinessProfileRepository(
 
 export function createBrowserBusinessProfileRepository() {
   if (typeof window === 'undefined') {
-    throw new Error('Unternehmensprofile sind nur im Browser verfügbar.')
+    throw new Error(m.profile_browser_only())
   }
 
   return createBusinessProfileRepository(window.localStorage)

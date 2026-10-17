@@ -23,6 +23,9 @@ export default [
       'playwright-report/**',
       'test-results/**',
       '.vitals/**',
+      'src/paraglide/**',
+      'project.inlang/.lix/**',
+      'project.inlang/cache/**',
     ],
   },
 ]

@@ -12,6 +12,7 @@ import { SecurityDiagnostics } from '../support/playwright/security'
 import { RequestObserver } from '../support/playwright/requests'
 import {
   landingVisibilityExample,
+  landingVisibilityExamples,
   applicationVisibilityExamples,
 } from '../scenarios/visibility'
 
@@ -61,7 +62,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectManifestAssets(deployment.baseUrl, manifest)
 
     // Start on a public document without entering either Settings route.
-    await pageA.goto(`${deployment.baseUrl}/invoice`)
+    await pageA.goto(`${deployment.baseUrl}/de/rechnung`)
     await pwaA.acknowledgeRunningReleaseNotes()
     await shellA.expectApplicationShell()
     await pwaA.expectOfflineReady()
@@ -77,7 +78,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectActiveMetadata(
       pageA,
       'Rechnung erstellen – regningen',
-      `${deployment.baseUrl}/invoice`,
+      `${deployment.baseUrl}/de/rechnung`,
     )
     const offlineManifest = await pwaBrowser.fetchResource(
       pageA,
@@ -86,12 +87,12 @@ test('generated production workers prepare offline routes and prompt for same-ve
     expect(offlineManifest.status).toBe(200)
     expect(JSON.parse(offlineManifest.body)).toEqual(manifest)
     // The public landing document was not visited online in this browser.
-    await pageA.goto(deployment.baseUrl)
+    await pageA.goto(`${deployment.baseUrl}/de`)
     await landingA.expectIntroduction()
     await expectActiveMetadata(
       pageA,
       landingTitle,
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
       true,
     )
     await landingA.expectFeatureHeadings()
@@ -100,7 +101,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectActiveMetadata(
       pageA,
       landingTitle,
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
       true,
     )
     // Client navigation must retain the server-resolved policy without a network.
@@ -109,33 +110,35 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectActiveMetadata(
       pageA,
       'Einstellungen – regningen',
-      `${deployment.baseUrl}/settings`,
+      `${deployment.baseUrl}/de/einstellungen`,
     )
     await pageA.reload()
     await settingsA.expectGeneralPage()
     await settingsA.expectActivePage('Allgemein')
-    await pageA.goto(`${deployment.baseUrl}/settings/profile/`)
+    await pageA.goto(`${deployment.baseUrl}/de/einstellungen/profil/`)
     await profileA.expectEditorReady()
     await expectActiveMetadata(
       pageA,
       'Unternehmensprofil – regningen',
-      `${deployment.baseUrl}/settings/profile`,
+      `${deployment.baseUrl}/de/einstellungen/profil`,
     )
     await pageA.reload()
     await profileA.expectEditorReady()
     await expectActiveMetadata(
       pageA,
       'Unternehmensprofil – regningen',
-      `${deployment.baseUrl}/settings/profile`,
+      `${deployment.baseUrl}/de/einstellungen/profil`,
     )
     await settingsA.expectActivePage('Profil')
     const profile = createBusinessProfileScenario()
     await profileA.configureBusinessProfile(profile)
     await profileA.expectProfileSaved()
-    await expect(pageA).toHaveURL(`${deployment.baseUrl}/settings/profile/`)
+    await expect(pageA).toHaveURL(
+      `${deployment.baseUrl}/de/einstellungen/profil`,
+    )
     await shellA.navigateToInvoice()
 
-    await pageA.goto(`${deployment.baseUrl}/invoice/`)
+    await pageA.goto(`${deployment.baseUrl}/de/rechnung/`)
     await invoiceA.expectReady()
     const offlineInvoice = createInvoiceScenario({
       number: 'draft-tab-a',
@@ -171,7 +174,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
       amount: 'not-money',
     })
 
-    await pageB.goto(`${deployment.baseUrl}/invoice`)
+    await pageB.goto(`${deployment.baseUrl}/de/rechnung`)
     await invoiceB.expectReady()
     const independentDraft = createInvoiceScenario({
       number: 'draft-tab-b',
@@ -179,7 +182,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     })
     await invoiceB.enterInvoiceNumber(independentDraft.input.number)
     await invoiceB.enterSubject(independentDraft.input.subject)
-    await pageB.goto(`${deployment.baseUrl}/settings/profile`)
+    await pageB.goto(`${deployment.baseUrl}/de/einstellungen/profil`)
     await profileB.expectEditorReady()
 
     await shellA.navigateToSettings()
@@ -187,13 +190,13 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await pwaA.expectNotificationsEnabled()
     await pwaBrowser.createUnrelatedOriginCache(pageA)
 
-    await pageA.goto(deployment.baseUrl)
+    await pageA.goto(`${deployment.baseUrl}/de`)
     await shellA.expectApplicationShell()
     await landingA.expectIntroduction()
     await expectActiveMetadata(
       pageA,
       landingTitle,
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
       true,
     )
     await shellA.navigateToInvoice()
@@ -201,10 +204,10 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectActiveMetadata(
       pageA,
       'Rechnung erstellen – regningen',
-      `${deployment.baseUrl}/invoice`,
+      `${deployment.baseUrl}/de/rechnung`,
     )
     await invoiceA.expectInvoiceNumber('draft-tab-a')
-    await pageA.goto(`${deployment.baseUrl}/settings/profile/`)
+    await pageA.goto(`${deployment.baseUrl}/de/einstellungen/profil/`)
     await profileA.expectEditorReady()
     await profileA.expectFieldValue('businessName', profile.businessName)
     await shellA.navigateToInvoice()
@@ -244,7 +247,9 @@ test('generated production workers prepare offline routes and prompt for same-ve
       .notifications[0]
     expect(notification.title).toBe('PDF wurde erstellt')
     expect(notification.body).toContain('Rechnung_draft-tab-a_')
-    expect(notification.body).toContain('Du findest es in den Downloads.')
+    expect(notification.body).toContain(
+      'Sie finden die Datei in den Downloads.',
+    )
     await shellA.navigateToSettings()
     await pwaA.expectNotificationsEnabled()
     await settingsA.openProfile()
@@ -260,7 +265,9 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await pwaA.postponeUpdate()
     await pwaA.expectUpdateClosed()
     await pwaA.expectRunningVersion(releaseA)
-    await expect(pageA).toHaveURL(`${deployment.baseUrl}/settings/profile`)
+    await expect(pageA).toHaveURL(
+      `${deployment.baseUrl}/de/einstellungen/profil`,
+    )
     await pwaA.reopenUpdate()
     await pwaA.applyUpdate()
     await profileA.expectUnsavedChangesWarning()
@@ -282,7 +289,9 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await profileA.discardUnsavedChanges()
     await pageAReloaded
 
-    await expect(pageA).toHaveURL(`${deployment.baseUrl}/settings/profile`)
+    await expect(pageA).toHaveURL(
+      `${deployment.baseUrl}/de/einstellungen/profil`,
+    )
     await profileA.expectFieldValue('businessName', profile.businessName)
     await shellA.navigateToInvoice()
     await invoiceA.expectReady()
@@ -299,7 +308,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectActiveMetadata(
       pageA,
       updatedLandingTitle,
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
       true,
     )
     expect(inspectHtml(await pageA.content()).mainText).toContain(
@@ -312,7 +321,9 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await profileB.expectUnsavedChangesWarning()
     await profileB.keepUnsavedChanges()
     await profileB.expectFieldValue('businessName', 'Unsaved update in tab B')
-    await expect(pageB).toHaveURL(`${deployment.baseUrl}/settings/profile`)
+    await expect(pageB).toHaveURL(
+      `${deployment.baseUrl}/de/einstellungen/profil`,
+    )
     await pwaB.reopenUpdate()
     const pageBReloaded = pageB.waitForEvent(
       'framenavigated',
@@ -322,7 +333,9 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await profileB.expectUnsavedChangesWarning()
     await profileB.discardUnsavedChanges()
     await pageBReloaded
-    await expect(pageB).toHaveURL(`${deployment.baseUrl}/settings/profile`)
+    await expect(pageB).toHaveURL(
+      `${deployment.baseUrl}/de/einstellungen/profil`,
+    )
     await profileB.expectFieldValue('businessName', profile.businessName)
     await shellB.navigateToInvoice()
     await invoiceB.expectInvoiceNumber('draft-tab-b')
@@ -340,8 +353,10 @@ test('generated production workers prepare offline routes and prompt for same-ve
     )
     expect(workerA).not.toBe(workerB)
     for (const documentRevision of [
-      /url:"\/",revision:"([^"]+)"/,
-      /url:"\/invoice",revision:"([^"]+)"/,
+      /url:"\/de",revision:"([^"]+)"/,
+      /url:"\/de\/rechnung",revision:"([^"]+)"/,
+      /url:"\/en",revision:"([^"]+)"/,
+      /url:"\/en\/invoice",revision:"([^"]+)"/,
     ]) {
       const revisionA = documentRevision.exec(workerA)?.[1]
       const revisionB = documentRevision.exec(workerB)?.[1]
@@ -349,18 +364,18 @@ test('generated production workers prepare offline routes and prompt for same-ve
       expect(revisionB).toBeTruthy()
       expect(revisionA).not.toBe(revisionB)
     }
-    expect(workerA).toContain('/invoice')
-    expect(workerB).toContain('/settings/profile')
-    expect(workerB).toContain('/settings')
+    expect(workerA).toContain('/de/rechnung')
+    expect(workerB).toContain('/de/einstellungen/profil')
+    expect(workerB).toContain('/en/settings/profile')
     expect(workerB).not.toContain('/business-profile')
 
     await pwaBrowser.setOffline(true)
-    await pageA.goto(deployment.baseUrl)
+    await pageA.goto(`${deployment.baseUrl}/de`)
     await landingA.expectIntroduction()
     await expectActiveMetadata(
       pageA,
       updatedLandingTitle,
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
       true,
     )
     expect(inspectHtml(await pageA.content()).mainText).toContain(
@@ -370,7 +385,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectActiveMetadata(
       pageA,
       updatedLandingTitle,
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
       true,
     )
     expect(inspectHtml(await pageA.content()).mainText).toContain(
@@ -381,7 +396,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await expectActiveMetadata(
       pageA,
       'Rechnung erstellen – regningen',
-      `${deployment.baseUrl}/invoice`,
+      `${deployment.baseUrl}/de/rechnung`,
     )
     await pwaA.expectReleaseBInvoiceAsset()
     await invoiceA.expectPdfEnabled()
@@ -466,15 +481,15 @@ test('a configuration-only rebuild refreshes offline visibility through the exis
       await readdir(deployment.artifactPath('b', 'public/assets')),
     ).toEqual(await readdir(deployment.artifactPath('a', 'public/assets')))
     await deployment.deploy('a')
-    await page.goto(deployment.baseUrl)
+    await page.goto(`${deployment.baseUrl}/de`)
     await pwa.acknowledgeRunningReleaseNotes()
     await pwa.expectOfflineReady()
-    const heldPage = await controls.openPage(deployment.baseUrl)
+    const heldPage = await controls.openPage(`${deployment.baseUrl}/de`)
     await robotsForPage(heldPage).landing.expectIntroduction()
     await expectActiveMetadata(
       page,
       landingTitle,
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
       true,
     )
 
@@ -488,7 +503,7 @@ test('a configuration-only rebuild refreshes offline visibility through the exis
     await expectActiveMetadata(
       page,
       landingTitle,
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
       true,
     )
 
@@ -503,7 +518,148 @@ test('a configuration-only rebuild refreshes offline visibility through the exis
     await controls.setOffline(true)
     await page.reload()
     await landing.expectIntroduction()
-    await expectActiveMetadata(page, landingTitle, `${updatedOrigin}/`, false)
+    await expectActiveMetadata(page, landingTitle, `${updatedOrigin}/de`, false)
+  } finally {
+    await controls.dispose()
+    await deployment.dispose()
+  }
+})
+
+test('one prepared worker opens both languages offline and exports a real English PDF without translation services', async ({
+  browser,
+  robotsForPage,
+}) => {
+  test.setTimeout(240_000)
+  const deployment = await PwaDeployment.create({ updates: false })
+  const controls = await PwaBrowserControls.create(browser)
+  const page = await controls.openPage()
+  const {
+    pwa,
+    language,
+    businessProfile,
+    invoice,
+    appShell,
+    settings,
+    landing,
+  } = robotsForPage(page)
+  const requests = new RequestObserver(page).observeRequests()
+  try {
+    await deployment.deploy('a')
+    await page.goto(`${deployment.baseUrl}/de/rechnung`)
+    await pwa.acknowledgeRunningReleaseNotes()
+    await pwa.expectOfflineReady()
+    const manifest = await readManifest(deployment.baseUrl)
+    await expectGeneratedWorker(deployment.baseUrl, deployment, 'a')
+    await controls.setOffline(true)
+    // These seven documents have not been visited online. Preparation, not
+    // incidental navigation caching, must make direct entry and reload work.
+    for (const [path, locale] of [
+      ['/de', 'de'],
+      ['/de/einstellungen', 'de'],
+      ['/de/einstellungen/profil', 'de'],
+      ['/en', 'en'],
+      ['/en/invoice', 'en'],
+      ['/en/settings', 'en'],
+      ['/en/settings/profile', 'en'],
+    ] as const) {
+      await page.goto(`${deployment.baseUrl}${path}/`)
+      await language.expectInterfaceLanguage(locale)
+      await expect(page).toHaveURL(`${deployment.baseUrl}${path}`)
+      await page.reload()
+      await language.expectInterfaceLanguage(locale)
+      const document = inspectHtml(await page.content())
+      expect(document.canonicals).toEqual([`${deployment.baseUrl}${path}`])
+      const expected = [
+        ...landingVisibilityExamples,
+        ...applicationVisibilityExamples,
+      ].find((entry) => entry.path === path)!
+      expect(document.title).toBe(expected.title)
+      expect(document.metas.description).toEqual([expected.description])
+      expect(document.metas.robots).toEqual([
+        path === '/de' || path === '/en' ? 'index, follow' : 'noindex, follow',
+      ])
+      if (path === '/de' || path === '/en')
+        await landing.expectIntroduction({ locale })
+      if (path === '/en/invoice') await invoice.expectProfileSetupPrompt('en')
+      if (path.endsWith('/profile'))
+        await businessProfile.expectEditorReady('en')
+      if (path === '/en/settings') await settings.expectGeneralPage('en')
+    }
+    await page.goto(`${deployment.baseUrl}/de/einstellungen/profil`)
+    await businessProfile.configureBusinessProfile(
+      createBusinessProfileScenario(),
+    )
+    await businessProfile.expectProfileSaved()
+    await appShell.navigateToInvoice()
+    const scenario = createInvoiceScenario()
+    await invoice.enterInvoice(scenario.input)
+    await language.changeInterfaceLanguage('en')
+    await language.expectInterfaceLanguage('en')
+    await invoice.expectReady('en')
+    const artifacts = new ArtifactSupport(page)
+    const download = await artifacts.captureDownload(() => invoice.createPdf())
+    expect(download.suggestedFilename()).toBe('Invoice_2026-001_2026-06-15.pdf')
+    const pdf = await artifacts.readPdf(download)
+    expect(pdf.pageCount).toBe(1)
+    for (const text of [
+      'Invoice number 2026-001',
+      'Date: 15/06/2026',
+      'Nordlicht Catering',
+      'Max Mustermann',
+      'Catering für die Firmenfeier',
+      'Net:',
+      '€146.73',
+      '7% VAT:',
+      '€10.27',
+      'Gross:',
+      '€157.00',
+    ])
+      expect(pdf.text).toContain(text)
+    expect(pdf.text).not.toContain('Rechnungsnummer')
+    await invoice.expectPdfCreated()
+    await page.goto(`${deployment.baseUrl}/en/settings`)
+    await language.expectPreferences('en', 'auto')
+    await language.chooseInvoiceLanguage('de')
+    await page.reload()
+    await language.expectPreferences('en', 'de')
+    await page.goto(`${deployment.baseUrl}/en/invoice`)
+    const germanDownload = await artifacts.captureDownload(() =>
+      invoice.createPdf(),
+    )
+    expect(germanDownload.suggestedFilename()).toBe(
+      'Rechnung_2026-001_2026-06-15.pdf',
+    )
+    const germanPdf = await artifacts.readPdf(germanDownload)
+    for (const text of scenario.expected.pdfText)
+      expect(germanPdf.text).toContain(text)
+    const offlineManifest = await controls.fetchResource(
+      page,
+      '/manifest.webmanifest',
+    )
+    expect(JSON.parse(offlineManifest.body)).toEqual(manifest)
+    expect(manifest.id).toBe('/')
+    for (const locale of ['de', 'en']) {
+      const localizedManifest = await controls.fetchResource(
+        page,
+        `/manifest-${locale}.webmanifest`,
+      )
+      expect(localizedManifest.status).toBe(200)
+      expect(JSON.parse(localizedManifest.body)).toMatchObject({
+        id: '/',
+        start_url: '/',
+        scope: '/',
+        lang: locale,
+        icons: manifest.icons,
+      })
+    }
+    // Installed/unprefixed launch must honor the remembered English UI offline.
+    await page.goto(deployment.baseUrl)
+    await language.expectInterfaceLanguage('en')
+    await expect(page).toHaveURL(`${deployment.baseUrl}/en`)
+    await page.reload()
+    await landing.expectIntroduction({ locale: 'en' })
+    for (const request of requests.snapshot())
+      expect(new URL(request.url).origin).toBe(deployment.baseUrl)
   } finally {
     await controls.dispose()
     await deployment.dispose()
@@ -514,6 +670,7 @@ async function readManifest(baseUrl: string) {
   const response = await fetch(`${baseUrl}/manifest.webmanifest`)
   expect(response.ok).toBe(true)
   return (await response.json()) as {
+    id: string
     name: string
     lang: string
     start_url: string
@@ -534,7 +691,16 @@ async function expectGeneratedWorker(
   )
   const body = await response.text()
   expect(body).toContain('precacheAndRoute')
-  for (const route of ['/', '/invoice', '/settings', '/settings/profile']) {
+  for (const route of [
+    '/de',
+    '/de/rechnung',
+    '/de/einstellungen',
+    '/de/einstellungen/profil',
+    '/en',
+    '/en/invoice',
+    '/en/settings',
+    '/en/settings/profile',
+  ]) {
     expect(body).toContain(route)
   }
   const artifact = await readFile(
@@ -620,10 +786,11 @@ async function expectActiveMetadata(
     expect(document.alternates).toEqual(
       expect.arrayContaining([
         { language: 'de', href: canonical },
+        { language: 'en', href: `${new URL(canonical).origin}/en` },
         { language: 'x-default', href: canonical },
       ]),
     )
-    expect(document.alternates).toHaveLength(2)
+    expect(document.alternates).toHaveLength(3)
     expect(document.structuredData).toHaveLength(1)
     expect(document.structuredData[0]).toMatchObject({
       '@graph': expect.arrayContaining([

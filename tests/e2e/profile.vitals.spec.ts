@@ -7,14 +7,14 @@ test('Business Profile editing with a saved fictional profile', async ({
 }) => {
   const profile = createBusinessProfileScenario()
   await vitals.audit({
-    path: '/settings/profile',
+    path: '/de/einstellungen/profil',
     budgets: budgets.profile,
     prepare: async ({ page, releaseNotes, settings, businessProfile }) => {
-      await page.goto('/')
+      await page.goto('/de')
       await releaseNotes.expectReleaseNotesDialog()
       await releaseNotes.acknowledgeReleaseNotes()
       await releaseNotes.expectReleaseNotesClosed()
-      await page.goto('/settings')
+      await page.goto('/de/einstellungen')
       await settings.selectAppearance('Hell')
       await settings.openProfile()
       await businessProfile.expectEditorReady()

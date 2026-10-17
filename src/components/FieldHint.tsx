@@ -1,5 +1,6 @@
 import { IconInfoCircle } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
+import * as m from '@/paraglide/messages'
 import {
   Popover,
   PopoverContent,
@@ -23,7 +24,7 @@ export function FieldHint({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={`Hinweis zu ${label}`}
+            aria-label={m.shell_field_hint({ label })}
             tabIndex={-1}
           />
         }

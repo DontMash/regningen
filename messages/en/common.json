@@ -1,0 +1,19 @@
+{
+  "common_close": "Close",
+  "common_toast_close": "Dismiss notification",
+  "common_toast_region": "Notifications",
+  "common_language_change": "Change language",
+  "common_interface_language": "Interface language",
+  "common_invoice_language": "Invoice language",
+  "common_follow_interface": "Follow interface language",
+  "common_language_save_failed": "The language preference could not be saved.",
+  "common_switch_failed": "The language could not be changed. Please check session storage and try again.",
+  "common_unavailable": "Page unavailable",
+  "common_not_found": "Page not found",
+  "common_unavailable_title": "Page unavailable – regningen",
+  "common_home": "Back to home",
+  "common_invalid": "Please check this input.",
+  "common_invalid_type": "Please enter a valid value.",
+  "common_too_long": "Please enter no more than {maximum} characters.",
+  "common_too_short": "Please enter at least {minimum} characters."
+}

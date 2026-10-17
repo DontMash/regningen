@@ -1,3 +1,7 @@
+import { useEffect } from 'react'
+import { baseLocale, cookieName, getLocale, locales } from '@/paraglide/runtime'
+import * as m from '@/paraglide/messages'
+import { initializeInvoiceLanguagePreference } from '@/lib/invoice-language'
 import {
   HeadContent,
   Link,
@@ -31,6 +35,11 @@ interface MyRouterContext {
 // Keep this pre-hydration bootstrap aligned with the shared theme runtime.
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;}catch(e){}})();`
 
+// The worker's cached unprefixed entry cannot negotiate a cookie on the server.
+// Canonicalize cached slash variants before parsing content; only '/' needs
+// language negotiation. Explicit locale URLs retain their chosen language.
+const LANGUAGE_ENTRY_SCRIPT = `(function(){var path=location.pathname;while(path.length>1&&path.endsWith('/'))path=path.slice(0,-1);if(path!==location.pathname){location.replace(path+location.search+location.hash);return}if(path!=='/')return;var supported=${JSON.stringify(locales)},fallback=${JSON.stringify(baseLocale)},name=${JSON.stringify(cookieName)}+'=';var saved=document.cookie.split(';').map(function(v){return v.trim()}).find(function(v){return v.indexOf(name)===0});var locale=saved?saved.slice(name.length):'';if(supported.indexOf(locale)<0){locale=(navigator.languages||[navigator.language]).map(function(v){return v.toLowerCase().split('-')[0]}).find(function(v){return supported.indexOf(v)>=0})||fallback}location.replace('/'+locale+location.search+location.hash)})();`
+
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   beforeLoad: ({ serverContext, context }) => ({
     visibilityPolicy:
@@ -46,7 +55,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Seite nicht verfügbar – regningen',
+        title: m.common_unavailable_title(),
       },
       {
         name: 'robots',
@@ -72,7 +81,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     links: [
       {
         rel: 'manifest',
-        href: '/manifest.webmanifest',
+        href: `/manifest-${getLocale()}.webmanifest`,
       },
       ...pwaAssetsHead.links,
       {
@@ -87,8 +96,8 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     ],
   }),
   shellComponent: RootDocument,
-  notFoundComponent: () => <UnavailablePage title="Seite nicht gefunden" />,
-  errorComponent: () => <UnavailablePage title="Seite nicht verfügbar" />,
+  notFoundComponent: () => <UnavailablePage title={m.common_not_found()} />,
+  errorComponent: () => <UnavailablePage title={m.common_unavailable()} />,
 })
 
 function UnavailablePage({ title }: { title: string }) {
@@ -99,7 +108,7 @@ function UnavailablePage({ title }: { title: string }) {
         to="/"
         className="paragraph text-primary underline underline-offset-4"
       >
-        Zur Startseite
+        {m.common_home()}
       </Link>
     </div>
   )
@@ -107,9 +116,14 @@ function UnavailablePage({ title }: { title: string }) {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const nonce = useRouter().options.ssr?.nonce
+  useEffect(initializeInvoiceLanguagePreference, [])
   return (
-    <html lang="de" suppressHydrationWarning>
+    <html lang={getLocale()} suppressHydrationWarning>
       <head>
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: LANGUAGE_ENTRY_SCRIPT }}
+        />
         <script
           nonce={nonce}
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
@@ -130,7 +144,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               <Toaster />
               <TanStackDevtools
                 config={{
-                  position: 'bottom-right',
+                  position: 'bottom-left',
                 }}
                 plugins={[
                   {

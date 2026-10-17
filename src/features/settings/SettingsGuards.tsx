@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import * as m from '@/paraglide/messages'
 import { useBlocker } from '@tanstack/react-router'
 import { useSelector } from '@tanstack/react-store'
 import {
@@ -59,21 +60,18 @@ export default function SettingsGuards() {
         }
       >
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            Ungespeicherte Änderungen verwerfen?
-          </AlertDialogTitle>
+          <AlertDialogTitle>{m.settings_discard_title()}</AlertDialogTitle>
           <AlertDialogDescription>
-            Deine Änderungen am Unternehmensprofil wurden noch nicht
-            gespeichert. Wenn du fortfährst, gehen diese Änderungen verloren.
+            {m.settings_discard_description()}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Bleiben</AlertDialogCancel>
+          <AlertDialogCancel>{m.settings_stay()}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             onClick={() => resolveProfileDiscardConfirmation(true)}
           >
-            Änderungen verwerfen
+            {m.settings_discard()}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

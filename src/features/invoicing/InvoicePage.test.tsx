@@ -5,6 +5,11 @@ import { cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import InvoicePage from './InvoicePage'
+import {
+  resetInvoiceLanguage,
+  setInvoiceLanguage,
+} from '@/lib/invoice-language'
+import { setLocale } from '@/paraglide/runtime'
 import { InvoiceRobot } from '../../../tests/robots/vitest/invoice'
 import { createBusinessProfileScenario } from '../../../tests/scenarios/business-profile'
 import { createInvoiceScenario } from '../../../tests/scenarios/invoice'
@@ -27,6 +32,8 @@ beforeEach(async () => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   window.localStorage.clear()
   window.sessionStorage.clear()
+  resetInvoiceLanguage()
+  setLocale('de', { reload: false })
   invoiceDraftStore.setState(() => createEmptyInvoiceDraft())
   invoicePositionDraftStore.setState(() => ({ description: '', amount: '' }))
   businessProfileStorageStatus.setState(() => ({ error: null }))
@@ -43,6 +50,53 @@ afterEach(async () => {
 })
 
 describe('invoice editor', () => {
+  it('renders English editor text, tax wording and day-first dates from the interface locale', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    saveBusinessProfile(createBusinessProfileScenario())
+    invoiceDraftStore.setState((current) => ({
+      ...current,
+      date: '2026-06-15',
+    }))
+    setLocale('en', { reload: false })
+    await renderAtRoute('/invoice', InvoicePage)
+
+    await invoice.expectMessage('Create an invoice')
+    await invoice.expectMessage('Invoice details')
+    await invoice.expectMessage('Recipient')
+    await invoice.expectMessage('VAT rate')
+    await invoice.expectMessage('7% VAT')
+    await invoice.expectMessage('15/06/2026')
+    invoice.expectMessageAbsent('Rechnung erstellen')
+  })
+
+  it.each([
+    { locale: 'de', counts: ['0 Positionen', '1 Position', '2 Positionen'] },
+    { locale: 'en', counts: ['0 positions', '1 position', '2 positions'] },
+  ] as const)(
+    'announces the submitted position count as positions are added and removed in $locale',
+    async ({ locale, counts }) => {
+      const invoice = new InvoiceRobot(userEvent.setup())
+      const position = createInvoiceScenario({
+        positions: [{ description: 'Catering', amount: '10' }],
+      }).input.positions[0]
+      saveBusinessProfile(createBusinessProfileScenario())
+      setLocale(locale, { reload: false })
+      await renderAtRoute('/invoice', InvoicePage)
+
+      await invoice.expectPositionCount(counts[0])
+      await invoice.enterNewPosition(position)
+      await invoice.expectPositionCount(counts[0])
+      await invoice.submitNewPosition()
+      await invoice.expectPositionCount(counts[1])
+      await invoice.addPosition(position)
+      await invoice.expectPositionCount(counts[2])
+      await invoice.removePosition(1)
+      await invoice.expectPositionCount(counts[1])
+      await invoice.removePosition(1)
+      await invoice.expectPositionCount(counts[0])
+    },
+  )
+
   it('shows profile setup before any invoice data exists', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())
     await renderAtRoute('/invoice', InvoicePage)
@@ -116,6 +170,46 @@ describe('invoice editor', () => {
     await invoice.expectMessage('Einen positiven Bruttopreis eingeben.')
   })
 
+  it('displays valid source-locale amounts in German without reinterpreting unfinished entry', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    saveBusinessProfile(createBusinessProfileScenario())
+    invoiceDraftStore.setState((current) => ({
+      ...current,
+      items: [
+        {
+          description: 'English thousands',
+          amount: '1,234',
+          amountLocale: 'en',
+        },
+      ],
+    }))
+    invoicePositionDraftStore.setState(() => ({
+      description: 'Unfinished English amount',
+      amount: '1.',
+      amountLocale: 'en',
+    }))
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+
+    invoice.expectPositionValues(1, { amount: '1.234,00' })
+    invoice.expectTotals({ gross: '1.234,00 €' })
+    invoice.expectNewPositionValues({ amount: '1.' })
+    await invoice.expectMessage(
+      'Diese Eingabe verwendet englische Trennzeichen (z. B. 1,234.56). Zum Wechseln in das aktuelle Zahlenformat das Feld leeren und den Betrag neu eingeben.',
+    )
+    expect(invoiceDraftStore.state.items[0]).toMatchObject({
+      amount: '1,234',
+      amountLocale: 'en',
+    })
+
+    await invoice.editPosition(1, { amount: '12,50' })
+    invoice.expectTotals({ gross: '12,50 €' })
+    expect(invoiceDraftStore.state.items[0]).toMatchObject({
+      amount: '12,50',
+      amountLocale: 'de',
+    })
+  })
+
   it('validates new positions only on their own submission and resets feedback after adding', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())
     const position = createInvoiceScenario().input.positions[0]
@@ -176,6 +270,21 @@ describe('invoice editor', () => {
     invoice.expectPositionRequired(1)
   })
 
+  it('retains and displays an invalid calendar day without normalizing it into a different date', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    saveBusinessProfile(createBusinessProfileScenario())
+    invoiceDraftStore.setState((current) => ({
+      ...current,
+      date: '2026-02-29',
+    }))
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+
+    invoice.expectDateLabel('2026-02-29')
+    expect(invoiceDraftStore.state.date).toBe('2026-02-29')
+    await invoice.expectPdfDisabled()
+  })
+
   it('selects the requested calendar date and preserves invoice data when reset is cancelled', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())
     const { input } = createInvoiceScenario({ number: 'keep-me' })
@@ -200,48 +309,55 @@ describe('invoice editor', () => {
     invoice.expectDateLabel('15.06.2026')
   })
 
-  it('initiates a PDF download with a sanitized filename and the invoice date', async () => {
-    const invoice = new InvoiceRobot(userEvent.setup())
-    const { input } = createInvoiceScenario({
-      number: '2026/001',
-      recipient: { company: 'Muster GmbH', name: '' },
-    })
-    saveBusinessProfile(createBusinessProfileScenario())
-    invoiceDraftStore.setState((current) => ({
-      ...current,
-      date: input.date,
-    }))
-    const createObjectURL = vi.fn(() => 'blob:invoice')
-    vi.stubGlobal(
-      'URL',
-      Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }),
-    )
-    const downloads: Array<{ filename: string; href: string }> = []
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
-      this: HTMLAnchorElement,
-    ) {
-      downloads.push({ filename: this.download, href: this.href })
-    })
-    await renderAtRoute('/invoice', InvoicePage)
-    await invoice.expectReady()
+  it.each([
+    { locale: 'de', filename: 'Rechnung_2026_001_2026-06-15.pdf' },
+    { locale: 'en', filename: 'Invoice_2026_001_2026-06-15.pdf' },
+  ] as const)(
+    'initiates a $locale PDF download with a sanitized filename while feedback remains German',
+    async ({ locale, filename }) => {
+      const invoice = new InvoiceRobot(userEvent.setup())
+      const { input } = createInvoiceScenario({
+        number: '2026/001',
+        recipient: { company: 'Muster GmbH', name: '' },
+      })
+      setInvoiceLanguage(locale)
+      saveBusinessProfile(createBusinessProfileScenario())
+      invoiceDraftStore.setState((current) => ({
+        ...current,
+        date: input.date,
+      }))
+      const createObjectURL = vi.fn(() => 'blob:invoice')
+      vi.stubGlobal(
+        'URL',
+        Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }),
+      )
+      const downloads: Array<{ filename: string; href: string }> = []
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(
+        function (this: HTMLAnchorElement) {
+          downloads.push({ filename: this.download, href: this.href })
+        },
+      )
+      await renderAtRoute('/invoice', InvoicePage)
+      await invoice.expectReady()
 
-    await invoice.enterInvoiceNumber(input.number)
-    await invoice.enterRecipient(input.recipient)
-    await invoice.addPosition(input.positions[0])
-    invoice.expectPdfEnabled()
+      await invoice.enterInvoiceNumber(input.number)
+      await invoice.enterRecipient(input.recipient)
+      await invoice.addPosition(input.positions[0])
+      invoice.expectPdfEnabled()
 
-    await invoice.createPdf()
-    await invoice.expectMessage('PDF wurde erstellt')
-    expect(downloads).toEqual([
-      {
-        filename: 'Rechnung_2026_001_2026-06-15.pdf',
-        href: 'blob:invoice',
-      },
-    ])
-    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
-    expect(invoiceDraftStore.state.number).toBe(input.number)
-    invoice.expectMessageAbsent('PDF konnte nicht erstellt werden')
-  })
+      await invoice.createPdf()
+      await invoice.expectMessage('PDF wurde erstellt')
+      expect(downloads).toEqual([
+        {
+          filename,
+          href: 'blob:invoice',
+        },
+      ])
+      expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+      expect(invoiceDraftStore.state.number).toBe(input.number)
+      invoice.expectMessageAbsent('PDF konnte nicht erstellt werden')
+    },
+  )
 
   it('reports a browser download failure without claiming PDF creation succeeded', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())

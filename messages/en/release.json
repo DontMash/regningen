@@ -1,0 +1,11 @@
+{
+  "release_title": "Release notes",
+  "release_acknowledge": "Understood",
+  "release_version_current": "Version {version} · current",
+  "release_version_historical": "Version {version}",
+  "release_select_version": "Select version",
+  "release_option_current": "v{version} (current)",
+  "release_option_historical": "v{version}",
+  "release_acknowledgment_error": "Read release notes could not be saved.",
+  "release_acknowledgment_error_description": "The release notes may appear again the next time you open the application."
+}

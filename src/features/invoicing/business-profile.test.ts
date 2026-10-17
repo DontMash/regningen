@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { getLocale, overwriteGetLocale } from '@/paraglide/runtime'
 import { businessProfileSchema, isValidIban } from './business-profile'
+
+const originalGetLocale = getLocale
+afterEach(() => overwriteGetLocale(originalGetLocale))
 
 const completeProfile = {
   businessName: 'Beispielbetrieb',
@@ -16,6 +20,45 @@ const completeProfile = {
 }
 
 describe('business profile validation', () => {
+  it('validates the business name in the active language without recreating the schema', () => {
+    overwriteGetLocale(() => 'en')
+    const english = businessProfileSchema.safeParse({
+      ...completeProfile,
+      businessName: '',
+    })
+    expect(english.error?.issues[0]?.message).toBe('Business name is required.')
+
+    overwriteGetLocale(() => 'de')
+    const german = businessProfileSchema.safeParse({
+      ...completeProfile,
+      businessName: '',
+    })
+    expect(german.error?.issues[0]?.message).toBe('Unternehmensname fehlt.')
+  })
+
+  it.each([
+    ['ownerName', '', 'Owner name is required.'],
+    ['street', '', 'Street and house number are required.'],
+    ['postalCode', '', 'Postal code is required.'],
+    ['town', '', 'Town or city is required.'],
+    ['iban', 'invalid', 'Please enter a valid IBAN.'],
+    ['vatId', '', 'Provide a VAT ID or tax number.'],
+    [
+      'vatId',
+      'DE123',
+      'A German VAT ID starts with DE followed by nine digits.',
+    ],
+  ])('explains invalid %s in English', (field, value, message) => {
+    overwriteGetLocale(() => 'en')
+    const result = businessProfileSchema.safeParse({
+      ...completeProfile,
+      [field]: value,
+    })
+    expect(result.error?.issues).toEqual([
+      expect.objectContaining({ path: [field], message }),
+    ])
+  })
+
   it('accepts a German VAT ID as the issuer tax identifier', () => {
     expect(businessProfileSchema.safeParse(completeProfile).success).toBe(true)
   })

@@ -1,10 +1,14 @@
 import { z } from '@/lib/validation'
+import { getLocale } from '@/paraglide/runtime'
+import type { Locale } from '@/paraglide/runtime'
+import * as m from '@/paraglide/messages'
 
 export type VatRate = 7 | 19
 
 export type InvoiceLineDraft = {
   description: string
   amount: string
+  amountLocale?: Locale
 }
 
 export type InvoiceDraft = {
@@ -21,31 +25,61 @@ export type InvoiceDraft = {
 }
 
 const lineItemSchema = z.object({
-  description: z.string().max(85),
+  description: z
+    .string()
+    .max(85, { error: () => m.invoice_maximum_characters({ limit: 85 }) }),
   amount: z.string(),
+  amountLocale: z.enum(['de', 'en']).optional(),
 })
 
 export const invoiceFormSchema = z
   .object({
-    number: z.string().trim().min(1, 'Rechnungsnummer fehlt.').max(40),
+    number: z
+      .string()
+      .trim()
+      .min(1, { error: () => m.invoice_number_required() })
+      .max(40, { error: () => m.invoice_maximum_characters({ limit: 40 }) }),
     date: z
       .string()
-      .refine(isCalendarDate, 'Bitte ein gültiges Datum eingeben.'),
-    subject: z.string().max(100),
-    company: z.string().trim().max(70),
-    name: z.string().trim().max(70),
-    street: z.string().trim().min(1, 'Straße und Hausnummer fehlen.').max(85),
-    postalCode: z.string().trim().min(1, 'Postleitzahl fehlt.').max(85),
-    town: z.string().trim().min(1, 'Ort fehlt.').max(85),
+      .refine(isCalendarDate, { error: () => m.invoice_date_invalid() }),
+    subject: z
+      .string()
+      .max(100, { error: () => m.invoice_maximum_characters({ limit: 100 }) }),
+    company: z
+      .string()
+      .trim()
+      .max(70, { error: () => m.invoice_maximum_characters({ limit: 70 }) }),
+    name: z
+      .string()
+      .trim()
+      .max(70, { error: () => m.invoice_maximum_characters({ limit: 70 }) }),
+    street: z
+      .string()
+      .trim()
+      .min(1, { error: () => m.invoice_street_required() })
+      .max(85, { error: () => m.invoice_maximum_characters({ limit: 85 }) }),
+    postalCode: z
+      .string()
+      .trim()
+      .min(1, { error: () => m.invoice_postal_code_required() })
+      .max(85, { error: () => m.invoice_maximum_characters({ limit: 85 }) }),
+    town: z
+      .string()
+      .trim()
+      .min(1, { error: () => m.invoice_town_required() })
+      .max(85, { error: () => m.invoice_maximum_characters({ limit: 85 }) }),
     rate: z.union([z.literal(7), z.literal(19)]),
-    items: z.array(lineItemSchema).min(1).max(16),
+    items: z
+      .array(lineItemSchema)
+      .min(1, { error: () => m.invoice_position_required() })
+      .max(16, { error: () => m.invoice_position_limit() }),
   })
   .superRefine((invoice, context) => {
     if (!invoice.company && !invoice.name) {
       context.addIssue({
         code: 'custom',
         path: ['company'],
-        message: 'Unternehmen oder Name des Empfängers angeben.',
+        message: m.invoice_recipient_required(),
       })
     }
 
@@ -57,7 +91,7 @@ export const invoiceFormSchema = z
       context.addIssue({
         code: 'custom',
         path: ['items'],
-        message: 'Mindestens eine Position eintragen.',
+        message: m.invoice_position_required(),
       })
     }
 
@@ -66,16 +100,16 @@ export const invoiceFormSchema = z
         context.addIssue({
           code: 'custom',
           path: ['items', index, 'description'],
-          message: 'Positionsbeschreibung fehlt.',
+          message: m.invoice_description_required(),
         })
       }
 
-      const amount = parseEuroAmount(item.amount)
+      const amount = parseEuroAmount(item.amount, item.amountLocale ?? 'de')
       if (amount === null || amount <= 0) {
         context.addIssue({
           code: 'custom',
           path: ['items', index, 'amount'],
-          message: 'Einen positiven Bruttopreis eingeben.',
+          message: m.invoice_amount_invalid(),
         })
       }
     }
@@ -99,12 +133,20 @@ export type InvoiceTotals = {
   tax: number
 }
 
-export function parseEuroAmount(input: string): number | null {
+export function parseEuroAmount(
+  input: string,
+  locale: Locale = getLocale(),
+): number | null {
   const raw = input.trim().replace(/[\s€]/g, '')
   if (!raw) return null
 
   let normalized: string
-  if (/^\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/.test(raw)) {
+  if (locale === 'en') {
+    if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(raw)) {
+      return null
+    }
+    normalized = raw.replaceAll(',', '')
+  } else if (/^\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/.test(raw)) {
     normalized = raw.replaceAll('.', '').replace(',', '.')
   } else if (/^\d+(?:,\d{1,2})?$/.test(raw)) {
     normalized = raw.replace(',', '.')

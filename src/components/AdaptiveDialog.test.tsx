@@ -5,6 +5,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdaptiveDialog from './AdaptiveDialog'
+import { setLocale } from '@/paraglide/runtime'
 
 function setViewportWidth(width: number) {
   vi.stubGlobal(
@@ -23,6 +24,7 @@ function setViewportWidth(width: number) {
 }
 
 beforeEach(() => {
+  setLocale('de', { reload: false })
   setViewportWidth(1024)
 })
 
@@ -32,6 +34,23 @@ afterEach(() => {
 })
 
 describe('AdaptiveDialog', () => {
+  it.each([767, 1024])(
+    'offers an English close action at viewport width %s',
+    async (width) => {
+      setViewportWidth(width)
+      setLocale('en', { reload: false })
+      const user = userEvent.setup()
+      const onOpenChange = vi.fn()
+      render(
+        <AdaptiveDialog open onOpenChange={onOpenChange} title="Release notes">
+          <p>Original content</p>
+        </AdaptiveDialog>,
+      )
+      await user.click(await screen.findByRole('button', { name: 'Close' }))
+      expect(onOpenChange.mock.calls[0]?.[0]).toBe(false)
+    },
+  )
+
   it('renders arbitrary content, accessible structure, and footer in a desktop dialog', async () => {
     render(
       <AdaptiveDialog

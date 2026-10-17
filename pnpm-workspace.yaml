@@ -1,3 +1,7 @@
+# Query's SSR bridge must share the exact core instance with React Query.
+overrides:
+  '@tanstack/query-core': 5.104.2
+
 allowBuilds:
   esbuild: true
   lightningcss: true

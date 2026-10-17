@@ -13,6 +13,7 @@ import {
 import { waitForPwaCriticalOperations } from './pwa-critical-operations'
 import { confirmDiscardProfileChanges } from '@/features/settings/unsaved-profile'
 import { getCompletedApplicationResetGeneration } from '@/features/settings/reset-generation'
+import * as m from '@/paraglide/messages'
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -68,12 +69,12 @@ function manualInstallationInstructions() {
     navigator.platform.toLowerCase() === 'macintel' &&
     navigator.maxTouchPoints > 1
   if (/iphone|ipad|ipod/.test(userAgent) || ipadDesktopMode) {
-    return 'Öffne das Teilen-Menü in Safari und wähle „Zum Home-Bildschirm“. Die Installationsmöglichkeit hängt von deiner iOS-Version und dem Browser ab.'
+    return m.pwa_install_ios()
   }
   if (/android/.test(userAgent)) {
-    return 'Öffne das Browsermenü und suche nach „App installieren“ oder „Zum Startbildschirm hinzufügen“. Die Bezeichnung hängt vom Browser ab.'
+    return m.pwa_install_android()
   }
-  return 'Dieser Browser stellt keine native Installation bereit. Manche Browser bieten die Installation über ihr Menü an; andernfalls kannst du regningen weiterhin in diesem Browser nutzen.'
+  return m.pwa_install_browser()
 }
 
 function PluginRegistration({
@@ -191,8 +192,8 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   const onRegisterError = React.useCallback((error: unknown) => {
     setUpdateError(
       error instanceof Error
-        ? `Offline-Funktionen konnten nicht eingerichtet werden: ${error.message}`
-        : 'Offline-Funktionen konnten nicht eingerichtet werden. Die Online-Nutzung bleibt verfügbar.',
+        ? m.pwa_registration_error_detail({ detail: error.message })
+        : m.pwa_registration_error(),
     )
   }, [])
 
@@ -213,7 +214,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     if (lastUpdateErrorRef.current === updateError) return
     lastUpdateErrorRef.current = updateError
     toast.add({
-      title: 'PWA-Funktion nicht verfügbar',
+      title: m.pwa_unavailable_title(),
       description: updateError,
       type: 'warning',
     })
@@ -223,7 +224,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
     if (!draftPersistence.error || hasHandledDraftError.current) return
     hasHandledDraftError.current = true
     toast.add({
-      title: 'Invoice Draft-Speicherung nicht verfügbar',
+      title: m.pwa_draft_storage_unavailable(),
       description: draftPersistence.error,
       type: 'warning',
     })
@@ -358,8 +359,8 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       try {
         const registration = registrationRef.current
         if (!registration) return
-        await registration.showNotification('PDF wurde erstellt', {
-          body: `${filename} wurde heruntergeladen. Du findest es in den Downloads.`,
+        await registration.showNotification(m.pwa_pdf_created(), {
+          body: m.pwa_pdf_downloaded({ filename }),
           icon: '/pwa-192x192.png',
           badge: '/pwa-192x192.png',
         })
@@ -399,8 +400,8 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
         setUpdateRequested(false)
         setUpdateError(
           error instanceof Error
-            ? error.message
-            : 'Die Aktualisierung konnte nicht gestartet werden. Versuche es später erneut.',
+            ? m.pwa_update_error_detail({ detail: error.message })
+            : m.pwa_update_error(),
         )
       }
     })()
@@ -487,10 +488,12 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
         onOpenChange={(open) => {
           if (!open) setInstallationHelp(null)
         }}
-        title="regningen installieren"
-        description="Die verfügbaren Schritte unterscheiden sich je nach Browser und Plattform."
+        title={m.pwa_install_title()}
+        description={m.pwa_install_description()}
         footer={
-          <Button onClick={() => setInstallationHelp(null)}>Schließen</Button>
+          <Button onClick={() => setInstallationHelp(null)}>
+            {m.pwa_close()}
+          </Button>
         }
       >
         <p className="paragraph">{installationHelp}</p>
@@ -498,20 +501,18 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       <AdaptiveDialog
         open={updateDialogOpen}
         onOpenChange={setUpdateDialogOpen}
-        title="Aktualisierung verfügbar"
-        description="Neue Anwendungsinhalte wurden im Hintergrund vorbereitet. Gespeicherte Invoice Drafts werden nach dem Neuladen in dieser Browsersitzung wiederhergestellt."
+        title={m.pwa_update_title()}
+        description={m.pwa_update_description()}
         footer={
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => setUpdateDialogOpen(false)}
             >
-              Später
+              {m.pwa_update_later()}
             </Button>
             <Button onClick={applyUpdate} disabled={updateRequested}>
-              {updateRequested
-                ? 'Aktualisierung wird gestartet …'
-                : 'Update jetzt'}
+              {updateRequested ? m.pwa_update_starting() : m.pwa_update_now()}
             </Button>
           </div>
         }

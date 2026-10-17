@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
+import * as m from '../src/paraglide/messages.js'
 
 const font = async (family) =>
   (
@@ -14,7 +15,28 @@ try {
     viewport: { width: 1200, height: 630 },
     deviceScaleFactor: 1,
   })
-  await page.setContent(`<!doctype html><html lang="de"><meta charset="utf-8"><style>
+  for (const locale of ['de', 'en']) {
+    const text = (message) =>
+      message({}, { locale })
+        .replace(
+          /[&<>"']/g,
+          (character) =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            })[character],
+        )
+        .replaceAll('\n', '<br>')
+    const total = new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-GB', {
+      style: 'currency',
+      currency: 'EUR',
+    })
+      .format(119)
+      .replaceAll('\u00a0', ' ')
+    await page.setContent(`<!doctype html><html lang="${locale}"><meta charset="utf-8"><style>
     @font-face { font-family: Inter; src: url(data:font/woff2;base64,${await font('inter')}); }
     @font-face { font-family: Lora; src: url(data:font/woff2;base64,${await font('lora')}); }
     * { box-sizing: border-box; } body { margin: 0; background: #f5f5f4; color: #1c1917; font: 24px Inter; }
@@ -26,9 +48,15 @@ try {
     .rule { height: 4px; background: #ec003f; margin: 24px 0; } .line { height: 8px; width: 100%; background: #e7e5e4; margin: 18px 0; }
     .short { width: 60%; } .total { border-top: 1px solid #e7e5e4; margin-top: 40px; padding-top: 20px; display: flex; justify-content: space-between; font-size: 18px; }
     .pdf { display: inline-block; background: #ec003f; color: #fff; padding: 8px 14px; font-size: 16px; margin-top: 28px; border-radius: 4px; }
-  </style><main><section><div class="brand">${icon}regningen</div><h1>Rechnungen erstellen.<br>Als PDF herunterladen.</h1><p>Direkt im Browser.<br>Ohne Benutzerkonto.</p></section><section class="paper"><h2>Rechnung</h2><p>Fiktives Beispiel · R-001</p><div class="rule"></div><p>Studio Beispiel<br>an Musterwerkstatt</p><div class="line"></div><div class="line short"></div><div class="total"><span>Bruttosumme</span><strong>119,00 €</strong></div><div class="pdf">PDF herunterladen</div></section></main></html>`)
-  await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: 'public/social-preview.png' })
+  </style><main><section><div class="brand">${icon}regningen</div><h1>${text(m.artwork_headline)}</h1><p>${text(m.artwork_intro)}</p></section><section class="paper"><h2>${text(m.artwork_invoice)}</h2><p>${text(m.artwork_example)}</p><div class="rule"></div><p>${text(m.artwork_parties)}</p><div class="line"></div><div class="line short"></div><div class="total"><span>${text(m.artwork_gross)}</span><strong>${total}</strong></div><div class="pdf">${text(m.artwork_download)}</div></section></main></html>`)
+    await page.evaluate(() => document.fonts.ready)
+    await page.screenshot({
+      path:
+        locale === 'de'
+          ? 'public/social-preview.png'
+          : 'public/social-preview-en.png',
+    })
+  }
 } finally {
   await browser.close()
 }

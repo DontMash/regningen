@@ -1,6 +1,6 @@
 # regningen
 
-A German-language invoice generator application built with React, TanStack Start, and Tailwind CSS.
+A German and English invoice generator application built with React, TanStack Start, Paraglide, and Tailwind CSS.
 
 ## Development
 
@@ -50,15 +50,23 @@ An absent or empty `ORIGIN` leaves the deployment noindex with no public identit
 
 Production and production-style previews enforce repository-owned browser security headers. HSTS is **off by default** until public HTTPS, redirection, and automated renewal are verified. See [browser security and the HTTPS deployment checklist](docs/security.md) for policy ownership, CSP/offline behavior, explicit HSTS rollout/rollback, and hosting responsibilities. Local tests do not verify the public deployment.
 
+## Languages
+
+Use the language icon in the header, or the interface-language select in General Settings, to choose **Deutsch** or **English**. Public pages have translated addresses: `/de` / `/en`, `/de/rechnung` / `/en/invoice`, `/de/einstellungen` / `/en/settings`, and `/de/einstellungen/profil` / `/en/settings/profile`. An explicit URL language wins; unprefixed entry uses the remembered cookie, browser preference, then German. English uses en-GB formatting and German uses de-DE; both retain EUR and the existing German-oriented invoicing rules.
+
+**Invoice Language** is configured only in General Settings. It defaults to **Follow interface language**; fixed Deutsch or English stays fixed across later interface changes. The resolved choice controls PDF wording, formatting, metadata, and filename, not the language of editor feedback. User-entered content is never translated. Switching interface language preserves the tab's Invoice Draft and amount interpretation, and asks before discarding unsaved Business Profile changes.
+
+Translations are individual messages in `messages/de/` and `messages/en/`, with typed placeholders and plural variants. Add matching keys in both languages; compiler configuration merges the feature catalogs. `pnpm i18n:compile` generates the ignored Paraglide output. Development/build and the normal lint, typecheck, and Vitest package scripts compile it automatically; run the compiler first when invoking tools directly after a fresh checkout. Do not edit or commit generated runtime/messages.
+
 ## Settings
 
-Open **Einstellungen** using the cogwheel in the header. The settings aside links to **Allgemein** (`/settings`) and **Profil** (`/settings/profile`); the old profile address is no longer available. Allgemein contains appearance, installation, local PDF notifications, and application reset. The header theme shortcut remains synchronized with the System/Hell/Dunkel selection.
+Open **Einstellungen / Settings** using the cogwheel in the header. The settings aside links to **Allgemein / General** and **Profil / Profile** at their localized addresses. General Settings contains language, appearance, installation, local PDF notifications, and application reset. The header theme shortcut remains synchronized with the System/Light/Dark selection.
 
 Profil contains the Business Profile form and backup/delete controls. Editing and importing change only the working form: choose **Profil speichern** to persist a valid profile. Save stays on Profil; **Rechnung** returns to invoicing without discarding the tab's Invoice Draft. Leaving with unsaved profile changes offers a discard warning; manual tab close/reload uses the browser's best-effort native warning. Ordinary saves in multiple tabs silently use the last successful save, without conflict warnings or merging.
 
 ## Installable app and offline use
 
-Production builds use `vite-plugin-pwa` to generate the manifest, receipt-derived installation artwork, and a Workbox service worker. The worker precaches the server-rendered root, Invoice, Allgemein, and Profil documents plus application chunks, fonts, styles, and generated icons. Production hosting must serve the app and `/sw.js` over HTTPS (localhost is suitable for testing), keep the worker URL and `/` scope stable, and avoid caching `/sw.js`. The current deployment supports the root path; hosting under a subdirectory is not verified. `pnpm test:e2e` builds and serves isolated production deployments to exercise real offline routing, PDF generation, and prompt-managed updates.
+Production builds use `vite-plugin-pwa` to generate the manifest, receipt-derived installation artwork, and a Workbox service worker. The worker precaches the unprefixed entry and both languages' introduction, Invoice, General Settings, and Profile documents plus application chunks, fonts, styles, localized manifests, and generated icons. Both languages use one app identity and installation. Production hosting must serve the app and `/sw.js` over HTTPS (localhost is suitable for testing), keep the worker URL and `/` scope stable, and avoid caching `/sw.js`. The current deployment supports the root path; hosting under a subdirectory is not verified. `pnpm test:e2e` builds and serves isolated production deployments to exercise real offline routing, PDF generation, and prompt-managed updates.
 
 Visit online once and wait for **Offline bereit** before relying on offline startup. The generated worker prepares the core server-rendered routes, lazy-loaded assets, fonts, styles, and icons. Browser storage can still be evicted, and installation does not guarantee permanent offline access. Browser installation support varies; use the explicit Installieren control for native prompting or platform guidance. No install prompt appears automatically.
 
@@ -78,7 +86,7 @@ The app server delivers server-rendered documents and application assets; it doe
 
 The profile can be exported and imported as JSON. Export includes only the last saved profile, not unsaved edits; imported values require a later valid **Profil speichern** action. Structurally supported incomplete backups remain editable. Backups are **not encrypted** and contain sensitive business information, so store them securely. Export a backup before clearing browser data or moving to another browser or device.
 
-**Profil löschen** removes only the saved Business Profile and clears its working form; Invoice Drafts and general preferences remain. **Anwendung zurücksetzen** instead removes the Business Profile, Invoice Drafts and unfinished Positions, appearance and notification preferences, and release-note acknowledgments. Its confirmation applies to all reset-aware application tabs sharing this browser's site storage, including stale sessions when they resume. Reset invalidation prevents pre-reset working data from being restored or saved back; drafts otherwise remain independent between tabs. Successful reset returns to empty Profil setup, with ordinary first-visit release-note behavior. A storage failure is reported as incomplete reset without claiming rollback or success; retry after correcting browser storage settings.
+**Profil löschen** removes only the saved Business Profile and clears its working form; Invoice Drafts and general preferences remain. **Anwendung zurücksetzen** instead removes the Business Profile, Invoice Drafts and unfinished Positions, appearance, language and notification preferences, and release-note acknowledgments. Its confirmation applies to all reset-aware application tabs sharing this browser's site storage, including stale sessions when they resume. Reset invalidation prevents pre-reset working data from being restored or saved back; drafts otherwise remain independent between tabs. Successful reset returns to empty Profil setup, with ordinary first-visit release-note behavior. A storage failure is reported as incomplete reset without claiming rollback or success; retry after correcting browser storage settings.
 
 Application reset preserves downloaded PDFs/backups, browser notification permissions, installation, service workers, offline caches, and unrelated storage. It does not affect other browsers/devices or guarantee secure erasure of browser-internal history or copies.
 

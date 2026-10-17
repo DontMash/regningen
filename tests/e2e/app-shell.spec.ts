@@ -17,7 +17,9 @@ test('fits compact navigation into a 320px fullscreen menu', async ({
   const menu = await layout.navigationDrawer()
   expect(menu.surface).toEqual({ x: 0, y: 0, width: 320, height: 720 })
   expect(menu.overflows).toBe(false)
-  expect(menu.settings.x + menu.settings.width).toBeLessThan(menu.theme.x)
+  expect(menu.language.x + menu.language.width).toBeLessThan(menu.theme.x)
+  expect(menu.theme.x + menu.theme.width).toBeLessThan(menu.settings.x)
+  expect(menu.language.y).toBe(menu.theme.y)
   expect(menu.settings.y).toBe(menu.theme.y)
   expect(menu.theme.y + menu.theme.height).toBeGreaterThan(680)
   await appShell.closeMenu()
@@ -344,8 +346,10 @@ test('keeps close and bottom controls reachable with an unbroken Business name i
     expect(menu.close.y).toBeGreaterThanOrEqual(0)
     expect(menu.close.y + menu.close.height).toBeLessThan(240)
     expect(menu.theme.y + menu.theme.height).toBe(224)
+    expect(menu.language.y).toBe(menu.theme.y)
     expect(menu.settings.y).toBe(menu.theme.y)
-    expect(menu.settings.x + menu.settings.width).toBeLessThan(menu.theme.x)
+    expect(menu.language.x + menu.language.width).toBeLessThan(menu.theme.x)
+    expect(menu.theme.x + menu.theme.width).toBeLessThan(menu.settings.x)
   }
   await appShell.closeMenu()
   await appShell.expectMenuClosed()
@@ -421,7 +425,7 @@ test('does not retain an alias for the removed Business Profile route', async ({
   harness,
   releaseNotes,
 }) => {
-  await harness.open('/business-profile')
+  await harness.open('/de/business-profile')
   await releaseNotes.dismissReleaseNotes()
   await appShell.expectUnknownRoute()
 })
@@ -432,7 +436,7 @@ test('recovers from an unknown route to the stable introduction and explicit pro
   releaseNotes,
   landing,
 }) => {
-  await harness.open('/not-a-route')
+  await harness.open('/de/not-a-route')
   await releaseNotes.dismissReleaseNotes()
   await appShell.expectUnknownRoute()
   await appShell.returnToHomeFromUnknownRoute()

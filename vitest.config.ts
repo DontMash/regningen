@@ -25,6 +25,7 @@ export default defineConfig({
         'src/**/*.test.{ts,tsx}',
         'src/components/ui/**',
         'src/routeTree.gen.ts',
+        'src/paraglide/**',
       ],
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: './coverage/unit',

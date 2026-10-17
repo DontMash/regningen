@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { InstallButton, NotificationControl } from './PwaControls'
 import { PwaProvider, usePwa } from './PwaProvider'
+import { setLocale } from '@/paraglide/runtime'
 import { disposeInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft-store'
 import {
   discardUnsavedProfileChanges,
@@ -96,7 +97,10 @@ function renderPwa() {
   )
 }
 
-beforeEach(() => stubMatchMedia())
+beforeEach(() => {
+  setLocale('de', { reload: false })
+  stubMatchMedia()
+})
 
 afterEach(async () => {
   cleanup()
@@ -109,6 +113,81 @@ afterEach(async () => {
 })
 
 describe('application PWA controls', () => {
+  it('offers English installation guidance and update controls without automatically updating', async () => {
+    setLocale('en', { reload: false })
+    const user = userEvent.setup()
+    renderPwa()
+
+    await user.click(await screen.findByRole('button', { name: 'Install' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Install regningen' }),
+    ).toBeVisible()
+    expect(screen.getByText(/does not offer native installation/)).toBeVisible()
+    await user.click(
+      screen.getByText('Close', { selector: 'button', exact: true }),
+    )
+
+    triggerPwaUpdateAvailable()
+    expect(
+      await screen.findByRole('dialog', { name: 'Update available' }),
+    ).toBeVisible()
+    expect(screen.getByText(/Saved invoice drafts/)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Later' }))
+    expect(getPwaUpdateServiceWorkerCalls()).toBe(0)
+  })
+
+  it('uses English notification controls and reports the actual PDF filename in a complete message', async () => {
+    setLocale('en', { reload: false })
+    const user = userEvent.setup()
+    stubNotificationSupport()
+    renderPwa()
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Enable notifications' }),
+    )
+    await screen.findByRole('button', { name: 'Disable notifications' })
+    await user.click(screen.getByRole('button', { name: 'PDF export' }))
+
+    await waitFor(() =>
+      expect(getPwaRegistration().showNotification).toHaveBeenCalledWith(
+        'PDF created',
+        expect.objectContaining({
+          body: 'Rechnung_test.pdf has been downloaded. You can find the file in Downloads.',
+        }),
+      ),
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Disable notifications' }),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Enable notifications' }),
+    ).toBeEnabled()
+  })
+
+  it('explains offline setup and update failures in English while retaining the reported reason', async () => {
+    setLocale('en', { reload: false })
+    const user = userEvent.setup()
+    renderPwa()
+    await screen.findByRole('button', { name: 'Install' })
+
+    triggerPwaRegisterError(new Error('registration unavailable'))
+    expect(
+      await screen.findByText(
+        'update-error:Offline features could not be set up: registration unavailable',
+      ),
+    ).toBeVisible()
+
+    setPwaUpdateServiceWorkerError(new Error('activation failed'))
+    triggerPwaUpdateAvailable()
+    await user.click(await screen.findByRole('button', { name: 'Update now' }))
+    expect(
+      await screen.findByText(
+        'update-error:The update could not be started: activation failed',
+      ),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Update now' })).toBeEnabled()
+  })
+
   it('keeps a deferred local reload discoverable after unsaved profile discard is cancelled', async () => {
     const user = userEvent.setup()
     renderPwa()
@@ -245,7 +324,9 @@ describe('application PWA controls', () => {
       await screen.findByRole('button', { name: 'Update jetzt' }),
     )
     expect(
-      await screen.findByText('update-error:activation failed'),
+      await screen.findByText(
+        'update-error:Die Aktualisierung konnte nicht gestartet werden: activation failed',
+      ),
     ).toBeVisible()
     expect(getPwaUpdateServiceWorkerCalls()).toBe(1)
   })
@@ -276,7 +357,7 @@ describe('application PWA controls', () => {
       expect(getPwaRegistration().showNotification).toHaveBeenCalledWith(
         'PDF wurde erstellt',
         expect.objectContaining({
-          body: 'Rechnung_test.pdf wurde heruntergeladen. Du findest es in den Downloads.',
+          body: 'Rechnung_test.pdf wurde heruntergeladen. Sie finden die Datei in den Downloads.',
         }),
       ),
     )
@@ -319,7 +400,7 @@ describe('application PWA controls', () => {
     })
     expect(installRequired).toBeDisabled()
     expect(
-      screen.getByText(/Installiere regningen zum Home-Bildschirm/),
+      screen.getByText(/Installieren Sie regningen auf dem Home-Bildschirm/),
     ).toBeVisible()
   })
 })

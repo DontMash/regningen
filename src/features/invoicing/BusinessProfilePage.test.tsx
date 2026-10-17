@@ -5,6 +5,7 @@ import { act, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import BusinessProfilePage from './BusinessProfilePage'
+import { getLocale, overwriteGetLocale } from '@/paraglide/runtime'
 import { BusinessProfileRobot } from '../../../tests/robots/vitest/business-profile'
 import { createBusinessProfileScenario } from '../../../tests/scenarios/business-profile'
 import {
@@ -24,7 +25,10 @@ import {
   setUnsavedProfileChanges,
 } from '../settings/unsaved-profile'
 
+const originalGetLocale = getLocale
+
 beforeEach(() => {
+  overwriteGetLocale(() => 'de')
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   window.localStorage.clear()
   businessProfileStorageStatus.setState(() => ({ error: null }))
@@ -36,9 +40,227 @@ afterEach(() => {
   disposeTestRouters()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  overwriteGetLocale(originalGetLocale)
 })
 
 describe('business profile settings', () => {
+  it('shows English Business Profile setup and backup guidance', async () => {
+    overwriteGetLocale(() => 'en')
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+
+    await businessProfile.expectNotice('Business Profile')
+    await businessProfile.expectNotice('Business name')
+    await businessProfile.expectNotice('Owner')
+    await businessProfile.expectNotice('Save profile')
+    await businessProfile.expectNotice('Export backup')
+    await businessProfile.expectNotice('Import backup')
+    await businessProfile.expectNotice(
+      'These details are stored only in this browser and used for your invoices. There is no user account or invoice archive.',
+    )
+    await businessProfile.expectNotice(
+      'Backups are unencrypted JSON files containing sensitive business data. Store them securely.',
+    )
+  })
+
+  it('offers English field labels and saved-profile actions without changing stored content', async () => {
+    overwriteGetLocale(() => 'en')
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const profile = createBusinessProfileScenario({
+      businessName: 'Unveränderter Betrieb',
+      ownerName: 'Renée Beispiel',
+    })
+    saveBusinessProfile(profile)
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+
+    for (const message of [
+      'Invoice issuer details',
+      'Service description',
+      'Street and house number',
+      'Postal code',
+      'Town or city',
+      'Phone',
+      'Mobile phone',
+      'VAT ID',
+      'Tax number',
+      'Invoice',
+      'Back up profile',
+      'Delete Business Profile',
+      'Delete profile',
+      'Previously downloaded PDFs will not be deleted.',
+    ]) {
+      await businessProfile.expectNotice(message)
+    }
+    expect(
+      await createBusinessProfileRepository(window.localStorage).loadProfile(),
+    ).toEqual(profile)
+    expect(hasUnsavedProfileChanges()).toBe(false)
+  })
+
+  it('shows English storage-read recovery instead of an editable empty profile', async () => {
+    overwriteGetLocale(() => 'en')
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage unavailable')
+    })
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+
+    await businessProfile.expectNotice('Business Profile unavailable')
+    await businessProfile.expectNotice(
+      'The browser cannot read the profile. Check the local storage settings and reload the page.',
+    )
+    await businessProfile.expectNotice('Reload')
+    await businessProfile.expectNotice('Close')
+  })
+
+  it('resolves Save feedback in the active language and preserves entered profile content', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const profile = createBusinessProfileScenario({
+      businessName: 'Unveränderter Betrieb',
+      ownerName: 'Renée Beispiel',
+    })
+    saveBusinessProfile(profile)
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+    await businessProfile.enterProfile({ businessName: 'Neue Eingabe' })
+    overwriteGetLocale(() => 'en')
+
+    await businessProfile.save()
+
+    await businessProfile.expectNotice('Profile saved.')
+    expect(
+      await createBusinessProfileRepository(window.localStorage).loadProfile(),
+    ).toEqual({ ...profile, businessName: 'Neue Eingabe' })
+    expect(hasUnsavedProfileChanges()).toBe(false)
+  })
+
+  it('exports an English-named backup without translating or changing its saved profile format', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const profile = createBusinessProfileScenario({
+      businessName: 'Unveränderter Betrieb',
+    })
+    saveBusinessProfile(profile)
+    const createObjectURL = vi.fn<(blob: Blob) => string>(
+      () => 'blob:english-profile-backup',
+    )
+    vi.stubGlobal(
+      'URL',
+      Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }),
+    )
+    const filenames: Array<string> = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      filenames.push(this.download)
+    })
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+    await businessProfile.enterProfile({ businessName: 'Nicht exportieren' })
+    overwriteGetLocale(() => 'en')
+
+    await businessProfile.exportBackup()
+
+    await businessProfile.expectNotice('Backup created.')
+    await businessProfile.expectNotice(
+      'The file contains sensitive, unencrypted data.',
+    )
+    expect(filenames).toEqual(['regningen-business-profile.json'])
+    const [blob] = createObjectURL.mock.calls[0]
+    expect(JSON.parse(await blob.text())).toEqual({
+      format: 'regningen-business-profile',
+      version: 1,
+      profile,
+    })
+    expect(hasUnsavedProfileChanges()).toBe(true)
+  })
+
+  it('loads a backup with English feedback while retaining the explicit profile Save boundary', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const profile = createBusinessProfileScenario({
+      businessName: 'Übernommener Betrieb',
+    })
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+    overwriteGetLocale(() => 'en')
+
+    await businessProfile.importBackup(
+      new File(
+        [
+          JSON.stringify({
+            format: 'regningen-business-profile',
+            version: 1,
+            profile,
+          }),
+        ],
+        'profile.json',
+        { type: 'application/json' },
+      ),
+    )
+
+    await businessProfile.expectNotice(
+      'Profile backup loaded. Please save the profile.',
+    )
+    expect(
+      await createBusinessProfileRepository(window.localStorage).loadProfile(),
+    ).toBeNull()
+    expect(hasUnsavedProfileChanges()).toBe(true)
+  })
+
+  it('explains profile deletion in English without deleting before confirmation', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const profile = createBusinessProfileScenario()
+    saveBusinessProfile(profile)
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+    overwriteGetLocale(() => 'en')
+
+    await businessProfile.requestDeletion()
+
+    await businessProfile.expectNotice('Delete Business Profile?')
+    await businessProfile.expectNotice(
+      'The saved profile and current form inputs will be deleted. Invoice inputs, settings and downloaded PDFs will be retained.',
+    )
+    await businessProfile.expectNotice('Cancel')
+    expect(
+      await createBusinessProfileRepository(window.localStorage).loadProfile(),
+    ).toEqual(profile)
+  })
+
+  it('reports English storage recovery guidance without saving or discarding working inputs', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const profile = createBusinessProfileScenario()
+    saveBusinessProfile(profile)
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+    await businessProfile.enterProfile({
+      businessName: 'Ungespeicherte Eingabe',
+    })
+    const originalSetItem = Storage.prototype.setItem
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === BUSINESS_PROFILE_STORAGE_KEY)
+        throw new Error('storage unavailable')
+      return originalSetItem.call(this, key, value)
+    })
+    overwriteGetLocale(() => 'en')
+
+    await businessProfile.save()
+
+    await businessProfile.expectNotice('The profile could not be saved')
+    await businessProfile.expectNotice('Check storage again')
+    await businessProfile.expectNotice('Save again')
+    await businessProfile.expectNotice(
+      "The Business Profile could not be saved or read locally. Invoicing is blocked. Check the browser's storage settings and try saving again. Your changes remain in this form; there is no need to reload the page. For read or deletion problems, check storage again without saving changes.",
+    )
+    expect(
+      await createBusinessProfileRepository(window.localStorage).loadProfile(),
+    ).toEqual(profile)
+    expect(hasUnsavedProfileChanges()).toBe(true)
+  })
+
   it('refuses a stale profile Save after application-reset invalidation even before a browser event arrives', async () => {
     const businessProfile = new BusinessProfileRobot(userEvent.setup())
     saveBusinessProfile(createBusinessProfileScenario())

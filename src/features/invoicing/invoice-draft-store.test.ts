@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLocale } from '@/paraglide/runtime'
 import { subscribeToApplicationReset } from '../settings/application-reset'
 import {
   createEmptyInvoiceDraft,
@@ -57,6 +58,7 @@ const storedDraft = {
 }
 
 beforeEach(() => {
+  setLocale('de', { reload: false })
   localStorage.clear()
   sessionStorage.clear()
   resetInvoiceDraft()
@@ -322,6 +324,35 @@ describe('session-autosaved Invoice Drafts', () => {
       error: null,
     })
     expect(storage.values.get('regningen.invoice-draft')).toEqual(storedDraft)
+  })
+
+  it('retains entry locales and incomplete amount text through a persistence round trip', async () => {
+    const storage = createSessionStorage()
+    await initializeInvoiceDraftPersistence(storage)
+    invoiceDraftStore.setState((draft) => ({
+      ...draft,
+      items: [
+        { description: 'English charge', amount: '1,234', amountLocale: 'en' },
+      ],
+    }))
+    invoicePositionDraftStore.setState(() => ({
+      description: 'Unfinished German charge',
+      amount: '1,',
+      amountLocale: 'de',
+    }))
+    await waitForInvoiceDraftPersistence()
+    await disposeInvoiceDraftPersistence()
+    resetInvoiceDraft()
+    await initializeInvoiceDraftPersistence(storage)
+
+    expect(invoiceDraftStore.state.items).toEqual([
+      { description: 'English charge', amount: '1,234', amountLocale: 'en' },
+    ])
+    expect(invoicePositionDraftStore.state).toEqual({
+      description: 'Unfinished German charge',
+      amount: '1,',
+      amountLocale: 'de',
+    })
   })
 
   it('saves every edit as one current envelope without waiting for a debounce', async () => {

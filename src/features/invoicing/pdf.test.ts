@@ -1,8 +1,14 @@
 import { PDFDocument } from 'pdf-lib'
-import { describe, expect, it } from 'vitest'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { afterEach, describe, expect, it } from 'vitest'
+import { getLocale, overwriteGetLocale } from '@/paraglide/runtime'
+
 import type { BusinessProfileDraft } from './business-profile'
 import type { InvoiceDraft } from './invoice'
 import { createInvoicePdf } from './pdf'
+
+const defaultGetLocale = getLocale
+afterEach(() => overwriteGetLocale(defaultGetLocale))
 
 const profile: BusinessProfileDraft = {
   businessName: 'Nordlicht Catering',
@@ -41,20 +47,74 @@ describe('invoice PDF generation', () => {
     expect(pdf.getAuthor()).toBe('Nordlicht Catering')
   })
 
-  it('fits the supported maximum of 16 concise items on one page', async () => {
-    const invoiceWithSixteenItems = {
-      ...invoice,
-      items: Array.from({ length: 16 }, (_, index) => ({
-        description: `Position ${index + 1}`,
-        amount: '10,00',
-      })),
-    }
-
-    const bytes = await createInvoicePdf(profile, invoiceWithSixteenItems)
+  it('uses the explicit Invoice Language for metadata independently of the interface and entry locale', async () => {
+    const bytes = await createInvoicePdf(
+      profile,
+      {
+        ...invoice,
+        items: [
+          {
+            description: 'Unchanged user content',
+            amount: '1.234,56',
+            amountLocale: 'de',
+          },
+        ],
+      },
+      'en',
+    )
     const pdf = await PDFDocument.load(bytes)
 
     expect(pdf.getPageCount()).toBe(1)
+    expect(pdf.getTitle()).toBe('Invoice 2026-001')
+    expect(pdf.getPage(0).getSize()).toEqual({ width: 595.28, height: 841.89 })
+    const loading = getDocument({ data: bytes })
+    try {
+      const document = await loading.promise
+      const page = await document.getPage(1)
+      const content = await page.getTextContent()
+      const text = content.items
+        .map((item) => ('str' in item ? item.str : ''))
+        .join(' ')
+      for (const expected of [
+        'Invoice number 2026-001',
+        'Date: 01/04/2026',
+        'Goods & services',
+        'Unchanged user content',
+        '€1,234.56',
+        'Net:',
+        '7% VAT:',
+        'Gross:',
+        'Nordlicht Catering',
+      ]) {
+        expect(text).toContain(expected)
+      }
+      expect(text).not.toContain('Rechnungsnummer')
+    } finally {
+      await loading.destroy()
+    }
   })
+
+  it.each(['de', 'en'] as const)(
+    'fits the supported maximum of 16 concise items on one page in %s',
+    async (locale) => {
+      const invoiceWithSixteenItems = {
+        ...invoice,
+        items: Array.from({ length: 16 }, (_, index) => ({
+          description: `Position ${index + 1}`,
+          amount: '10,00',
+        })),
+      }
+
+      const bytes = await createInvoicePdf(
+        profile,
+        invoiceWithSixteenItems,
+        locale,
+      )
+      const pdf = await PDFDocument.load(bytes)
+
+      expect(pdf.getPageCount()).toBe(1)
+    },
+  )
 
   it('refuses content that cannot fit on a single page', async () => {
     const crowdedInvoice = {
@@ -117,6 +177,27 @@ describe('invoice PDF generation', () => {
         items: [{ description: 'Beschreibung'.repeat(40), amount: '10,00' }],
       }),
     ).rejects.toThrow('Positionsbeschreibung ist zu lang')
+  })
+
+  it('reports PDF constraints in the interface language rather than the Invoice Language', async () => {
+    overwriteGetLocale(() => 'en')
+    await expect(
+      createInvoicePdf(
+        { ...profile, businessName: 'B'.repeat(300) },
+        invoice,
+        'de',
+      ),
+    ).rejects.toThrow('The business name is too long for the PDF.')
+  })
+
+  it('reports unsupported characters with an actionable interface-language error', async () => {
+    await expect(
+      createInvoicePdf(
+        { ...profile, businessName: 'Business 🧾' },
+        invoice,
+        'en',
+      ),
+    ).rejects.toThrow('Bitte Sonderzeichen in den Angaben prüfen.')
   })
 
   it('rejects line items without a positive gross price', async () => {

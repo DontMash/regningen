@@ -14,11 +14,13 @@ import { PwaProvider } from '@/features/pwa/PwaProvider'
 import { disposeInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft-store'
 import { resetPwaRegisterMock } from '../../../tests/support/vitest/pwa-register'
 import GeneralSettingsPage from './GeneralSettingsPage'
+import { setLocale } from '@/paraglide/runtime'
 import { saveBusinessProfile } from '../../../tests/support/vitest/business-profile'
 import { createBusinessProfileScenario } from '../../../tests/scenarios/business-profile'
 import { createBrowserBusinessProfileRepository } from '@/features/invoicing/business-profile-repository'
 
 beforeEach(() => {
+  setLocale('de', { reload: false })
   window.localStorage.clear()
   window.sessionStorage.clear()
   themeStore.store.setState(() => ({ mode: 'auto' }))
@@ -103,6 +105,49 @@ it('reports an incomplete reset without losing the settings page and permits ret
       await createBrowserBusinessProfileRepository().loadProfile(),
     ).toBeNull(),
   )
+})
+
+it('retains a fixed Invoice Language across remounts and can restore automatic following', async () => {
+  const user = userEvent.setup()
+  const settings = () =>
+    render(
+      <PwaProvider>
+        <GeneralSettingsPage />
+      </PwaProvider>,
+    )
+  settings()
+  const invoiceLanguage = () =>
+    screen.getByRole('combobox', { name: 'Rechnungssprache' })
+  expect(invoiceLanguage()).toHaveTextContent('Oberflächensprache folgen')
+  await user.click(invoiceLanguage())
+  await user.click(await screen.findByRole('option', { name: 'English' }))
+  expect(invoiceLanguage()).toHaveTextContent('English')
+  cleanup()
+  settings()
+  await waitFor(() => expect(invoiceLanguage()).toHaveTextContent('English'))
+  await user.click(invoiceLanguage())
+  await user.click(
+    await screen.findByRole('option', {
+      name: 'Oberflächensprache folgen',
+    }),
+  )
+  expect(invoiceLanguage()).toHaveTextContent('Oberflächensprache folgen')
+})
+
+it('presents General Settings and both language choices in English', async () => {
+  setLocale('en', { reload: false })
+  render(
+    <PwaProvider>
+      <GeneralSettingsPage />
+    </PwaProvider>,
+  )
+  expect(screen.getByRole('heading', { name: 'General' })).toBeVisible()
+  expect(
+    screen.getByRole('combobox', { name: 'Interface language' }),
+  ).toHaveTextContent('English')
+  expect(
+    screen.getByRole('combobox', { name: 'Invoice language' }),
+  ).toHaveTextContent('Follow interface language')
 })
 
 it('applies and persists explicit appearance choices and can return to System mode', async () => {

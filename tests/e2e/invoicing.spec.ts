@@ -901,9 +901,9 @@ test('keeps Invoice entries while the Business Profile is deleted and set up aga
   await businessProfile.expectProfileDeleted()
 
   await appShell.navigateToInvoice()
-  await invoice.expectInvoiceNumber('preserved-001')
   await invoice.expectProfileMissingWarning()
   await invoice.closeBlockingNotice()
+  await invoice.expectInvoiceNumber('preserved-001')
   await invoice.expectPositionValue(1, 'description', 'Catering')
   await invoice.expectPdfDisabled()
 

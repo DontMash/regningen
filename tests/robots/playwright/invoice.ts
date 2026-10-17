@@ -21,16 +21,22 @@ type InvoiceControl =
 export class InvoiceRobot {
   constructor(private readonly page: Page) {}
 
-  async expectReady() {
+  async expectReady(locale: 'de' | 'en' = 'de') {
     await expect(
-      this.page.getByRole('heading', { name: 'Rechnung erstellen' }),
+      this.page.getByRole('heading', {
+        name: locale === 'de' ? 'Rechnung erstellen' : 'Create an invoice',
+        exact: true,
+      }),
     ).toBeVisible()
   }
 
-  async expectProfileSetupPrompt() {
+  async expectProfileSetupPrompt(locale: 'de' | 'en' = 'de') {
     await expect(
       this.page.getByRole('heading', {
-        name: 'Unternehmensprofil vervollständigen',
+        name:
+          locale === 'de'
+            ? 'Unternehmensprofil vervollständigen'
+            : 'Complete the business profile',
       }),
     ).toBeVisible()
   }
@@ -203,10 +209,14 @@ export class InvoiceRobot {
     const targetMonth = year * 12 + month - 1
     await this.openDatePicker()
     for (let step = currentMonth; step < targetMonth; step++) {
-      await this.page.getByRole('button', { name: /next month/i }).click()
+      await this.page
+        .getByRole('button', { name: /^(Nächster Monat|Next month)$/ })
+        .click()
     }
     for (let step = currentMonth; step > targetMonth; step--) {
-      await this.page.getByRole('button', { name: /previous month/i }).click()
+      await this.page
+        .getByRole('button', { name: /^(Vorheriger Monat|Previous month)$/ })
+        .click()
     }
     const localeDate = new Date(year, month - 1, day).toLocaleDateString(
       'de-DE',
@@ -258,7 +268,9 @@ export class InvoiceRobot {
   async expectPositionCount(count: number) {
     await expect(
       this.page
-        .getByRole('table', { name: 'Rechnungspositionen' })
+        .getByRole('table', {
+          name: /^(Rechnungspositionen|Invoice positions)$/,
+        })
         .locator('tbody tr'),
     ).toHaveCount(count)
   }
@@ -282,7 +294,9 @@ export class InvoiceRobot {
 
   async expectEmptyPositions() {
     await expect(
-      this.page.getByRole('table', { name: 'Rechnungspositionen' }),
+      this.page.getByRole('table', {
+        name: /^(Rechnungspositionen|Invoice positions)$/,
+      }),
     ).toContainText('Noch keine Positionen')
   }
 
@@ -322,7 +336,7 @@ export class InvoiceRobot {
     await expect(
       this.page
         .getByText(
-          'Der gespeicherte Invoice Draft ist ungültig oder nicht kompatibel. Es wurde ein leerer Entwurf geöffnet.',
+          'Der gespeicherte Rechnungsentwurf ist ungültig oder nicht kompatibel. Es wurde ein leerer Entwurf geöffnet.',
           { exact: false },
         )
         .first(),
@@ -351,7 +365,9 @@ export class InvoiceRobot {
 
   async expectPdfCreated() {
     await expect(
-      this.page.getByRole('heading', { name: 'PDF wurde erstellt' }),
+      this.page.getByRole('heading', {
+        name: /^(PDF wurde erstellt|PDF created)$/,
+      }),
     ).toBeVisible()
   }
 
@@ -361,15 +377,15 @@ export class InvoiceRobot {
     gross: string
   }) {
     const summary = this.page.getByRole('complementary')
-    await expect(summary.getByText('Netto').locator('..')).toContainText(
-      totals.net,
-    )
-    await expect(summary.getByText(/MwSt\./).locator('..')).toContainText(
+    await expect(
+      summary.getByText(/^(Netto|Net)$/).locator('..'),
+    ).toContainText(totals.net)
+    await expect(summary.getByText(/MwSt\.|VAT/).locator('..')).toContainText(
       totals.tax,
     )
-    await expect(summary.getByText('Brutto').locator('..')).toContainText(
-      totals.gross,
-    )
+    await expect(
+      summary.getByText(/^(Brutto|Gross)$/).locator('..'),
+    ).toContainText(totals.gross)
   }
 
   async expectBusinessName(name: string) {
@@ -428,32 +444,36 @@ export class InvoiceRobot {
 
   private control(control: InvoiceControl): Locator {
     const controls: Record<InvoiceControl, Locator> = {
-      number: this.page.getByLabel('Rechnungsnummer'),
-      subject: this.page.getByLabel('Betreff'),
+      number: this.page.getByRole('textbox', {
+        name: /^(Rechnungsnummer|Invoice number)/,
+      }),
+      subject: this.page.getByRole('textbox', { name: /^(Betreff|Subject)/ }),
       'new position description': this.page.getByRole('textbox', {
-        name: 'Beschreibung',
+        name: /^(Beschreibung|Description)$/,
         exact: true,
       }),
       'new position amount': this.page.getByRole('textbox', {
-        name: 'Brutto in Euro',
+        name: /^(Brutto in €|Gross amount €)$/,
         exact: true,
       }),
       'add position': this.page.getByRole('button', {
-        name: 'Position hinzufügen',
+        name: /^(Position hinzufügen|Add position)$/,
         exact: true,
       }),
-      'save invoice': this.page.getByRole('button', { name: 'PDF erstellen' }),
+      'save invoice': this.page.getByRole('button', {
+        name: /^(PDF erstellen|Create PDF)$/,
+      }),
     }
     return controls[control]
   }
 
   private recipientControl(field: keyof RecipientInput) {
-    const labels: Record<keyof RecipientInput, string> = {
-      company: 'Unternehmen des Empfängers',
-      name: 'Name / z. Hd.',
-      street: 'Straße und Hausnummer',
-      postalCode: 'PLZ',
-      town: 'Ort',
+    const labels: Record<keyof RecipientInput, RegExp> = {
+      company: /^(Unternehmen des Empfängers|Recipient's business)$/,
+      name: /^(Name \/ z\. Hd\.|Name \/ for the attention of)$/,
+      street: /^(Straße und Hausnummer|Street and house number)$/,
+      postalCode: /^(PLZ|Postal code)$/,
+      town: /^(Ort|Town or city)$/,
     }
     return this.page.getByRole('textbox', { name: labels[field], exact: true })
   }
@@ -461,8 +481,12 @@ export class InvoiceRobot {
   private positionControl(index: number, field: 'description' | 'amount') {
     const label =
       field === 'description'
-        ? `Beschreibung Position ${index}`
-        : `Brutto in Euro Position ${index}`
+        ? new RegExp(
+            `^(Beschreibung Position ${index}|Description for position ${index})$`,
+          )
+        : new RegExp(
+            `^(Brutto in Euro Position ${index}|Gross amount in euros for position ${index})$`,
+          )
     return this.page.getByRole('textbox', { name: label, exact: true })
   }
 }

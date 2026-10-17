@@ -24,6 +24,9 @@ _Avoid_: Draft (when referring to an issued invoice)
 The business's editable working inputs for an Invoice, including incomplete or invalid values and an Invoice Position still being entered. It is distinct from the generated Invoice document.
 _Avoid_: Invoice (when referring to editable working inputs)
 
+**Invoice Language**:
+The language of an Invoice's standard wording, distinct from the language used to operate the application. It does not change descriptions or other content supplied by the business.
+
 **Invoice Position**:
 A charge for a good or service on one invoice, with a description and gross amount. It is not a reusable catalogue entry.
 _Avoid_: Product (when referring to a charge on an invoice)

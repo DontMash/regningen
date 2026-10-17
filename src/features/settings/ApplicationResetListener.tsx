@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { localizeUrl } from '@/paraglide/runtime'
 import { subscribeToApplicationReset } from './application-reset'
 import { invalidateUnsavedProfileChanges } from './unsaved-profile'
 
@@ -8,7 +9,10 @@ export default function ApplicationResetListener() {
     () =>
       subscribeToApplicationReset(() => {
         invalidateUnsavedProfileChanges()
-        window.location.assign('/settings/profile')
+        window.location.assign(
+          localizeUrl(new URL('/settings/profile', window.location.origin))
+            .href,
+        )
       }),
     [],
   )

@@ -27,7 +27,7 @@ test('keeps home stable until a keyboard action opens actual first-time profile 
   await appShell.expectProfilePage()
   await landing.expectVisibility(
     'Unternehmensprofil – regningen',
-    `${deployment.baseUrl}/settings/profile`,
+    `${deployment.baseUrl}/de/einstellungen/profil`,
   )
 })
 
@@ -53,7 +53,7 @@ test('uses the saved profile only after explicit entry and clears stale head inf
   await landing.expectIntroduction()
   await landing.expectVisibility(
     'regningen – Rechnungen erstellen und als PDF herunterladen',
-    `${deployment.baseUrl}/`,
+    `${deployment.baseUrl}/de`,
     true,
   )
   await landing.startInvoice('final')
@@ -67,24 +67,24 @@ test('uses the saved profile only after explicit entry and clears stale head inf
   await invoice.enterInvoice(draft.input)
   await landing.expectVisibility(
     'Rechnung erstellen – regningen',
-    `${deployment.baseUrl}/invoice`,
+    `${deployment.baseUrl}/de/rechnung`,
   )
   await appShell.navigateToSettings()
   await settings.expectGeneralPage()
   await landing.expectVisibility(
     'Einstellungen – regningen',
-    `${deployment.baseUrl}/settings`,
+    `${deployment.baseUrl}/de/einstellungen`,
   )
   await settings.openProfile()
   await landing.expectVisibility(
     'Unternehmensprofil – regningen',
-    `${deployment.baseUrl}/settings/profile`,
+    `${deployment.baseUrl}/de/einstellungen/profil`,
   )
   await landing.returnHome()
   await landing.expectIntroduction()
   await landing.expectVisibility(
     'regningen – Rechnungen erstellen und als PDF herunterladen',
-    `${deployment.baseUrl}/`,
+    `${deployment.baseUrl}/de`,
     true,
   )
   const publicInformation = JSON.stringify(await landing.publicInformation())
@@ -174,17 +174,17 @@ test('retains a foreign deployment’s exclusion policy through hydration and cl
   await landing.expectIntroduction()
   await landing.expectVisibility(
     'regningen – Rechnungen erstellen und als PDF herunterladen',
-    'https://regningen.soren.codes/',
+    'https://regningen.soren.codes/de',
   )
   await landing.startInvoice()
   await appShell.expectProfilePage()
   await landing.expectVisibility(
     'Unternehmensprofil – regningen',
-    'https://regningen.soren.codes/settings/profile',
+    'https://regningen.soren.codes/de/einstellungen/profil',
   )
   await landing.returnHome()
   await landing.expectVisibility(
     'regningen – Rechnungen erstellen und als PDF herunterladen',
-    'https://regningen.soren.codes/',
+    'https://regningen.soren.codes/de',
   )
 })

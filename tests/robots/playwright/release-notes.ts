@@ -45,10 +45,10 @@ export class ReleaseNotesRobot {
   async dismissReleaseNotes() {
     await this.page
       .getByRole('dialog', {
-        name: 'Versionshinweise',
+        name: /^(Versionshinweise|Release notes)$/,
         exact: true,
       })
-      .getByRole('button', { name: 'Schließen' })
+      .getByRole('button', { name: /^(Schließen|Close)$/ })
       .click()
   }
 
@@ -65,10 +65,10 @@ export class ReleaseNotesRobot {
   async acknowledgeReleaseNotes() {
     await this.page
       .getByRole('dialog', {
-        name: 'Versionshinweise',
+        name: /^(Versionshinweise|Release notes)$/,
         exact: true,
       })
-      .getByRole('button', { name: 'Verstanden' })
+      .getByRole('button', { name: /^(Verstanden|Understood)$/ })
       .click()
   }
 

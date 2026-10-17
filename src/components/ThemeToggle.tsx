@@ -3,6 +3,7 @@ import { IconSun, IconMoon, IconDeviceDesktop } from '@tabler/icons-react'
 import { useSelector } from '@tanstack/react-store'
 import { applyThemeMode, themeModeLabels, themeStore } from '@/lib/theme-store'
 import { Button } from '@/components/ui/button'
+import * as m from '@/paraglide/messages'
 
 export default function ThemeToggle() {
   const mode = useSelector(themeStore.store, (state) => state.mode)
@@ -40,8 +41,8 @@ export default function ThemeToggle() {
       type="button"
       disabled={!isHydrated}
       onClick={toggleMode}
-      aria-label="Darstellung umschalten"
-      title={`Darstellung: ${themeModeLabels[mode]}`}
+      aria-label={m.shell_theme_toggle()}
+      title={m.shell_theme_title({ mode: themeModeLabels[mode] })}
     >
       {mode === 'light' && <IconSun data-icon="inline-start" />}
       {mode === 'dark' && <IconMoon data-icon="inline-start" />}

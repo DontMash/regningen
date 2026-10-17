@@ -10,6 +10,7 @@ import {
   FieldSet,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import * as m from '@/paraglide/messages'
 
 export function RequiredMark() {
   return <span aria-hidden="true"> *</span>
@@ -47,7 +48,7 @@ export function RequiredAlternativeFields({
     >
       <FieldLegend variant="label">
         {label}
-        <RequiredMark /> — mindestens eine Angabe
+        <RequiredMark /> — {m.form_alternative_requirement()}
       </FieldLegend>
       <AlternativeErrorContext.Provider value={{ id: errorId, error }}>
         <FieldGroup className="grid gap-5 md:grid-cols-2">

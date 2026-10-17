@@ -1,0 +1,11 @@
+{
+  "release_title": "Versionshinweise",
+  "release_acknowledge": "Verstanden",
+  "release_version_current": "Version {version} · laufend",
+  "release_version_historical": "Version {version}",
+  "release_select_version": "Version auswählen",
+  "release_option_current": "v{version} (laufend)",
+  "release_option_historical": "v{version}",
+  "release_acknowledgment_error": "Gelesene Versionshinweise konnten nicht gespeichert werden.",
+  "release_acknowledgment_error_description": "Die Versionshinweise können beim nächsten Start erneut erscheinen."
+}

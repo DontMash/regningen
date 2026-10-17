@@ -24,7 +24,7 @@ export class FooterRobot {
     await expect(footer).toBeVisible()
     await expect(
       footer.getByRole('link', { name: 'regningen' }),
-    ).toHaveAttribute('href', '/')
+    ).toHaveAttribute('href', '/de')
     await expect(footer.locator('img')).toHaveAttribute('src', '/favicon.svg')
     await expect(
       footer.getByText(
@@ -37,7 +37,7 @@ export class FooterRobot {
     await expect(features.locator('a[href^="/"]')).toHaveCount(1)
     await expect(
       features.getByRole('link', { name: 'Rechnung' }),
-    ).toHaveAttribute('href', '/invoice')
+    ).toHaveAttribute('href', '/de/rechnung')
     for (const [name, href] of [
       ['Impressum', 'https://www.soren.codes/de/impressum'],
       ['Datenschutz', 'https://www.soren.codes/de/datenschutz'],
@@ -49,10 +49,14 @@ export class FooterRobot {
     }
   }
 
-  async expectAuthorAttribution() {
+  async expectAuthorAttribution(locale: 'de' | 'en' = 'de') {
     const footer = this.page.getByRole('contentinfo')
-    await expect(footer.getByText('Made with', { exact: false })).toHaveText(
-      'Made with love by soren',
+    await expect(
+      footer.getByText(locale === 'de' ? 'Mit' : 'Made with', { exact: false }),
+    ).toHaveText(
+      locale === 'de'
+        ? 'Mit Liebe von soren erstellt'
+        : 'Made with love by soren',
     )
     const author = footer.getByRole('link', { name: 'soren' })
     await expect(author).toHaveAttribute(

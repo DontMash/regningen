@@ -7,7 +7,18 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Field, FieldTitle } from '@/components/ui/field'
+import * as m from '@/paraglide/messages'
+import {
+  LanguageSelect,
+  InvoiceLanguageSelect,
+} from '@/components/LanguageSelect'
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+  FieldTitle,
+} from '@/components/ui/field'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { toast } from '@/components/ui/toast'
 import { applyThemeMode, themeModeLabels, themeStore } from '@/lib/theme-store'
@@ -48,7 +59,7 @@ export default function GeneralSettingsPage() {
       setResetError(
         error instanceof Error
           ? error.message
-          : 'Der Browserspeicher ist nicht verfügbar.',
+          : m.settings_storage_unavailable(),
       )
     } finally {
       setResetting(false)
@@ -63,7 +74,7 @@ export default function GeneralSettingsPage() {
       themeStore.setMode(selected, window.localStorage)
     } catch {
       toast.add({
-        title: 'Darstellung konnte nicht gespeichert werden.',
+        title: m.settings_theme_failed(),
         type: 'warning',
       })
     }
@@ -71,17 +82,46 @@ export default function GeneralSettingsPage() {
   }
   return (
     <div className="flex flex-col gap-6">
-      <h2 className="heading-2">Allgemein</h2>
+      <h2 className="heading-2">{m.settings_general()}</h2>
       <Card>
         <CardHeader>
-          <CardTitle>Darstellung</CardTitle>
+          <CardTitle>{m.settings_languages()}</CardTitle>
           <CardDescription>
-            Wähle eine Darstellung oder folge den Einstellungen deines Geräts.
+            {m.settings_languages_description()}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="interface-language">
+                {m.common_interface_language()}
+              </FieldLabel>
+              <LanguageSelect id="interface-language" />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="invoice-language">
+                {m.common_invoice_language()}
+              </FieldLabel>
+              <InvoiceLanguageSelect id="invoice-language" />
+              <FieldDescription>
+                {m.settings_invoice_language_hint()}
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{m.settings_appearance()}</CardTitle>
+          <CardDescription>
+            {m.settings_appearance_description()}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Field orientation="horizontal" data-disabled={!isHydrated}>
-            <FieldTitle id="appearance-label">Farbschema</FieldTitle>
+            <FieldTitle id="appearance-label">
+              {m.settings_colour_scheme()}
+            </FieldTitle>
             <ToggleGroup
               aria-labelledby="appearance-label"
               value={[isHydrated ? mode : 'auto']}
@@ -102,11 +142,9 @@ export default function GeneralSettingsPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Benachrichtigungen</CardTitle>
+          <CardTitle>{m.settings_notifications()}</CardTitle>
           <CardDescription>
-            Lokale Benachrichtigungen informieren dich nach einem erfolgreichen
-            PDF-Export. Es gibt keine Erinnerungen oder Nachrichten von einem
-            Server.
+            {m.settings_notifications_description()}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -115,10 +153,9 @@ export default function GeneralSettingsPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Installation</CardTitle>
+          <CardTitle>{m.settings_installation()}</CardTitle>
           <CardDescription>
-            Installiere regningen, um die Anwendung direkt von deinem Gerät zu
-            öffnen. Benachrichtigungen werden dadurch nicht aktiviert.
+            {m.settings_installation_description()}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -128,20 +165,15 @@ export default function GeneralSettingsPage() {
       <Separator />
       <Card>
         <CardHeader>
-          <CardTitle>Anwendung zurücksetzen</CardTitle>
-          <CardDescription>
-            Lösche deine lokal gespeicherten Daten und Einstellungen in diesem
-            Browser und beginne neu.
-          </CardDescription>
+          <CardTitle>{m.settings_reset()}</CardTitle>
+          <CardDescription>{m.settings_reset_description()}</CardDescription>
         </CardHeader>
         <CardContent>
           {resetError && (
             <Alert variant="destructive" role="alert">
-              <AlertTitle>Anwendung nicht vollständig zurückgesetzt</AlertTitle>
+              <AlertTitle>{m.settings_reset_incomplete()}</AlertTitle>
               <AlertDescription>
-                Ein Teil der Daten wurde möglicherweise bereits gelöscht.{' '}
-                {resetError} Prüfe die Speichereinstellungen und versuche es
-                erneut.
+                {m.settings_reset_failed({ error: resetError })}
               </AlertDescription>
             </Alert>
           )}
@@ -150,7 +182,7 @@ export default function GeneralSettingsPage() {
             onClick={() => setResetOpen(true)}
             disabled={resetting}
           >
-            Anwendung zurücksetzen
+            {m.settings_reset()}
           </Button>
         </CardContent>
       </Card>
@@ -162,27 +194,21 @@ export default function GeneralSettingsPage() {
       >
         <AlertDialogContent initialFocus={cancelRef}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Anwendung zurücksetzen?</AlertDialogTitle>
+            <AlertDialogTitle>{m.settings_reset_confirm()}</AlertDialogTitle>
             <AlertDialogDescription>
-              Das Unternehmensprofil, alle Rechnungseingaben einschließlich
-              ungespeicherter Änderungen in den Tabs dieser Anwendung,
-              Darstellung, Benachrichtigungseinstellungen und gelesene
-              Versionshinweise werden in diesem Browser gelöscht.
-              Heruntergeladene PDFs und Sicherungen, Browser-Berechtigungen,
-              Installation und Offline-Verfügbarkeit bleiben erhalten. Andere
-              Browser und Geräte sind nicht betroffen.
+              {m.settings_reset_scope()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel ref={cancelRef} disabled={resetting}>
-              Abbrechen
+              {m.settings_cancel()}
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={resetting}
               onClick={() => void reset()}
             >
-              {resetting ? 'Wird zurückgesetzt …' : 'Anwendung zurücksetzen'}
+              {resetting ? m.settings_resetting() : m.settings_reset()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

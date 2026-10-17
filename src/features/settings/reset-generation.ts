@@ -1,3 +1,5 @@
+import * as m from '@/paraglide/messages'
+
 const RESET_GENERATION_KEY = 'regningen.application-reset.generation'
 const RESET_COMPLETED_KEY = 'regningen.application-reset.completed'
 export const INITIAL_APPLICATION_RESET_GENERATION = 'initial'
@@ -140,9 +142,7 @@ export function beginApplicationReset(generation: string): Promise<void> {
 export async function publishApplicationReset(generation: string) {
   await prepareApplicationReset()
   if (getApplicationResetGeneration() !== generation) {
-    throw new Error(
-      'Eine andere Registerkarte hat die Anwendung zurückgesetzt.',
-    )
+    throw new Error(m.settings_reset_conflict())
   }
   window.localStorage.setItem(RESET_COMPLETED_KEY, generation)
   await checkForApplicationReset()

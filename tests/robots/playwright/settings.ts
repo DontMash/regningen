@@ -19,19 +19,31 @@ export class SettingsRobot {
       .click()
   }
 
-  async expectGeneralPage() {
-    await expect(this.page).toHaveURL(/\/settings\/?$/)
+  async expectGeneralPage(locale: 'de' | 'en' = 'de') {
+    await expect(this.page).toHaveURL(
+      locale === 'de' ? /\/de\/einstellungen$/ : /\/en\/settings$/,
+    )
     await expect(
-      this.page.getByRole('heading', { name: 'Allgemein', exact: true }),
+      this.page.getByRole('heading', {
+        name: locale === 'de' ? 'Allgemein' : 'General',
+        exact: true,
+      }),
     ).toBeVisible()
     await expect(
-      this.page.getByText('Benachrichtigungen', { exact: true }),
+      this.page.getByText(
+        locale === 'de' ? 'Benachrichtigungen' : 'Notifications',
+        { exact: true },
+      ),
     ).toBeVisible()
     await expect(
       this.page.getByText('Installation', { exact: true }),
     ).toBeVisible()
     await expect(
-      this.page.getByText(/nach einem erfolgreichen PDF-Export/),
+      this.page.getByText(
+        locale === 'de'
+          ? /nach einem erfolgreichen PDF-Export/
+          : /after a successful PDF export/,
+      ),
     ).toBeVisible()
   }
 
@@ -41,10 +53,10 @@ export class SettingsRobot {
       .getByRole('navigation', { name: 'Einstellungen', exact: true })
     await expect(
       navigation.getByRole('link', { name: 'Allgemein', exact: true }),
-    ).toHaveAttribute('href', '/settings')
+    ).toHaveAttribute('href', '/de/einstellungen')
     await expect(
       navigation.getByRole('link', { name: 'Profil', exact: true }),
-    ).toHaveAttribute('href', '/settings/profile')
+    ).toHaveAttribute('href', '/de/einstellungen/profil')
     await expect(
       navigation.getByRole('link', { name, exact: true }),
     ).toHaveAttribute('aria-current', 'page')
@@ -84,7 +96,7 @@ export class SettingsRobot {
       }),
     ).toBeDisabled()
     await expect(
-      this.page.getByText(/Ändere sie in den Browser-Einstellungen/),
+      this.page.getByText(/Ändern Sie sie in den Browser-Einstellungen/),
     ).toBeVisible()
   }
 
@@ -139,7 +151,7 @@ export class SettingsRobot {
     await expect(error).toContainText(
       'Ein Teil der Daten wurde möglicherweise bereits gelöscht.',
     )
-    await expect(error).toContainText('versuche es erneut')
+    await expect(error).toContainText('versuchen Sie es erneut')
     await this.expectGeneralPage()
   }
 

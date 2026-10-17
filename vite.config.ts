@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  writeFileSync,
 } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
@@ -19,6 +20,8 @@ import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
+import { paraglideVitePlugin } from '@inlang/paraglide-js'
+import { localizedPages, paraglideOptions } from './src/i18n/config.ts'
 
 function releaseDataValidation(): Plugin {
   let rootDirectory = process.cwd()
@@ -89,18 +92,73 @@ function applicationBuildOutputRevision(
 
 const ssrDocumentPaths = [
   '/',
-  '/invoice',
-  '/invoice/',
-  '/settings',
-  '/settings/',
-  '/settings/profile',
-  '/settings/profile/',
+  ...localizedPages.flatMap((page) =>
+    [page.de, page.en].flatMap((path) => [path, `${path}/`]),
+  ),
 ]
+const baseManifest = {
+  id: '/',
+  name: 'regningen',
+  short_name: 'regningen',
+  lang: 'de',
+  description: 'Rechnungen erstellen und als PDF herunterladen.',
+  start_url: '/',
+  scope: '/',
+  display: 'standalone',
+  background_color: '#ffffff',
+  theme_color: '#ec003f',
+} as const
+
+function localizedManifest(manifest: object, locale: 'de' | 'en') {
+  const messages = JSON.parse(
+    readFileSync(
+      resolve(process.cwd(), `messages/${locale}/meta.json`),
+      'utf8',
+    ),
+  ) as Record<string, string>
+  return {
+    ...manifest,
+    lang: locale,
+    description: messages.meta_manifest_description,
+  }
+}
+
+function developmentManifests(): Plugin {
+  return {
+    name: 'localized-development-manifests',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const match = /^\/manifest-(de|en)\.webmanifest(?:\?|$)/.exec(
+          request.url ?? '',
+        )
+        if (!match) return next()
+        response.setHeader(
+          'Content-Type',
+          'application/manifest+json; charset=utf-8',
+        )
+        response.end(
+          JSON.stringify(
+            localizedManifest(baseManifest, match[1] as 'de' | 'en'),
+          ),
+        )
+      })
+    },
+  }
+}
+
 function preparePwaWorker(
   options: ResolvedVitePWAOptions,
   environment: ReturnType<typeof readEnvironment>,
 ) {
   copyServerRenderedStyles()
+  if (options.manifest) {
+    for (const locale of ['de', 'en'] as const) {
+      writeFileSync(
+        resolve(process.cwd(), `.output/public/manifest-${locale}.webmanifest`),
+        JSON.stringify(localizedManifest(options.manifest, locale)),
+      )
+    }
+  }
   const revision = applicationBuildOutputRevision(process.cwd(), environment)
   const generatedEntries = (
     options.workbox.additionalManifestEntries ?? []
@@ -142,6 +200,8 @@ const config = defineConfig(({ command, mode }) => {
     // Fonts and artwork remain origin-served resources under the enforced CSP.
     build: { assetsInlineLimit: 0 },
     plugins: [
+      paraglideVitePlugin(paraglideOptions),
+      developmentManifests(),
       releaseDataValidation(),
       VitePWA({
         strategies: 'generateSW',
@@ -153,17 +213,7 @@ const config = defineConfig(({ command, mode }) => {
         manifestFilename: 'manifest.webmanifest',
         includeAssets: ['favicon.svg'],
         includeManifestIcons: true,
-        manifest: {
-          name: 'regningen',
-          short_name: 'regningen',
-          lang: 'de',
-          description: 'Rechnungen erstellen und als PDF herunterladen.',
-          start_url: '/',
-          scope: '/',
-          display: 'standalone',
-          background_color: '#ffffff',
-          theme_color: '#ec003f',
-        },
+        manifest: baseManifest,
         pwaAssets: {
           config: './pwa-assets.config.ts',
           overrideManifestIcons: true,
@@ -180,8 +230,11 @@ const config = defineConfig(({ command, mode }) => {
         },
         workbox: {
           navigateFallback: null,
+          // VitePWA already injects the base manifest with its own revision.
+          // Include localized manifests via globbing, but never the base twice.
+          globIgnores: ['**/manifest.webmanifest'],
           globPatterns: [
-            '**/*.{js,mjs,css,html,ico,png,svg,webp,woff,woff2,ttf,eot}',
+            '**/*.{js,mjs,css,html,ico,png,svg,webp,woff,woff2,ttf,eot,webmanifest}',
           ],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           cleanupOutdatedCaches: true,

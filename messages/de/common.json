@@ -1,0 +1,19 @@
+{
+  "common_close": "Schließen",
+  "common_toast_close": "Meldung schließen",
+  "common_toast_region": "Meldungen",
+  "common_language_change": "Sprache ändern",
+  "common_interface_language": "Oberflächensprache",
+  "common_invoice_language": "Rechnungssprache",
+  "common_follow_interface": "Oberflächensprache folgen",
+  "common_language_save_failed": "Die Spracheinstellung konnte nicht gespeichert werden.",
+  "common_switch_failed": "Die Sprache konnte nicht gewechselt werden. Bitte prüfen Sie den Sitzungsspeicher und versuchen Sie es erneut.",
+  "common_unavailable": "Seite nicht verfügbar",
+  "common_not_found": "Seite nicht gefunden",
+  "common_unavailable_title": "Seite nicht verfügbar – regningen",
+  "common_home": "Zur Startseite",
+  "common_invalid": "Bitte prüfen Sie diese Eingabe.",
+  "common_invalid_type": "Bitte geben Sie einen gültigen Wert ein.",
+  "common_too_long": "Bitte geben Sie höchstens {maximum} Zeichen ein.",
+  "common_too_short": "Bitte geben Sie mindestens {minimum} Zeichen ein."
+}

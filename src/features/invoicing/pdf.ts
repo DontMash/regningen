@@ -2,6 +2,10 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type { BusinessProfileDraft } from './business-profile'
 import type { InvoiceDraft } from './invoice'
 import { calculateInvoiceTotals, parseEuroAmount } from './invoice'
+import * as m from '@/paraglide/messages'
+import { getLocale } from '@/paraglide/runtime'
+import type { Locale } from '@/paraglide/runtime'
+import { formatDate, formatEuro } from '@/lib/i18n'
 
 const PAGE_WIDTH = 595.28
 const PAGE_HEIGHT = 841.89
@@ -45,26 +49,32 @@ function wrapText(
   return lines
 }
 
-function formattedEuro(cents: number) {
-  return new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  })
-    .format(cents / 100)
-    .replaceAll('\u00a0', ' ')
-}
-
-function germanDate(isoDate: string) {
-  const [year, month, day] = isoDate.split('-')
-  return `${day}.${month}.${year}`
-}
-
 export async function createInvoicePdf(
   profile: BusinessProfileDraft,
   invoice: InvoiceDraft,
+  locale: Locale = getLocale(),
+): Promise<Uint8Array> {
+  try {
+    return await renderInvoicePdf(profile, invoice, locale)
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes('WinAnsi cannot encode')
+    ) {
+      throw new Error(m.pdf_error_characters(), { cause: error })
+    }
+    throw error
+  }
+}
+
+async function renderInvoicePdf(
+  profile: BusinessProfileDraft,
+  invoice: InvoiceDraft,
+  locale: Locale,
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create()
-  pdf.setTitle(`Rechnung ${invoice.number}`)
+  pdf.setTitle(m.pdf_title({ number: invoice.number }, { locale }))
+  pdf.setLanguage(locale)
   pdf.setAuthor(profile.businessName)
   pdf.setCreator('regningen')
   pdf.setCreationDate(new Date(`${invoice.date}T12:00:00`))
@@ -113,7 +123,7 @@ export async function createInvoicePdf(
     RIGHT - LEFT,
   )
   if (businessNameLines.length > 2) {
-    throw new Error('Der Unternehmensname ist zu lang für das PDF.')
+    throw new Error(m.pdf_error_business_name())
   }
   businessNameLines.forEach((value, index) =>
     write(value, LEFT, 790 - index * 19, 16, bold),
@@ -127,7 +137,7 @@ export async function createInvoicePdf(
       RIGHT - LEFT,
     )
     if (serviceLines.length > 1) {
-      throw new Error('Die Leistungsbeschreibung ist zu lang für das PDF.')
+      throw new Error(m.pdf_error_service())
     }
     write(serviceLines[0] ?? '', LEFT, headingBottom, 10, font, MUTED)
   }
@@ -149,8 +159,8 @@ export async function createInvoicePdf(
       profile.ownerName,
       profile.street,
       `${profile.postalCode} ${profile.town}`,
-      profile.phone && `Tel.: ${profile.phone}`,
-      profile.mobile && `Mobil: ${profile.mobile}`,
+      profile.phone && m.pdf_phone({ phone: profile.phone }, { locale }),
+      profile.mobile && m.pdf_mobile({ mobile: profile.mobile }, { locale }),
     ],
     338,
     addressTop,
@@ -159,13 +169,17 @@ export async function createInvoicePdf(
 
   let y = Math.min(recipientLines, issuerLines) - 26
   if (y < 560) {
-    throw new Error('Die Anschriften sind zu umfangreich für eine Seite.')
+    throw new Error(m.pdf_error_addresses())
   }
 
-  write('Rechnung', LEFT, y, 14, bold)
+  write(m.pdf_heading({}, { locale }), LEFT, y, 14, bold)
   y -= 24
-  write(`Rechnungsnummer ${invoice.number}`, LEFT, y, 10)
-  rightText(`Datum: ${germanDate(invoice.date)}`, y, 10)
+  write(m.pdf_number({ number: invoice.number }, { locale }), LEFT, y, 10)
+  rightText(
+    m.pdf_date({ date: formatDate(invoice.date, locale) }, { locale }),
+    y,
+    10,
+  )
   y -= 18
   if (invoice.subject.trim()) {
     const subjectLines = wrapText(
@@ -175,27 +189,32 @@ export async function createInvoicePdf(
       RIGHT - LEFT - 44,
     )
     if (subjectLines.length > 2) {
-      throw new Error('Der Betreff ist zu lang für eine Seite.')
+      throw new Error(m.pdf_error_subject())
     }
     subjectLines.forEach((part, index) =>
-      write(index === 0 ? `Betreff: ${part}` : part, LEFT, y - index * 12, 10),
+      write(
+        index === 0 ? m.pdf_subject({ subject: part }, { locale }) : part,
+        LEFT,
+        y - index * 12,
+        10,
+      ),
     )
     y -= subjectLines.length * 12 + 7
   }
 
-  write('Waren & Dienstleistungen', LEFT, y, 10, bold)
-  rightText('Kosten', y, 10, bold)
+  write(m.pdf_positions({}, { locale }), LEFT, y, 10, bold)
+  rightText(m.pdf_cost({}, { locale }), y, 10, bold)
   line(y - 8)
   y -= 27
 
   const completedItems = invoice.items.filter(
     (item) => item.description.trim() || item.amount.trim(),
   )
-  const amounts = completedItems.map((item) => parseEuroAmount(item.amount))
+  const amounts = completedItems.map((item) =>
+    parseEuroAmount(item.amount, item.amountLocale ?? 'de'),
+  )
   if (amounts.some((amount) => amount === null || amount <= 0)) {
-    throw new Error(
-      'Bitte alle Positionsbeschreibungen und Bruttopreise prüfen.',
-    )
+    throw new Error(m.pdf_error_amounts())
   }
 
   for (let index = 0; index < completedItems.length; index++) {
@@ -205,13 +224,13 @@ export async function createInvoicePdf(
 
     const descriptionLines = wrapText(item.description.trim(), font, 9, 350)
     if (descriptionLines.length > 2) {
-      throw new Error('Eine Positionsbeschreibung ist zu lang für eine Seite.')
+      throw new Error(m.pdf_error_description())
     }
 
     descriptionLines.forEach((part, lineIndex) =>
       write(part, LEFT, y - lineIndex * 11, 9),
     )
-    rightText(formattedEuro(amount), y, 9)
+    rightText(formatEuro(amount, locale), y, 9)
 
     const rowHeight = Math.max(16, descriptionLines.length * 11 + 5)
     y -= rowHeight
@@ -219,9 +238,7 @@ export async function createInvoicePdf(
   }
 
   if (y < 285) {
-    throw new Error(
-      'Zu viele lange Positionen für eine Seite. Bitte Beschreibungen kürzen.',
-    )
+    throw new Error(m.pdf_error_positions())
   }
 
   const totals = calculateInvoiceTotals(
@@ -229,16 +246,21 @@ export async function createInvoicePdf(
     invoice.rate,
   )
   const totalRows = [
-    { label: 'Netto:', value: formattedEuro(totals.net), size: 9, face: font },
     {
-      label: `${invoice.rate} % MwSt.:`,
-      value: formattedEuro(totals.tax),
+      label: m.pdf_net({}, { locale }),
+      value: formatEuro(totals.net, locale),
       size: 9,
       face: font,
     },
     {
-      label: 'Brutto:',
-      value: formattedEuro(totals.gross),
+      label: m.pdf_tax({ rate: invoice.rate }, { locale }),
+      value: formatEuro(totals.tax, locale),
+      size: 9,
+      face: font,
+    },
+    {
+      label: m.pdf_gross({}, { locale }),
+      value: formatEuro(totals.gross, locale),
       size: 10,
       face: bold,
     },
@@ -261,18 +283,18 @@ export async function createInvoicePdf(
   }
 
   if (y < 165) {
-    throw new Error('Die Rechnungsdaten sind zu umfangreich für eine Seite.')
+    throw new Error(m.pdf_error_invoice())
   }
 
   const bankDetails = [
-    { label: 'IBAN:', value: profile.iban, y: 126 },
+    { label: m.pdf_iban({}, { locale }), value: profile.iban, y: 126 },
     ...(profile.vatId
-      ? [{ label: 'USt-IdNr.:', value: profile.vatId, y: 110 }]
+      ? [{ label: m.pdf_vat_id({}, { locale }), value: profile.vatId, y: 110 }]
       : []),
     ...(profile.taxNumber
       ? [
           {
-            label: 'Steuernummer:',
+            label: m.pdf_tax_number({}, { locale }),
             value: profile.taxNumber,
             y: profile.vatId ? 94 : 110,
           },

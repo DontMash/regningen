@@ -96,7 +96,9 @@ export class InvoiceRobot {
 
   async submitNewPosition() {
     await this.user.click(
-      screen.getByRole('button', { name: 'Position hinzufügen' }),
+      screen.getByRole('button', {
+        name: /^(?:Position hinzufügen|Add position)$/,
+      }),
     )
   }
 
@@ -122,7 +124,11 @@ export class InvoiceRobot {
 
   async removePosition(index: number) {
     await this.user.click(
-      screen.getByRole('button', { name: `Position ${index} entfernen` }),
+      screen.getByRole('button', {
+        name: new RegExp(
+          `^(?:Position ${index} entfernen|Remove position ${index})$`,
+        ),
+      }),
     )
   }
 
@@ -136,6 +142,13 @@ export class InvoiceRobot {
 
   expectMessageAbsent(message: string) {
     expect(screen.queryByText(message, { exact: true })).not.toBeInTheDocument()
+  }
+
+  async expectPositionCount(text: string) {
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent(new RegExp(`^${text}$`))
+    expect(status).toBeVisible()
+    expect(status).toHaveAttribute('aria-live', 'polite')
   }
 
   expectPositionValues(index: number, position: Partial<InvoicePositionInput>) {
@@ -271,7 +284,7 @@ export class InvoiceRobot {
       'PLZ',
       'Ort',
       'Beschreibung',
-      'Brutto in Euro',
+      'Brutto in €',
     ]) {
       expect(screen.getByRole('textbox', { name: label })).toBeRequired()
       expect(screen.getByText(label, { selector: 'label' })).toHaveTextContent(
@@ -297,7 +310,7 @@ export class InvoiceRobot {
     expect(
       screen.getByText('MwSt.-Satz', { selector: 'label' }),
     ).toHaveTextContent(/\*/)
-    for (const label of ['Beschreibung', 'Brutto in Euro']) {
+    for (const label of ['Beschreibung', 'Brutto in €']) {
       expect(
         screen.getByRole('columnheader', { name: label }),
       ).toHaveTextContent(/\*/)
@@ -328,7 +341,10 @@ export class InvoiceRobot {
 
   private newPositionField(field: keyof InvoicePositionInput) {
     return screen.getByRole('textbox', {
-      name: field === 'description' ? 'Beschreibung' : 'Brutto in Euro',
+      name:
+        field === 'description'
+          ? /^(?:Beschreibung|Description)$/
+          : /^(?:Brutto in €|Gross amount €)$/,
     })
   }
 

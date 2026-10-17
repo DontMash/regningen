@@ -72,7 +72,7 @@ test.describe('production browser security', () => {
     const controls = new BrowserControls(page, context)
     await controls.useSystemTheme('dark')
     try {
-      await page.goto(deployment.baseUrl)
+      await page.goto(`${deployment.baseUrl}/de`)
       await theme.expectResolvedTheme('dark')
       await releaseNotes.selectReleaseVersion('v1.0.0')
       await releaseNotes.acknowledgeReleaseNotes()
@@ -161,7 +161,7 @@ test.describe('production browser security', () => {
     const { pwa, settings, appShell, businessProfile, invoice } =
       robotsForPage(page)
     try {
-      await page.goto(`${deployment.baseUrl}/settings`)
+      await page.goto(`${deployment.baseUrl}/de/einstellungen`)
       await pwa.acknowledgeRunningReleaseNotes()
       await pwa.expectOfflineReady()
       await settings.expectNotificationsDenied()
@@ -196,18 +196,28 @@ test.describe('production browser security', () => {
 
   test('pages, failures, discovery and generated assets deliver the enforced baseline', async () => {
     for (const [path, status, mime] of [
-      ['/', 200, 'text/html'],
-      ['/invoice', 200, 'text/html'],
-      ['/settings/profile', 200, 'text/html'],
-      ['/unknown-security-page', 404, 'text/html'],
-      ['/visibility-failure', 500, 'text/html'],
+      ['/de', 200, 'text/html'],
+      ['/en', 200, 'text/html'],
+      ['/de/rechnung', 200, 'text/html'],
+      ['/en/invoice', 200, 'text/html'],
+      ['/de/einstellungen', 200, 'text/html'],
+      ['/en/settings', 200, 'text/html'],
+      ['/de/einstellungen/profil', 200, 'text/html'],
+      ['/en/settings/profile', 200, 'text/html'],
+      ['/de/unknown-security-page', 404, 'text/html'],
+      ['/en/unknown-security-page', 404, 'text/html'],
+      ['/de/visibility-failure', 500, 'text/html'],
+      ['/en/visibility-failure', 500, 'text/html'],
       ['/robots.txt', 200, 'text/plain'],
       ['/sitemap.xml', 200, 'xml'],
       ['/llms.txt', 200, 'text/plain'],
       ['/sw.js', 200, 'javascript'],
       ['/manifest.webmanifest', 200, 'application/manifest+json'],
+      ['/manifest-de.webmanifest', 200, 'application/manifest+json'],
+      ['/manifest-en.webmanifest', 200, 'application/manifest+json'],
       ['/favicon.svg', 200, 'image/svg+xml'],
       ['/social-preview.png', 200, 'image/png'],
+      ['/social-preview-en.png', 200, 'image/png'],
     ] as const) {
       const response = await readHttp(deployment.baseUrl, path)
       expect(response.status, path).toBe(status)
@@ -235,7 +245,7 @@ test.describe('production browser security', () => {
   })
 
   test('runtime failures, previews and conditional generated assets retain protection and MIME types', async () => {
-    const failure = await readHttp(deployment.baseUrl, '/', {
+    const failure = await readHttp(deployment.baseUrl, '/de', {
       accept: 'application/json',
     })
     expect(failure.status).toBe(406)
@@ -243,7 +253,7 @@ test.describe('production browser security', () => {
       "frame-ancestors 'none'",
     )
     expect(failure.headers['referrer-policy']).toBe('no-referrer')
-    const preview = await readHttp(deployment.baseUrl, '/', {
+    const preview = await readHttp(deployment.baseUrl, '/en', {
       host: 'preview.example',
     })
     expect(preview.status).toBe(200)
@@ -290,7 +300,7 @@ test.describe('production browser security', () => {
     const probes = await installExecutionProbes(context, deployment.baseUrl)
     const page = await context.newPage()
     try {
-      await page.goto(`${deployment.baseUrl}/?security-probes`)
+      await page.goto(`${deployment.baseUrl}/de?security-probes`)
       await robotsForPage(page).releaseNotes.dismissReleaseNotes()
       await activateProhibitedHandler(page)
       await expect
@@ -353,7 +363,7 @@ test.describe('production browser security', () => {
     const { footer, releaseNotes } = robotsForPage(page)
     try {
       await page.goto(
-        `${deployment.baseUrl}/?utm_source=private&invoice=fictional-secret`,
+        `${deployment.baseUrl}/de?utm_source=private&invoice=fictional-secret`,
       )
       await releaseNotes.dismissReleaseNotes()
       await footer.expectFooterDestinations()
@@ -387,7 +397,7 @@ test.describe('production browser security', () => {
     ] as const) {
       await deployment.deploy('a', { TRUST_PROXY: 'true', HSTS_STAGE: stage })
       for (let request = 0; request < 2; request += 1) {
-        const response = await readHttp(deployment.baseUrl, '/', headers)
+        const response = await readHttp(deployment.baseUrl, '/de', headers)
         expect(response.headers['strict-transport-security']).toBe(expected)
       }
       expect(
@@ -401,7 +411,7 @@ test.describe('production browser security', () => {
       HSTS_STAGE: 'one-day',
     })
     expect(
-      (await readHttp(deployment.baseUrl, '/', headers)).headers[
+      (await readHttp(deployment.baseUrl, '/en', headers)).headers[
         'strict-transport-security'
       ],
     ).toBeUndefined()
@@ -421,7 +431,7 @@ test.describe('production browser security', () => {
     ]
     for (const forwarding of malformedForwarding) {
       expect(
-        (await readHttp(deployment.baseUrl, '/', forwarding)).headers[
+        (await readHttp(deployment.baseUrl, '/de', forwarding)).headers[
           'strict-transport-security'
         ],
       ).toBeUndefined()
@@ -443,7 +453,7 @@ test.describe('production browser security', () => {
     try {
       await deployment.deploy('a')
       expect(deployment.version('a')).toBe(deployment.version('b'))
-      await page.goto(`${deployment.baseUrl}/invoice`)
+      await page.goto(`${deployment.baseUrl}/de/rechnung`)
       await pwa.acknowledgeRunningReleaseNotes()
       await pwa.expectOfflineReady()
       await appShell.navigateToBusinessProfile()
@@ -455,7 +465,7 @@ test.describe('production browser security', () => {
       // Keep an old controlled client alive through document navigations. With
       // no old clients, browsers may naturally activate a waiting worker.
       const heldPage = await pwaBrowser.openPage(
-        `${deployment.baseUrl}/invoice`,
+        `${deployment.baseUrl}/de/rechnung`,
       )
       await robotsForPage(heldPage).invoice.expectReady()
       await appShell.navigateToBusinessProfile()
@@ -477,7 +487,7 @@ test.describe('production browser security', () => {
       await businessProfile.expectProfileSaved()
       await pwaBrowser.setOffline(true)
       // The landing route was prepared, but never visited online.
-      const oldResponse = await page.goto(deployment.baseUrl)
+      const oldResponse = await page.goto(`${deployment.baseUrl}/de`)
       await landing.expectIntroduction()
       const oldPolicy = await oldResponse!.allHeaders()
       expect(oldPolicy['permissions-policy']).toBe(

@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react'
 import { cn } from 'cn'
 import { useTable } from '@tanstack/react-table'
 import type { ColumnDef } from '@tanstack/react-table'
-import { de } from 'date-fns/locale'
+import { de, enGB } from 'date-fns/locale'
 import { useSelector } from '@tanstack/react-store'
 import { useForm } from '@tanstack/react-form'
 import { Link } from '@tanstack/react-router'
@@ -64,6 +64,11 @@ import {
   invoicePositionDraftStore,
 } from './invoice-draft-store'
 import type { InvoiceDraft, InvoiceLineDraft, VatRate } from './invoice'
+import * as m from '@/paraglide/messages'
+import { getLocale } from '@/paraglide/runtime'
+import type { Locale } from '@/paraglide/runtime'
+import { formatDate, formatEuro, formattingLocale } from '@/lib/i18n'
+import { getInvoiceLanguage } from '@/lib/invoice-language'
 import {
   calculateInvoiceTotals,
   invoiceFormSchema,
@@ -114,18 +119,9 @@ function getInvoiceErrors(invoice: InvoiceDraft): InvoiceErrors {
   )
 }
 
-function formattedEuro(cents: number) {
-  return new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  })
-    .format(cents / 100)
-    .replaceAll('\u00a0', ' ')
-}
-
-function suggestedPdfFilename(invoice: InvoiceDraft) {
+function suggestedPdfFilename(invoice: InvoiceDraft, locale: Locale) {
   const safeNumber = invoice.number.replace(/[^a-zA-Z0-9_-]/g, '_')
-  return `Rechnung_${safeNumber}_${invoice.date}.pdf`
+  return m.pdf_filename({ number: safeNumber, date: invoice.date }, { locale })
 }
 
 function savePdf(bytes: Uint8Array, filename: string) {
@@ -145,11 +141,56 @@ function InvoiceInput(props: ComponentProps<typeof FormInput>) {
   return <FormInput form="invoice-form" {...props} />
 }
 
+function InvoiceAmountInput({
+  item,
+  onChange,
+  ...props
+}: Omit<ComponentProps<typeof InvoiceInput>, 'value' | 'onChange'> & {
+  item: InvoiceLineDraft
+  onChange: (amount: string, amountLocale: Locale) => void
+}) {
+  const locale = getLocale()
+  // Drafts without entry metadata were entered with the original German grammar.
+  const sourceLocale = item.amountLocale ?? 'de'
+  const cents = parseEuroAmount(item.amount, sourceLocale)
+  const reformat = sourceLocale !== locale && cents !== null
+  const entryLocale = reformat || !item.amount.trim() ? locale : sourceLocale
+  const sourceHint =
+    item.amount && entryLocale !== locale
+      ? entryLocale === 'de'
+        ? m.invoice_amount_source_de()
+        : m.invoice_amount_source_en()
+      : undefined
+  const value = reformat
+    ? new Intl.NumberFormat(formattingLocale(locale), {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(cents / 100)
+    : item.amount
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <InvoiceInput
+        {...props}
+        value={value}
+        aria-description={sourceHint}
+        onChange={(amount) =>
+          onChange(amount, amount.trim() ? entryLocale : locale)
+        }
+      />
+      {sourceHint ? (
+        <p className="paragraph-small text-muted-foreground">{sourceHint}</p>
+      ) : null}
+    </div>
+  )
+}
+
 type InvoicePositionEditor = {
   updateItem: (
     index: number,
-    name: keyof InvoiceLineDraft,
+    name: 'description' | 'amount',
     value: string,
+    amountLocale?: Locale,
   ) => void
   touch: (name: string) => void
   removeItem: (index: number) => void
@@ -161,7 +202,7 @@ const InvoicePositionEditorContext =
 
 function useInvoicePositionEditor() {
   const editor = useContext(InvoicePositionEditorContext)
-  if (!editor) throw new Error('Rechnungspositionen benötigen einen Editor.')
+  if (!editor) throw new Error(m.invoice_editor_missing())
   return editor
 }
 
@@ -176,7 +217,7 @@ function DescriptionCell({
   return (
     <InvoiceInput
       id={`item-description-${index}`}
-      label={`Beschreibung Position ${index + 1}`}
+      label={m.invoice_position_description({ position: index + 1 })}
       hideLabel
       required={hasInvoicePositionData(item)}
       value={item.description}
@@ -197,13 +238,15 @@ function AmountCell({
 }) {
   const { updateItem, touch, errors } = useInvoicePositionEditor()
   return (
-    <InvoiceInput
+    <InvoiceAmountInput
       id={`item-amount-${index}`}
-      label={`Brutto in Euro Position ${index + 1}`}
+      label={m.invoice_position_amount({ position: index + 1 })}
       hideLabel
       required={hasInvoicePositionData(item)}
-      value={item.amount}
-      onChange={(value) => updateItem(index, 'amount', value)}
+      item={item}
+      onChange={(value, amountLocale) =>
+        updateItem(index, 'amount', value, amountLocale)
+      }
       onBlur={() => touch(`items.${index}.amount`)}
       error={errors[`items.${index}.amount`]}
     />
@@ -217,7 +260,7 @@ function RemoveCell({ index }: { index: number }) {
       type="button"
       variant="destructive"
       size="icon"
-      aria-label={`Position ${index + 1} entfernen`}
+      aria-label={m.invoice_remove_position({ position: index + 1 })}
       onClick={() => removeItem(index)}
     >
       <IconTrash aria-hidden="true" data-icon="inline-start" />
@@ -226,12 +269,16 @@ function RemoveCell({ index }: { index: number }) {
 }
 
 const invoicePositionColumns: ColumnDef<{}, InvoiceLineDraft>[] = [
-  { id: 'position', header: 'Nr.', cell: ({ row }) => row.index + 1 },
+  {
+    id: 'position',
+    header: () => m.invoice_position_number(),
+    cell: ({ row }) => row.index + 1,
+  },
   {
     accessorKey: 'description',
     header: () => (
       <>
-        Beschreibung
+        {m.invoice_description()}
         <RequiredMark />
       </>
     ),
@@ -243,10 +290,10 @@ const invoicePositionColumns: ColumnDef<{}, InvoiceLineDraft>[] = [
     accessorKey: 'amount',
     header: () => (
       <div className="flex items-center gap-1">
-        Brutto in Euro
+        {m.invoice_amount()}
         <RequiredMark />
-        <FieldHint label="Brutto in Euro">
-          Positiver Bruttopreis in Euro, z. B. 107,00.
+        <FieldHint label={m.invoice_amount()}>
+          {m.invoice_amount_hint()}
         </FieldHint>
       </div>
     ),
@@ -254,7 +301,7 @@ const invoicePositionColumns: ColumnDef<{}, InvoiceLineDraft>[] = [
   },
   {
     id: 'actions',
-    header: 'Aktion',
+    header: () => m.invoice_action(),
     cell: ({ row }) => <RemoveCell index={row.index} />,
   },
 ]
@@ -272,17 +319,25 @@ function InvoiceDateField({
 }) {
   const [open, setOpen] = useState(false)
   const [year, month, day] = value.split('-').map(Number)
+  const candidate = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(year, month - 1, day)
+    : undefined
   const selected =
-    year && month && day ? new Date(year, month - 1, day) : undefined
+    candidate &&
+    candidate.getFullYear() === year &&
+    candidate.getMonth() === month - 1 &&
+    candidate.getDate() === day
+      ? candidate
+      : undefined
 
   return (
     <Field data-invalid={Boolean(error)}>
       <FieldLabel id="invoice-date-label" className="min-h-6">
-        Datum
+        {m.invoice_date()}
         <RequiredMark />
       </FieldLabel>
       <span id="invoice-date-required" className="sr-only">
-        Pflichtangabe.
+        {m.invoice_required()}
       </span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
@@ -297,18 +352,37 @@ function InvoiceDateField({
           }
         >
           <IconCalendar aria-hidden="true" data-icon="inline-start" />
-          {selected
-            ? new Intl.DateTimeFormat('de-DE', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              }).format(selected)
-            : 'Datum auswählen'}
+          {selected ? formatDate(value) : value || m.invoice_choose_date()}
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
           <Calendar
             mode="single"
-            locale={de}
+            locale={getLocale() === 'en' ? enGB : de}
+            labels={{
+              labelNav: () => m.invoice_calendar_navigation(),
+              labelPrevious: () => m.invoice_calendar_previous(),
+              labelNext: () => m.invoice_calendar_next(),
+              labelMonthDropdown: () => m.invoice_calendar_month(),
+              labelYearDropdown: () => m.invoice_calendar_year(),
+              labelDayButton: (date, modifiers) => {
+                const formatted = new Intl.DateTimeFormat(
+                  formattingLocale(getLocale()),
+                  {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  },
+                ).format(date)
+                if (modifiers.today && modifiers.selected)
+                  return m.invoice_calendar_today_selected({ date: formatted })
+                if (modifiers.today)
+                  return m.invoice_calendar_today({ date: formatted })
+                if (modifiers.selected)
+                  return m.invoice_calendar_selected_day({ date: formatted })
+                return m.invoice_calendar_day({ date: formatted })
+              },
+            }}
             selected={selected}
             defaultMonth={selected}
             onSelect={(date) => {
@@ -357,7 +431,7 @@ function InvoicePage() {
     return (
       <div className="mx-auto max-w-4xl px-4 py-12">
         <p className="text-center" aria-live="polite">
-          Unternehmensprofil wird lokal geladen …
+          {m.invoice_loading()}
         </p>
       </div>
     )
@@ -369,16 +443,15 @@ function InvoicePage() {
         <AlertDialog defaultOpen>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Rechnungen sind gesperrt</AlertDialogTitle>
+              <AlertDialogTitle>{m.invoice_blocked()}</AlertDialogTitle>
               <AlertDialogDescription>
-                Das Unternehmensprofil kann nicht aus dem Browser gelesen
-                werden. Prüfe die lokalen Speichereinstellungen.
+                {m.invoice_profile_read_failed()}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Schließen</AlertDialogCancel>
+              <AlertDialogCancel>{m.invoice_close()}</AlertDialogCancel>
               <AlertDialogAction onClick={() => window.location.reload()}>
-                Erneut laden
+                {m.invoice_reload()}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -390,12 +463,10 @@ function InvoicePage() {
   if (!validProfile && !hasInvoiceData(invoice)) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-12">
-        <h1 className="heading-1">Unternehmensprofil vervollständigen</h1>
-        <p className="paragraph">
-          Richte dein Profil ein, bevor du die erste Rechnung ausfüllst.
-        </p>
+        <h1 className="heading-1">{m.invoice_complete_profile()}</h1>
+        <p className="paragraph">{m.invoice_setup_guidance()}</p>
         <Link to="/settings/profile" className={buttonVariants()}>
-          Unternehmensprofil öffnen
+          {m.invoice_open_profile()}
         </Link>
       </div>
     )
@@ -444,26 +515,25 @@ function InvoiceEditor({
       )
         return
 
+      const invoiceLocale = getInvoiceLanguage()
       setIsGenerating(true)
       try {
         await runPwaCriticalOperation(async () => {
-          const bytes = await createInvoicePdf(profile, value)
-          const filename = suggestedPdfFilename(value)
+          const bytes = await createInvoicePdf(profile, value, invoiceLocale)
+          const filename = suggestedPdfFilename(value, invoiceLocale)
           savePdf(bytes, filename)
           toast.add({
-            title: 'PDF wurde erstellt',
-            description: 'Das PDF wurde heruntergeladen.',
+            title: m.invoice_pdf_created(),
+            description: m.invoice_pdf_downloaded(),
             type: 'success',
           })
           void pwa?.reportPdfExport(filename)
         })
       } catch (error) {
         toast.add({
-          title: 'PDF konnte nicht erstellt werden',
+          title: m.invoice_pdf_failed(),
           description:
-            error instanceof Error
-              ? error.message
-              : 'Bitte prüfe die Eingaben.',
+            error instanceof Error ? error.message : m.invoice_check_inputs(),
           type: 'error',
         })
       } finally {
@@ -499,11 +569,16 @@ function InvoiceEditor({
 
   function updateItem(
     index: number,
-    name: keyof InvoiceLineDraft,
+    name: 'description' | 'amount',
     value: string,
+    amountLocale?: Locale,
   ) {
     const items = [...form.state.values.items]
-    items[index] = { ...items[index], [name]: value }
+    items[index] = {
+      ...items[index],
+      [name]: value,
+      ...(name === 'amount' ? { amountLocale } : {}),
+    }
     form.setFieldValue('items', items)
     invoiceDraftStore.setState((current) => ({ ...current, items }))
   }
@@ -561,11 +636,9 @@ function InvoiceEditor({
       await clearStoredInvoiceDraft()
     } catch (error) {
       toast.add({
-        title: 'Neue Rechnung konnte nicht begonnen werden',
+        title: m.invoice_reset_failed(),
         description:
-          error instanceof Error
-            ? error.message
-            : 'Der gespeicherte Invoice Draft konnte nicht sicher entfernt werden.',
+          error instanceof Error ? error.message : m.invoice_discard_failed(),
         type: 'error',
       })
       return
@@ -592,15 +665,16 @@ function InvoiceEditor({
       ? validationErrors.company
       : undefined
   const validInvoice = Object.keys(validationErrors).length === 0
-  const newAmount = parseEuroAmount(newItem.amount)
+  const newAmount = parseEuroAmount(
+    newItem.amount,
+    newItem.amountLocale ?? 'de',
+  )
   const newItemErrors = {
     description: !newItem.description.trim()
-      ? 'Positionsbeschreibung fehlt.'
+      ? m.invoice_description_required()
       : '',
     amount:
-      newAmount === null || newAmount <= 0
-        ? 'Einen positiven Bruttopreis eingeben.'
-        : '',
+      newAmount === null || newAmount <= 0 ? m.invoice_amount_invalid() : '',
   }
   const table = useTable({
     features: {},
@@ -609,7 +683,7 @@ function InvoiceEditor({
   })
   const amounts = currentValues.items
     .filter(hasInvoicePositionData)
-    .map((item) => parseEuroAmount(item.amount))
+    .map((item) => parseEuroAmount(item.amount, item.amountLocale ?? 'de'))
   const totals =
     amounts.length && amounts.every((amount) => amount !== null)
       ? calculateInvoiceTotals(amounts, currentValues.rate)
@@ -620,14 +694,14 @@ function InvoiceEditor({
       <div className="flex min-w-0 flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <h1 className="heading-1">Rechnung erstellen</h1>
+            <h1 className="heading-1">{m.invoice_title()}</h1>
             <p className="paragraph-large text-muted-foreground">
-              Angaben eintragen, Beträge prüfen und das fertige PDF sichern.
+              {m.invoice_intro()}
             </p>
           </div>
           <Button type="button" variant="outline" onClick={startNewInvoice}>
             <IconEdit data-icon="inline-start" />
-            Neue Rechnung
+            {m.invoice_new()}
           </Button>
         </div>
 
@@ -641,28 +715,28 @@ function InvoiceEditor({
             <AlertDialogHeader>
               <AlertDialogTitle>
                 {blocker === 'storage'
-                  ? 'Profil konnte nicht gespeichert werden'
+                  ? m.invoice_profile_save_failed()
                   : blocker === 'changed'
-                    ? 'Unternehmensprofil wird aktualisiert'
-                    : 'Profil vervollständigen, um das PDF zu erstellen'}
+                    ? m.invoice_profile_updating()
+                    : m.invoice_profile_required()}
               </AlertDialogTitle>
               <AlertDialogDescription>
                 {blocker === 'storage'
-                  ? `${storageError} Rechnungen bleiben gesperrt, bis die lokale Speicherung wieder funktioniert.`
+                  ? m.invoice_storage_blocked({ error: storageError ?? '' })
                   : blocker === 'changed'
-                    ? 'Die PDF-Erstellung ist gesperrt, bis das geänderte Profil geladen wurde.'
-                    : 'Die Rechnungseingaben bleiben in diesem Tab erhalten. Ergänze oder korrigiere das Unternehmensprofil.'}
+                    ? m.invoice_profile_changed()
+                    : m.invoice_profile_incomplete()}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Schließen</AlertDialogCancel>
+              <AlertDialogCancel>{m.invoice_close()}</AlertDialogCancel>
               {blocker === 'profile' ? (
                 <Link to="/settings/profile" className={buttonVariants()}>
-                  Unternehmensprofil öffnen
+                  {m.invoice_open_profile()}
                 </Link>
               ) : blocker === 'storage' ? (
                 <AlertDialogAction onClick={() => window.location.reload()}>
-                  Erneut laden
+                  {m.invoice_reload()}
                 </AlertDialogAction>
               ) : null}
             </AlertDialogFooter>
@@ -671,15 +745,17 @@ function InvoiceEditor({
         <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Neue Rechnung beginnen?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {m.invoice_new_confirmation()}
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                Die aktuellen Eingaben werden verworfen.
+                {m.invoice_new_discard()}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+              <AlertDialogCancel>{m.invoice_cancel()}</AlertDialogCancel>
               <AlertDialogAction onClick={resetInvoice}>
-                Neue Rechnung beginnen
+                {m.invoice_new_confirm()}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -687,24 +763,21 @@ function InvoiceEditor({
 
         {draftPersistence.error ? (
           <p role="alert" className="paragraph-small text-destructive">
-            {draftPersistence.error} Die Eingaben bleiben in diesem Tab
-            bearbeitbar, sind aber möglicherweise nicht wiederherstellbar.
+            {m.invoice_persistence_warning({ error: draftPersistence.error })}
           </p>
         ) : null}
 
         <div className="flex flex-col gap-5">
           <Card>
             <CardHeader>
-              <CardTitle>Rechnungsangaben</CardTitle>
-              <CardDescription>
-                Pflichtangaben sind mit * markiert.
-              </CardDescription>
+              <CardTitle>{m.invoice_details()}</CardTitle>
+              <CardDescription>{m.invoice_required_guidance()}</CardDescription>
             </CardHeader>
             <CardContent>
               <FieldGroup className="grid gap-5 md:grid-cols-2">
                 <InvoiceInput
                   id="invoice-number"
-                  label="Rechnungsnummer"
+                  label={m.invoice_number()}
                   value={currentValues.number}
                   onChange={(value) => updateField('number', value)}
                   error={errors.number}
@@ -721,7 +794,7 @@ function InvoiceEditor({
                 <div className="md:col-span-2">
                   <InvoiceInput
                     id="invoice-subject"
-                    label="Betreff"
+                    label={m.invoice_subject()}
                     value={currentValues.subject}
                     onChange={(value) => updateField('subject', value)}
                     error={errors.subject}
@@ -735,21 +808,21 @@ function InvoiceEditor({
 
           <Card>
             <CardHeader>
-              <CardTitle>Empfänger</CardTitle>
+              <CardTitle>{m.invoice_recipient()}</CardTitle>
               <CardDescription>
-                Unternehmen oder Name sowie vollständige Anschrift angeben.
+                {m.invoice_recipient_guidance()}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <FieldGroup className="grid gap-5 md:grid-cols-2">
                 <RequiredAlternativeFields
                   id="recipient-identity"
-                  label="Unternehmen oder Name"
+                  label={m.invoice_recipient_identity()}
                   error={recipientError}
                 >
                   <InvoiceInput
                     id="recipient-company"
-                    label="Unternehmen des Empfängers"
+                    label={m.invoice_recipient_company()}
                     value={currentValues.company}
                     onChange={(value) => updateField('company', value)}
                     error={recipientMissing ? undefined : errors.company}
@@ -759,7 +832,7 @@ function InvoiceEditor({
                   />
                   <InvoiceInput
                     id="recipient-name"
-                    label="Name / z. Hd."
+                    label={m.invoice_recipient_name()}
                     value={currentValues.name}
                     onChange={(value) => updateField('name', value)}
                     error={errors.name}
@@ -770,7 +843,7 @@ function InvoiceEditor({
                 </RequiredAlternativeFields>
                 <InvoiceInput
                   id="recipient-street"
-                  label="Straße und Hausnummer"
+                  label={m.invoice_street()}
                   value={currentValues.street}
                   onChange={(value) => updateField('street', value)}
                   error={errors.street}
@@ -781,7 +854,7 @@ function InvoiceEditor({
                 />
                 <InvoiceInput
                   id="recipient-postal-code"
-                  label="PLZ"
+                  label={m.invoice_postal_code()}
                   value={currentValues.postalCode}
                   onChange={(value) => updateField('postalCode', value)}
                   error={errors.postalCode}
@@ -792,7 +865,7 @@ function InvoiceEditor({
                 />
                 <InvoiceInput
                   id="recipient-town"
-                  label="Ort"
+                  label={m.invoice_town()}
                   value={currentValues.town}
                   onChange={(value) => updateField('town', value)}
                   error={errors.town}
@@ -808,13 +881,16 @@ function InvoiceEditor({
           <Card>
             <CardHeader>
               <CardTitle>
-                Waren & Dienstleistungen
+                {m.invoice_positions()}
                 <RequiredMark />
               </CardTitle>
               <CardDescription>
-                Preise einschließlich MwSt. eingeben. Maximal 16 Positionen.
-                Mindestens eine vollständige Position erforderlich. * gilt pro
-                Position; leere Zeilen werden nicht berücksichtigt.
+                {m.invoice_positions_guidance()}
+                <span className="block" role="status" aria-live="polite">
+                  {m.invoice_position_count({
+                    count: currentValues.items.length,
+                  })}
+                </span>
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
@@ -823,7 +899,7 @@ function InvoiceEditor({
               >
                 <FieldGroup className="gap-0">
                   <Table
-                    aria-label="Rechnungspositionen"
+                    aria-label={m.invoice_positions_accessible()}
                     className="min-w-[34rem] table-fixed"
                   >
                     <TableHeader>
@@ -863,7 +939,7 @@ function InvoiceEditor({
                             colSpan={4}
                             className="py-8 text-center text-muted-foreground"
                           >
-                            Noch keine Positionen hinzugefügt.
+                            {m.invoice_positions_empty()}
                           </TableCell>
                         </TableRow>
                       )}
@@ -873,7 +949,7 @@ function InvoiceEditor({
               </InvoicePositionEditorContext.Provider>
               <form
                 id="new-position-form"
-                aria-label="Position hinzufügen"
+                aria-label={m.invoice_add_position()}
                 noValidate
                 onSubmit={(event) => {
                   event.preventDefault()
@@ -884,7 +960,7 @@ function InvoiceEditor({
                 <FieldGroup className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-start">
                   <InvoiceInput
                     id="new-item-description"
-                    label="Beschreibung"
+                    label={m.invoice_description()}
                     required
                     value={newItem.description}
                     maxLength={85}
@@ -899,17 +975,18 @@ function InvoiceEditor({
                       newItemSubmitted ? newItemErrors.description : undefined
                     }
                   />
-                  <InvoiceInput
+                  <InvoiceAmountInput
                     id="new-item-amount"
-                    label="Brutto in Euro"
+                    label={m.invoice_amount()}
                     required
-                    hint="Positiver Bruttopreis in Euro, z. B. 107,00."
-                    value={newItem.amount}
+                    hint={m.invoice_amount_hint()}
+                    item={newItem}
                     form="new-position-form"
-                    onChange={(amount) =>
+                    onChange={(amount, amountLocale) =>
                       invoicePositionDraftStore.setState((current) => ({
                         ...current,
                         amount,
+                        amountLocale,
                       }))
                     }
                     error={newItemSubmitted ? newItemErrors.amount : undefined}
@@ -922,17 +999,17 @@ function InvoiceEditor({
                     disabled={currentValues.items.length >= 16}
                   >
                     <IconPlus data-icon="inline-start" />
-                    Position hinzufügen
+                    {m.invoice_add_position()}
                   </Button>
                 </FieldGroup>
               </form>
               <Field data-invalid={Boolean(errors.rate)}>
                 <FieldLabel id="vat-rate-label">
-                  MwSt.-Satz
+                  {m.invoice_vat_rate()}
                   <RequiredMark />
                 </FieldLabel>
                 <span id="vat-rate-required" className="sr-only">
-                  Pflichtangabe.
+                  {m.invoice_required()}
                 </span>
                 <ToggleGroup
                   value={[String(currentValues.rate)]}
@@ -950,8 +1027,12 @@ function InvoiceEditor({
                     }
                   }}
                 >
-                  <ToggleGroupItem value="7">7 %</ToggleGroupItem>
-                  <ToggleGroupItem value="19">19 %</ToggleGroupItem>
+                  <ToggleGroupItem value="7">
+                    {m.invoice_vat_choice({ rate: 7 })}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="19">
+                    {m.invoice_vat_choice({ rate: 19 })}
+                  </ToggleGroupItem>
                 </ToggleGroup>
                 <FormErrorSlot id="vat-rate-error" error={errors.rate} />
               </Field>
@@ -963,27 +1044,26 @@ function InvoiceEditor({
       <aside className="lg:sticky lg:top-6 lg:self-start space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Rechnungsübersicht</CardTitle>
+            <CardTitle>{m.invoice_summary()}</CardTitle>
             <CardDescription>
               {currentValues.number.trim() || '—'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex justify-between gap-4">
-              <span>Netto</span>
-              <strong>{totals ? formattedEuro(totals.net) : '—'}</strong>
+              <span>{m.invoice_net()}</span>
+              <strong>{totals ? formatEuro(totals.net) : '—'}</strong>
             </div>
             <div className="flex justify-between gap-4">
-              <span>{currentValues.rate} % MwSt.</span>
-              <strong>{totals ? formattedEuro(totals.tax) : '—'}</strong>
+              <span>{m.invoice_tax({ rate: currentValues.rate })}</span>
+              <strong>{totals ? formatEuro(totals.tax) : '—'}</strong>
             </div>
             <div className="flex justify-between gap-4">
-              <span>Brutto</span>
-              <strong>{totals ? formattedEuro(totals.gross) : '—'}</strong>
+              <span>{m.invoice_gross()}</span>
+              <strong>{totals ? formatEuro(totals.gross) : '—'}</strong>
             </div>
             <p className="paragraph-small text-muted-foreground">
-              Geschäftsangaben werden aus dem lokalen Unternehmensprofil
-              übernommen.
+              {m.invoice_profile_source()}
             </p>
           </CardContent>
         </Card>
@@ -1008,7 +1088,9 @@ function InvoiceEditor({
               Boolean(storageError)
             }
           >
-            {isGenerating ? 'PDF wird erstellt …' : 'PDF erstellen'}
+            {isGenerating
+              ? m.invoice_generating_pdf()
+              : m.invoice_generate_pdf()}
           </Button>
         </form>
       </aside>

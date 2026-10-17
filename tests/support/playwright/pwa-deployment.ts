@@ -307,6 +307,8 @@ async function createReleaseSource(directory: string, failedPage = false) {
   for (const entry of [
     'src',
     'public',
+    'messages',
+    'project.inlang',
     'docs',
     'vite.config.ts',
     'pwa-assets.config.ts',
@@ -386,7 +388,7 @@ async function createReleaseBSource(
     'src/features/invoicing/InvoicePage.tsx',
   )
   const invoicePage = await readFile(invoicePagePath, 'utf8')
-  const invoiceHeading = '<h1 className="heading-1">Rechnung erstellen</h1>'
+  const invoiceHeading = '<h1 className="heading-1">{m.invoice_title()}</h1>'
   if (!invoicePage.includes(invoiceHeading)) {
     throw new Error('Could not locate the Invoice route heading for release B.')
   }
@@ -398,24 +400,21 @@ async function createReleaseBSource(
     ),
   )
 
-  const landingVisibilityPath = join(
-    directory,
-    'src/features/landing/visibility.ts',
-  )
-  const landingVisibility = await readFile(landingVisibilityPath, 'utf8')
-  const landingTitle =
-    'regningen – Rechnungen erstellen und als PDF herunterladen'
-  if (!landingVisibility.includes(landingTitle)) {
+  // Change a real localized title in the isolated release fixture. Recompiling
+  // it must revise prepared documents even when the application version stays put.
+  const metadataPath = join(directory, 'messages/de/meta.json')
+  const metadata = JSON.parse(await readFile(metadataPath, 'utf8')) as Record<
+    string,
+    string
+  >
+  if (!metadata.meta_landing_title)
     throw new Error('Could not locate the landing title for release B.')
-  }
-  await writeFile(
-    landingVisibilityPath,
-    landingVisibility.replace(landingTitle, `${landingTitle} – Release B`),
-  )
+  metadata.meta_landing_title += ' – Release B'
+  await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`)
 
   const landingPagePath = join(directory, 'src/features/landing/HomePage.tsx')
   const landingPage = await readFile(landingPagePath, 'utf8')
-  const landingCopy = 'Ohne Benutzerkonto.'
+  const landingCopy = '{m.landing_intro()}'
   if (!landingPage.includes(landingCopy)) {
     throw new Error('Could not locate the landing copy for release B.')
   }

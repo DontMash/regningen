@@ -3,6 +3,7 @@
 import { IconShare3 } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { usePwa } from './PwaProvider'
+import * as m from '@/paraglide/messages'
 
 export function InstallButton() {
   const { installed, requestInstallation } = usePwa()
@@ -12,11 +13,11 @@ export function InstallButton() {
     <Button
       type="button"
       variant="outline"
-      aria-label="Installieren"
+      aria-label={m.pwa_install()}
       onClick={() => void requestInstallation()}
     >
       <IconShare3 aria-hidden="true" data-icon="inline-start" />
-      <span>Installieren</span>
+      <span>{m.pwa_install()}</span>
     </Button>
   )
 }
@@ -27,23 +28,23 @@ export function NotificationControl() {
 
   const unavailableDescription =
     notificationStatus === 'unavailable'
-      ? 'Dieser Browser unterstützt keine lokalen Benachrichtigungen.'
+      ? m.pwa_notifications_unavailable_description()
       : notificationStatus === 'install-required'
-        ? 'Installiere regningen zum Home-Bildschirm, um Benachrichtigungen zu aktivieren.'
+        ? m.pwa_notifications_install_description()
         : notificationStatus === 'denied'
-          ? 'Die Berechtigung wurde blockiert. Ändere sie in den Browser-Einstellungen.'
+          ? m.pwa_notifications_denied_description()
           : null
 
   const label =
     notificationStatus === 'enabled'
-      ? 'Benachrichtigungen deaktivieren'
+      ? m.pwa_notifications_disable()
       : notificationStatus === 'unavailable'
-        ? 'Benachrichtigungen nicht verfügbar'
+        ? m.pwa_notifications_unavailable()
         : notificationStatus === 'install-required'
-          ? 'Installation für Benachrichtigungen erforderlich'
+          ? m.pwa_notifications_install_required()
           : notificationStatus === 'denied'
-            ? 'Benachrichtigungen blockiert'
-            : 'Benachrichtigungen aktivieren'
+            ? m.pwa_notifications_denied()
+            : m.pwa_notifications_enable()
 
   return (
     <div className="flex flex-col items-start gap-1">

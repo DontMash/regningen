@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom'
 
 export function readHttp(
   baseUrl: string,
-  path = '/',
+  path = '/de',
   headers: Record<string, string> = {},
 ) {
   return new Promise<{

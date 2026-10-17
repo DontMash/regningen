@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { Toast as ToastPrimitive } from '@base-ui/react/toast'
 import { cn } from 'cn'
+import * as m from '@/paraglide/messages'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -28,6 +29,7 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
   return (
     <ToastPrimitive.Viewport
       data-slot="toast-viewport"
+      aria-label={m.common_toast_region()}
       className={cn(
         'pointer-events-none fixed inset-x-4 bottom-4 z-50 mx-auto w-auto max-w-sm outline-none sm:right-4 sm:left-auto sm:mx-0 sm:w-full',
         className,
@@ -124,7 +126,7 @@ function ToastClose({
   return (
     <ToastPrimitive.Close
       data-slot="toast-close"
-      aria-label="Meldung schließen"
+      aria-label={m.common_toast_close()}
       render={render}
       className={cn(
         "relative shrink-0 text-muted-foreground after:absolute after:-inset-2 after:content-[''] hover:text-foreground",

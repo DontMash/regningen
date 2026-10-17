@@ -1,6 +1,7 @@
 import type { AnyRouteMatch } from '@tanstack/react-router'
 import type { DeploymentPolicy, PageVisibility } from './visibility'
-import { pageVisibility } from './page-visibility'
+import { pageVisibility, localizedCanonicalPath } from './page-visibility'
+import { getLocale } from '@/paraglide/runtime'
 
 export function pageHead(
   page: PageVisibility,
@@ -12,7 +13,7 @@ export function pageHead(
     (match) => match.status === 'success' && !match._notFound,
   )
   const { meta, links } = pageVisibility(policy).head(
-    successful ? page.canonicalPath : null,
+    successful ? localizedCanonicalPath(page.canonicalPath, getLocale()) : null,
   )
   // Router's JSON-LD meta helper does not propagate the SSR nonce to scripts.
   // Native head scripts do, including on client navigation. Keep script-boundary

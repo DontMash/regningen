@@ -1,6 +1,6 @@
 import { createEnv } from '@t3-oss/env-core'
-import { z } from './lib/validation.ts'
-import { resolveDeployment } from './lib/visibility.ts'
+import { z } from './lib/zod.ts'
+import { resolveDeployment } from './lib/deployment-policy.ts'
 
 /** Validate loaded server/build inputs; this module never loads environment files. */
 export function readEnvironment(values: Record<string, string | undefined>) {

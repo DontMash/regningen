@@ -6,6 +6,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ReleaseNotesDialog from './ReleaseNotesDialog'
+import { setLocale } from '@/paraglide/runtime'
 import type { ReleaseEntry } from '@/lib/release-catalog'
 
 const releases: ReleaseEntry[] = [
@@ -20,6 +21,7 @@ const releases: ReleaseEntry[] = [
 ]
 
 beforeEach(() => {
+  setLocale('de', { reload: false })
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => ({
@@ -67,6 +69,28 @@ function ReopenableReleaseNotes({ onAcknowledge = vi.fn() } = {}) {
 }
 
 describe('release notes dialog', () => {
+  it('translates English release controls and version templates while preserving authored note bodies', async () => {
+    setLocale('en', { reload: false })
+    const user = userEvent.setup()
+    const onAcknowledge = vi.fn()
+    render(<ReopenableReleaseNotes onAcknowledge={onAcknowledge} />)
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Release notes' }),
+    ).toBeVisible()
+    expect(screen.getByText('Version 2.0.0 · current')).toBeVisible()
+    expect(screen.getByText('Added the new workflow.')).toBeVisible()
+    await user.click(screen.getByRole('combobox', { name: 'Select version' }))
+    expect(
+      screen.getByRole('option', { name: 'v2.0.0 (current)' }),
+    ).toBeVisible()
+    await user.click(screen.getByRole('option', { name: 'v1.0.0' }))
+    expect(screen.getByText('Version 1.0.0')).toBeVisible()
+    expect(screen.getByText('Corrected an earlier issue.')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Understood' }))
+    expect(onAcknowledge).toHaveBeenCalledWith('2.0.0')
+  })
+
   it('renders generated Markdown safely and opens changelog links in a new tab', async () => {
     render(
       <ReleaseNotesDialog

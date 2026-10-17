@@ -1,0 +1,20 @@
+{
+  "meta_default_description": "Rechnungen erstellen und als PDF herunterladen. Direkt im Browser.",
+  "meta_landing_title": "regningen – Rechnungen erstellen und als PDF herunterladen",
+  "meta_landing_description": "Rechnungen erstellen und als PDF herunterladen. Direkt im Browser, ohne Benutzerkonto.",
+  "meta_landing_agent": "Startseite",
+  "meta_invoice_title": "Rechnung erstellen – regningen",
+  "meta_invoice_description": "Empfänger und Rechnungspositionen erfassen und eine Rechnung als PDF herunterladen.",
+  "meta_profile_title": "Unternehmensprofil – regningen",
+  "meta_profile_description": "Unternehmensdaten in diesem Browser speichern sowie das gespeicherte Profil exportieren und importieren.",
+  "meta_settings_title": "Einstellungen – regningen",
+  "meta_settings_description": "Sprache, Darstellung, Installation und Benachrichtigungen für regningen verwalten.",
+  "meta_social_alt": "regningen – Rechnungen erstellen und als PDF herunterladen.",
+  "meta_manifest_description": "Rechnungen erstellen und als PDF herunterladen.",
+  "meta_feature_profile": "Unternehmensprofil in diesem Browser wiederverwenden",
+  "meta_feature_positions": "Bis zu 16 Positionen mit positiven Bruttobeträgen in Euro; ein Umsatzsteuersatz von 7 % oder 19 % pro Rechnung",
+  "meta_feature_pdf": "PDF im Browser erstellen und herunterladen; eine A4-Seite mit begrenztem Platz",
+  "meta_feature_draft": "Temporären Rechnungsentwurf für die Sitzung in diesem Tab behalten; kein Rechnungsarchiv",
+  "meta_feature_backup": "Gespeichertes Unternehmensprofil als unverschlüsselte JSON-Datei exportieren und importieren; nach Import speichern",
+  "meta_feature_offline": "Optional installieren und nach erster Online-Vorbereitung und „Offline bereit“ offline nutzen"
+}

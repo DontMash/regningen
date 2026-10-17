@@ -6,7 +6,7 @@ import {
 } from '../support/playwright/http-documents'
 import { PwaDeployment } from '../support/playwright/pwa-deployment'
 import {
-  landingVisibilityExample as landing,
+  landingVisibilityExamples as landings,
   applicationVisibilityExamples as applicationPages,
 } from '../scenarios/visibility'
 
@@ -33,99 +33,128 @@ test.describe('server-delivered visibility', () => {
     await deployment.dispose()
   })
 
-  test('the initial landing HTML explains the features and publishes complete German metadata', async () => {
+  test('both initial landing documents explain the features with localized metadata and reciprocal alternatives', async () => {
     await deployment.deploy('a', {
       ORIGIN: productionOrigin,
       TRUST_PROXY: 'true',
     })
-    const response = await readHttp(
-      deployment.baseUrl,
-      '/?utm_source=crawler&invoice=not-public',
-      productionHeaders,
+    // Concurrent, alternating language requests share a server, not locale state.
+    const responses = await Promise.all(
+      [...landings, ...landings].map((page) =>
+        readHttp(
+          deployment.baseUrl,
+          `${page.path}?utm_source=crawler&invoice=not-public`,
+          productionHeaders,
+        ),
+      ),
     )
-    expect(response.status).toBe(200)
-    expect(response.headers['content-type']).toMatch(
-      /text\/html.*charset=utf-8/i,
-    )
-    expect(response.headers['x-robots-tag'] ?? '').not.toMatch(/noindex/i)
-    const document = inspectHtml(response.body.toString())
-    expectStaticMetadata(document, landing, productionOrigin)
-    expect(document.metas.robots).toEqual(['index, follow'])
-    expect(document.mainText).toContain(
-      'Rechnungen erstellen. Direkt im Browser.',
-    )
-    expect(document.mainText).toContain('Ohne Benutzerkonto')
-    expect(document.mainText).toContain('Unternehmensprofil')
-    expect(document.mainText).toContain('16')
-    expect(document.mainText).toMatch(/7\s*%/)
-    expect(document.mainText).toMatch(/19\s*%/)
-    expect(document.mainText).toContain('A4')
-    expect(document.mainText).toMatch(/unverschlüsselt/)
-    expect(document.mainText).toMatch(/Offline bereit/)
-    // Six separate feature explanations, not only a hero and a generic list.
-    expect(document.headings.length).toBeGreaterThanOrEqual(7)
-    expect(document.alternates).toEqual(
-      expect.arrayContaining([
-        { language: 'de', href: `${productionOrigin}/` },
-        { language: 'x-default', href: `${productionOrigin}/` },
-      ]),
-    )
-    expect(document.alternates).toHaveLength(2)
-    expect(document.structuredData).toHaveLength(1)
-    const graph = document.structuredData[0] as {
-      '@context': string
-      '@graph': Array<Record<string, unknown>>
+    for (const [index, response] of responses.entries()) {
+      const landing = landings[index % landings.length]
+      const english = landing.language === 'en'
+      const canonical = `${productionOrigin}${landing.path}`
+      expect(response.status).toBe(200)
+      expect(response.headers['content-type']).toMatch(
+        /text\/html.*charset=utf-8/i,
+      )
+      expect(response.headers['x-robots-tag'] ?? '').not.toMatch(/noindex/i)
+      const document = inspectHtml(response.body.toString())
+      expectStaticMetadata(document, landing, productionOrigin)
+      expect(document.metas.robots).toEqual(['index, follow'])
+      expect(document.mainText).toContain(
+        english
+          ? 'Create invoices. Directly in your browser.'
+          : 'Rechnungen erstellen. Direkt im Browser.',
+      )
+      expect(document.mainText).toContain(
+        english ? 'No account required' : 'Ohne Benutzerkonto',
+      )
+      expect(document.mainText).toContain(
+        english ? 'business profile' : 'Unternehmensprofil',
+      )
+      expect(document.mainText).toContain('16')
+      expect(document.mainText).toMatch(/7\s*%/)
+      expect(document.mainText).toMatch(/19\s*%/)
+      expect(document.mainText).toContain('A4')
+      expect(document.mainText).toMatch(
+        english ? /unencrypted/ : /unverschlüsselt/,
+      )
+      expect(document.mainText).toMatch(
+        english ? /Ready offline/ : /Offline bereit/,
+      )
+      // Six separate feature explanations, not only a hero and a generic list.
+      expect(document.headings.length).toBeGreaterThanOrEqual(7)
+      expect(document.alternates).toEqual(
+        expect.arrayContaining([
+          { language: 'de', href: `${productionOrigin}/de` },
+          { language: 'en', href: `${productionOrigin}/en` },
+          { language: 'x-default', href: `${productionOrigin}/de` },
+        ]),
+      )
+      expect(document.alternates).toHaveLength(3)
+      expect(document.structuredData).toHaveLength(1)
+      const graph = document.structuredData[0] as {
+        '@context': string
+        '@graph': Array<Record<string, unknown>>
+      }
+      expect(graph['@context']).toBe('https://schema.org')
+      expect(graph['@graph']).toHaveLength(3)
+      expect(graph['@graph']).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            '@type': 'WebSite',
+            '@id': `${productionOrigin}/#website`,
+            name: 'regningen',
+            url: canonical,
+            inLanguage: landing.language,
+          }),
+          expect.objectContaining({
+            '@type': 'WebPage',
+            '@id': `${canonical}#webpage`,
+            url: canonical,
+            name: landing.title,
+            description: landing.description,
+            inLanguage: landing.language,
+            isPartOf: { '@id': `${productionOrigin}/#website` },
+            about: { '@id': `${canonical}#application` },
+          }),
+          expect.objectContaining({
+            '@type': 'WebApplication',
+            '@id': `${canonical}#application`,
+            name: 'regningen',
+            url: canonical,
+            applicationCategory: 'BusinessApplication',
+            operatingSystem: 'Web',
+            inLanguage: landing.language,
+          }),
+        ]),
+      )
+      const application = graph['@graph'].find(
+        (entity) => entity['@type'] === 'WebApplication',
+      )
+      expect(application?.featureList).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/16.*7.*19/),
+          expect.stringMatching(/A4/),
+          expect.stringMatching(
+            english
+              ? /session.*not an invoice archive/
+              : /Sitzung.*kein Rechnungsarchiv/,
+          ),
+          expect.stringMatching(english ? /unencrypted/ : /unverschlüsselt/),
+          expect.stringMatching(
+            english
+              ? /online preparation.*Offline ready/
+              : /Online-Vorbereitung.*Offline bereit/,
+          ),
+        ]),
+      )
+      const schema = JSON.stringify(graph)
+      expect(schema).not.toMatch(/\/invoice|\/settings|utm_source|not-public/)
+      expect(schema).not.toMatch(
+        /"(?:offers|aggregateRating|review|potentialAction)"/,
+      )
+      expectInstallationMetadata(document)
     }
-    expect(graph['@context']).toBe('https://schema.org')
-    expect(graph['@graph']).toHaveLength(3)
-    expect(graph['@graph']).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          '@type': 'WebSite',
-          '@id': `${productionOrigin}/#website`,
-          name: 'regningen',
-          url: `${productionOrigin}/`,
-          inLanguage: 'de',
-        }),
-        expect.objectContaining({
-          '@type': 'WebPage',
-          '@id': `${productionOrigin}/#webpage`,
-          url: `${productionOrigin}/`,
-          name: landing.title,
-          description: landing.description,
-          inLanguage: 'de',
-          isPartOf: { '@id': `${productionOrigin}/#website` },
-          about: { '@id': `${productionOrigin}/#application` },
-        }),
-        expect.objectContaining({
-          '@type': 'WebApplication',
-          '@id': `${productionOrigin}/#application`,
-          name: 'regningen',
-          url: `${productionOrigin}/`,
-          applicationCategory: 'BusinessApplication',
-          operatingSystem: 'Web',
-          inLanguage: 'de',
-        }),
-      ]),
-    )
-    const application = graph['@graph'].find(
-      (entity) => entity['@type'] === 'WebApplication',
-    )
-    expect(application?.featureList).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(/16.*7.*19/),
-        expect.stringMatching(/A4/),
-        expect.stringMatching(/Sitzung.*kein Rechnungsarchiv/),
-        expect.stringMatching(/unverschlüsselt/),
-        expect.stringMatching(/Online-Vorbereitung.*Offline bereit/),
-      ]),
-    )
-    const schema = JSON.stringify(graph)
-    expect(schema).not.toMatch(/\/invoice|\/settings|utm_source|not-public/)
-    expect(schema).not.toMatch(
-      /"(?:offers|aggregateRating|review|potentialAction)"/,
-    )
-    expectInstallationMetadata(document)
   })
 
   test('application pages have static page-specific sharing metadata without landing discovery', async () => {
@@ -172,19 +201,21 @@ test.describe('server-delivered visibility', () => {
       ORIGIN: productionOrigin,
       TRUST_PROXY: 'true',
     })
-    const response = await readHttp(
-      deployment.baseUrl,
-      '/not-a-real-page?utm_source=404',
-      productionHeaders,
-    )
-    expect(response.status).toBe(404)
-    expect(response.headers['content-type']).toMatch(/text\/html/)
-    const document = inspectHtml(response.body.toString())
-    expect(document.metas.robots).toEqual(['noindex, follow'])
-    expect(document.canonicals).toEqual([])
-    expect(document.alternates).toEqual([])
-    expect(document.structuredData).toEqual([])
-    expect(document.metas['og:url'] ?? []).toEqual([])
+    for (const locale of ['de', 'en']) {
+      const response = await readHttp(
+        deployment.baseUrl,
+        `/${locale}/not-a-real-page?utm_source=404`,
+        productionHeaders,
+      )
+      expect(response.status).toBe(404)
+      expect(response.headers['content-type']).toMatch(/text\/html/)
+      const document = inspectHtml(response.body.toString())
+      expect(document.metas.robots).toEqual(['noindex, follow'])
+      expect(document.canonicals).toEqual([])
+      expect(document.alternates).toEqual([])
+      expect(document.structuredData).toEqual([])
+      expect(document.metas['og:url'] ?? []).toEqual([])
+    }
   })
 
   test('a real throwing page loader delivers HTTP 500 and cannot inherit landing publication', async () => {
@@ -192,24 +223,26 @@ test.describe('server-delivered visibility', () => {
       ORIGIN: productionOrigin,
       TRUST_PROXY: 'true',
     })
-    const response = await readHttp(
-      deployment.baseUrl,
-      '/visibility-failure',
-      productionHeaders,
-    )
-    expect(response.status).toBe(500)
-    expect(response.headers['content-type']).toMatch(/text\/html/)
-    expect(response.headers['x-robots-tag']).toMatch(/noindex/i)
-    const document = inspectHtml(response.body.toString())
-    expect(document.title).not.toBe(landing.title)
-    expect(document.metas.robots).toEqual(['noindex, follow'])
-    expect(document.canonicals).toEqual([])
-    expect(document.alternates).toEqual([])
-    expect(document.structuredData).toEqual([])
-    expect(document.metas['og:url'] ?? []).toEqual([])
+    for (const locale of ['de', 'en']) {
+      const response = await readHttp(
+        deployment.baseUrl,
+        `/${locale}/visibility-failure`,
+        productionHeaders,
+      )
+      expect(response.status).toBe(500)
+      expect(response.headers['content-type']).toMatch(/text\/html/)
+      expect(response.headers['x-robots-tag']).toMatch(/noindex/i)
+      const document = inspectHtml(response.body.toString())
+      expect(landings.map((page) => page.title)).not.toContain(document.title)
+      expect(document.metas.robots).toEqual(['noindex, follow'])
+      expect(document.canonicals).toEqual([])
+      expect(document.alternates).toEqual([])
+      expect(document.structuredData).toEqual([])
+      expect(document.metas['og:url'] ?? []).toEqual([])
+    }
   })
 
-  test('production discovery endpoints advertise only the canonical landing page', async () => {
+  test('production discovery endpoints advertise only the two localized landing pages', async () => {
     await deployment.deploy('a', {
       ORIGIN: productionOrigin,
       TRUST_PROXY: 'true',
@@ -244,7 +277,10 @@ test.describe('server-delivered visibility', () => {
     expect(inventory.namespace).toBe(
       'http://www.sitemaps.org/schemas/sitemap/0.9',
     )
-    expect(inventory.locations).toEqual([`${productionOrigin}/`])
+    expect(inventory.locations).toEqual([
+      `${productionOrigin}/de`,
+      `${productionOrigin}/en`,
+    ])
     expect(inventory.priorities).toEqual([])
     expect(inventory.changeFrequencies).toEqual([])
     // There is no maintained landing content date in the current declaration.
@@ -259,7 +295,7 @@ test.describe('server-delivered visibility', () => {
     expect(guide.headers['content-type']).toMatch(/text\/plain.*charset=utf-8/i)
     const text = guide.body.toString()
     expect(text).toMatch(/^# regningen\s*$/m)
-    expect(text).toContain('German-language')
+    expect(text).toContain('German- and English-language')
     expect(text).toContain('invoices')
     expect(text).toContain('PDF')
     expect(text).toMatch(/offline.*initial online preparation/i)
@@ -270,11 +306,14 @@ test.describe('server-delivered visibility', () => {
       ([, label, url]) => ({ label, url }),
     )
     expect(links).toEqual([
-      { label: 'Startseite', url: `${productionOrigin}/` },
+      { label: 'Startseite', url: `${productionOrigin}/de` },
+      { label: 'Home', url: `${productionOrigin}/en` },
     ])
     for (const resource of [
-      '/invoice',
-      '/settings',
+      '/de/rechnung',
+      '/de/einstellungen',
+      '/en/invoice',
+      '/en/settings',
       '/sw.js',
       '/manifest.webmanifest',
     ]) {
@@ -291,28 +330,37 @@ test.describe('server-delivered visibility', () => {
     )
   })
 
-  test('the public social card is a real 1200×630 PNG and the installation manifest is German', async () => {
+  test('both localized social cards are real 1200×630 PNGs with one installation manifest', async () => {
     await deployment.deploy('a', {
       ORIGIN: productionOrigin,
       TRUST_PROXY: 'true',
     })
-    const page = await readHttp(deployment.baseUrl, '/', productionHeaders)
-    const document = inspectHtml(page.body.toString())
-    const imageUrl = new URL(document.metas['og:image'][0])
-    expect(imageUrl.origin).toBe(productionOrigin)
-    expect(imageUrl.pathname).toMatch(/\.png$/)
-    const image = await readHttp(
-      deployment.baseUrl,
-      imageUrl.pathname,
-      productionHeaders,
-    )
-    expect(image.status).toBe(200)
-    expect(image.headers['content-type']).toMatch(/^image\/png(?:;|$)/)
-    expect([...image.body.subarray(0, 8)]).toEqual([
-      137, 80, 78, 71, 13, 10, 26, 10,
-    ])
-    expect(image.body.readUInt32BE(16)).toBe(1200)
-    expect(image.body.readUInt32BE(20)).toBe(630)
+    const images = new Set<string>()
+    for (const landing of landings) {
+      const page = await readHttp(
+        deployment.baseUrl,
+        landing.path,
+        productionHeaders,
+      )
+      const document = inspectHtml(page.body.toString())
+      const imageUrl = new URL(document.metas['og:image'][0])
+      expect(imageUrl.origin).toBe(productionOrigin)
+      expect(imageUrl.pathname).toMatch(/\.png$/)
+      images.add(imageUrl.pathname)
+      const image = await readHttp(
+        deployment.baseUrl,
+        imageUrl.pathname,
+        productionHeaders,
+      )
+      expect(image.status).toBe(200)
+      expect(image.headers['content-type']).toMatch(/^image\/png(?:;|$)/)
+      expect([...image.body.subarray(0, 8)]).toEqual([
+        137, 80, 78, 71, 13, 10, 26, 10,
+      ])
+      expect(image.body.readUInt32BE(16)).toBe(1200)
+      expect(image.body.readUInt32BE(20)).toBe(630)
+    }
+    expect(images.size).toBe(2)
     const manifest = await readHttp(
       deployment.baseUrl,
       '/manifest.webmanifest',
@@ -323,6 +371,7 @@ test.describe('server-delivered visibility', () => {
       /application\/(?:manifest\+json|json)/,
     )
     expect(JSON.parse(manifest.body.toString())).toMatchObject({
+      id: '/',
       name: 'regningen',
       lang: 'de',
       start_url: '/',
@@ -333,7 +382,7 @@ test.describe('server-delivered visibility', () => {
   test('foreign HTML is forced noindex while crawling remains allowed and discovery returns 404', async () => {
     await deployment.deploy('a', { ORIGIN: productionOrigin })
     const foreignHeaders = { host: 'preview.example' }
-    for (const page of [landing, ...applicationPages]) {
+    for (const page of [...landings, ...applicationPages]) {
       const response = await readHttp(
         deployment.baseUrl,
         page.path,
@@ -358,7 +407,7 @@ test.describe('server-delivered visibility', () => {
         await deployment.deploy('a', { ORIGIN: origin, TRUST_PROXY: 'true' })
         const response = await readHttp(
           deployment.baseUrl,
-          '/',
+          '/de',
           productionHeaders,
         )
         expect(response.status).toBe(200)
@@ -377,7 +426,7 @@ test.describe('server-delivered visibility', () => {
           ORIGIN: productionOrigin,
           TRUST_PROXY: trust,
         })
-        expectExcludedHtml(await readHttp(deployment.baseUrl, '/', forged))
+        expectExcludedHtml(await readHttp(deployment.baseUrl, '/de', forged))
         await expectExcludedDiscovery(deployment, forged)
       })
     }
@@ -385,7 +434,7 @@ test.describe('server-delivered visibility', () => {
       ORIGIN: productionOrigin,
       TRUST_PROXY: 'true',
     })
-    const enabled = await readHttp(deployment.baseUrl, '/', forged)
+    const enabled = await readHttp(deployment.baseUrl, '/en', forged)
     expect(inspectHtml(enabled.body.toString()).metas.robots).toEqual([
       'index, follow',
     ])
@@ -393,12 +442,13 @@ test.describe('server-delivered visibility', () => {
     const sitemap = await readHttp(deployment.baseUrl, '/sitemap.xml', forged)
     expect(sitemap.status).toBe(200)
     expect(inspectSitemap(sitemap.body.toString()).locations).toEqual([
-      `${productionOrigin}/`,
+      `${productionOrigin}/de`,
+      `${productionOrigin}/en`,
     ])
     // A subsequent foreign request must not inherit the prior eligible response.
     await expectExcludedDiscovery(deployment, { host: 'preview.example' })
     expectExcludedHtml(
-      await readHttp(deployment.baseUrl, '/', { host: 'preview.example' }),
+      await readHttp(deployment.baseUrl, '/en', { host: 'preview.example' }),
     )
   })
 
@@ -437,7 +487,7 @@ test.describe('server-delivered visibility', () => {
     ]
     for (const forwarding of malformed) {
       const headers = { host: 'regningen.soren.codes', ...forwarding }
-      expectExcludedHtml(await readHttp(deployment.baseUrl, '/', headers))
+      expectExcludedHtml(await readHttp(deployment.baseUrl, '/de', headers))
       await expectExcludedDiscovery(deployment, headers)
     }
   })
@@ -458,7 +508,7 @@ test.describe('server-delivered visibility', () => {
       { 'x-forwarded-host': '', 'x-forwarded-proto': '' },
     ]
     for (const headers of malformed) {
-      expectExcludedHtml(await readHttp(deployment.baseUrl, '/', headers))
+      expectExcludedHtml(await readHttp(deployment.baseUrl, '/en', headers))
       await expectExcludedDiscovery(deployment, headers)
     }
   })
@@ -473,7 +523,7 @@ test.describe('server-delivered visibility', () => {
       'x-forwarded-host': 'REGNINGEN.SOREN.CODES:443',
       'x-forwarded-proto': 'https',
     }
-    for (const path of ['/', '/?utm_campaign=one&other=two']) {
+    for (const path of ['/de', '/de?utm_campaign=one&other=two']) {
       const response = await readHttp(
         deployment.baseUrl,
         path,
@@ -482,7 +532,7 @@ test.describe('server-delivered visibility', () => {
       const document = inspectHtml(response.body.toString())
       expect(response.status).toBe(200)
       expect(document.metas.robots).toEqual(['index, follow'])
-      expect(document.canonicals).toEqual([`${productionOrigin}/`])
+      expect(document.canonicals).toEqual([`${productionOrigin}/de`])
     }
     for (const forwarding of [
       {
@@ -496,7 +546,7 @@ test.describe('server-delivered visibility', () => {
       },
     ]) {
       const headers = { host: 'backend.internal', ...forwarding }
-      expectExcludedHtml(await readHttp(deployment.baseUrl, '/', headers))
+      expectExcludedHtml(await readHttp(deployment.baseUrl, '/de', headers))
       await expectExcludedDiscovery(deployment, headers)
     }
     await deployment.deploy('a', {
@@ -508,27 +558,29 @@ test.describe('server-delivered visibility', () => {
       'x-forwarded-host': 'regningen.soren.codes:8443',
     }
     const portMatch = inspectHtml(
-      (await readHttp(deployment.baseUrl, '/', portHeaders)).body.toString(),
+      (await readHttp(deployment.baseUrl, '/en', portHeaders)).body.toString(),
     )
     expect(portMatch.metas.robots).toEqual(['index, follow'])
     expect(portMatch.canonicals).toEqual([
-      'https://regningen.soren.codes:8443/',
+      'https://regningen.soren.codes:8443/en',
     ])
     expectExcludedHtml(
-      await readHttp(deployment.baseUrl, '/', productionHeaders),
+      await readHttp(deployment.baseUrl, '/en', productionHeaders),
     )
   })
 
   test('direct HTTP uses the actual Host and supports normalized local origins independently of path and query', async () => {
     await deployment.deploy('a', { ORIGIN: deployment.baseUrl })
-    for (const page of [landing, ...applicationPages]) {
+    for (const page of [...landings, ...applicationPages]) {
       const path = `${page.path}?utm_source=direct`
       const response = await readHttp(deployment.baseUrl, path)
       expect(response.status).toBe(200)
       const document = inspectHtml(response.body.toString())
       expect(document.canonicals).toEqual([`${deployment.baseUrl}${page.path}`])
       expect(document.metas.robots).toEqual([
-        page.path === '/' ? 'index, follow' : 'noindex, follow',
+        page.path === '/de' || page.path === '/en'
+          ? 'index, follow'
+          : 'noindex, follow',
       ])
     }
     const localSitemap = await readHttp(
@@ -537,29 +589,30 @@ test.describe('server-delivered visibility', () => {
     )
     expect(localSitemap.status).toBe(200)
     expect(inspectSitemap(localSitemap.body.toString()).locations).toEqual([
-      `${deployment.baseUrl}/`,
+      `${deployment.baseUrl}/de`,
+      `${deployment.baseUrl}/en`,
     ])
     expectExcludedHtml(
-      await readHttp(deployment.baseUrl, '/', { host: 'localhost' }),
+      await readHttp(deployment.baseUrl, '/de', { host: 'localhost' }),
     )
     const wrongPort = Number(new URL(deployment.baseUrl).port) + 1
     const wrongPortHeaders = { host: `127.0.0.1:${wrongPort}` }
     expectExcludedHtml(
-      await readHttp(deployment.baseUrl, '/', wrongPortHeaders),
+      await readHttp(deployment.baseUrl, '/en', wrongPortHeaders),
     )
     await expectExcludedDiscovery(deployment, wrongPortHeaders)
 
     await deployment.deploy('a', { ORIGIN: 'HTTP://REGNINGEN.SOREN.CODES:80/' })
-    const defaultPort = await readHttp(deployment.baseUrl, '/', {
+    const defaultPort = await readHttp(deployment.baseUrl, '/de', {
       host: 'REGNINGEN.SOREN.CODES:80',
     })
     const normalized = inspectHtml(defaultPort.body.toString())
     expect(normalized.metas.robots).toEqual(['index, follow'])
-    expect(normalized.canonicals).toEqual(['http://regningen.soren.codes/'])
+    expect(normalized.canonicals).toEqual(['http://regningen.soren.codes/de'])
     // Configuring HTTPS does not make this direct HTTP backend a public TLS request.
     await deployment.deploy('a', { ORIGIN: productionOrigin })
     expectExcludedHtml(
-      await readHttp(deployment.baseUrl, '/', {
+      await readHttp(deployment.baseUrl, '/en', {
         host: 'regningen.soren.codes',
       }),
     )
@@ -568,10 +621,10 @@ test.describe('server-delivered visibility', () => {
 
 function expectStaticMetadata(
   document: ReturnType<typeof inspectHtml>,
-  page: typeof landing,
+  page: (typeof landings)[number],
   origin: string,
 ) {
-  expect(document.language).toBe('de')
+  expect(document.language).toBe(page.language)
   expect(document.title).toBe(page.title)
   expect(document.metas.description).toEqual([page.description])
   expect(document.canonicals).toEqual([`${origin}${page.path}`])
@@ -581,17 +634,21 @@ function expectStaticMetadata(
     'og:type': 'website',
     'og:url': `${origin}${page.path}`,
     'og:site_name': 'regningen',
-    'og:locale': 'de_DE',
+    'og:locale': page.language === 'en' ? 'en_GB' : 'de_DE',
     'og:image:type': 'image/png',
     'og:image:width': '1200',
     'og:image:height': '630',
     'og:image:alt':
-      'regningen – Rechnungen erstellen und als PDF herunterladen.',
+      page.language === 'en'
+        ? 'regningen – Create invoices and download PDFs.'
+        : 'regningen – Rechnungen erstellen und als PDF herunterladen.',
     'twitter:card': 'summary_large_image',
     'twitter:title': page.title,
     'twitter:description': page.description,
     'twitter:image:alt':
-      'regningen – Rechnungen erstellen und als PDF herunterladen.',
+      page.language === 'en'
+        ? 'regningen – Create invoices and download PDFs.'
+        : 'regningen – Rechnungen erstellen und als PDF herunterladen.',
   })) {
     expect(document.metas[name], name).toEqual([content])
   }
@@ -609,7 +666,9 @@ function expectInstallationMetadata(document: ReturnType<typeof inspectHtml>) {
   expect(document.metas.viewport).toHaveLength(1)
   expect(document.metas['theme-color'].length).toBeGreaterThan(0)
   expect(document.metas['application-name']).toEqual(['regningen'])
-  expect(document.manifests).toEqual(['/manifest.webmanifest'])
+  expect(document.manifests).toEqual([
+    `/manifest-${document.language}.webmanifest`,
+  ])
   expect(document.touchIcons).toEqual(
     expect.arrayContaining(['/apple-touch-icon-180x180.png']),
   )

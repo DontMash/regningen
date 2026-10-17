@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { getLocale, overwriteGetLocale } from '@/paraglide/runtime'
 import {
   createBrowserBusinessProfileRepository,
   createBusinessProfileRepository,
   parseBusinessProfileBackup,
 } from './business-profile-repository'
+
+const originalGetLocale = getLocale
+afterEach(() => overwriteGetLocale(originalGetLocale))
 
 function createStorage() {
   const values = new Map<string, string>()
@@ -30,6 +34,71 @@ const partialProfile = {
 }
 
 describe('local business profile repository', () => {
+  it('explains malformed backups in the active language without changing saved values', async () => {
+    const repository = createBusinessProfileRepository(createStorage())
+    await repository.saveProfile(partialProfile)
+    overwriteGetLocale(() => 'en')
+
+    expect(() => parseBusinessProfileBackup('{')).toThrow(
+      'The profile backup does not contain valid JSON.',
+    )
+    expect(() => parseBusinessProfileBackup('{}')).toThrow(
+      'The profile backup has an invalid format.',
+    )
+    expect(await repository.loadProfile()).toEqual(partialProfile)
+    expect(JSON.parse(await repository.exportProfile())).toEqual({
+      format: 'regningen-business-profile',
+      version: 1,
+      profile: partialProfile,
+    })
+
+    overwriteGetLocale(() => 'de')
+    expect(() => parseBusinessProfileBackup('{')).toThrow(
+      'Die Profilsicherung enthält kein gültiges JSON.',
+    )
+  })
+
+  it('explains reset and unavailable-profile failures in English', async () => {
+    overwriteGetLocale(() => 'en')
+    let generation = 'before-reset'
+    const storage = createStorage()
+    const repository = createBusinessProfileRepository(
+      storage,
+      () => generation,
+    )
+    await repository.saveProfile(partialProfile)
+    generation = 'after-reset'
+
+    await expect(
+      repository.saveProfile(partialProfile, 'before-reset'),
+    ).rejects.toThrow(
+      'The application was reset. Reload the page before saving the profile.',
+    )
+    await expect(repository.deleteProfile('before-reset')).rejects.toThrow(
+      'The application was reset. Reload the page before deleting the profile.',
+    )
+    await expect(repository.exportProfile()).rejects.toThrow(
+      'There is no Business Profile to export yet.',
+    )
+    expect(() => createBrowserBusinessProfileRepository()).toThrow(
+      'Business Profiles are available only in the browser.',
+    )
+
+    const resetDuringSave = createBusinessProfileRepository(
+      {
+        ...storage,
+        setItem: (key, value) => {
+          storage.setItem(key, value)
+          generation = 'reset-during-save'
+        },
+      },
+      () => generation,
+    )
+    await expect(resetDuringSave.saveProfile(partialProfile)).rejects.toThrow(
+      'The application was reset while saving.',
+    )
+  })
+
   it('cannot read, export, or resave a Business Profile from before an application reset', async () => {
     let generation = 'before-reset'
     const repository = createBusinessProfileRepository(

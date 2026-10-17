@@ -11,6 +11,8 @@ import {
 import { JSDOM } from 'jsdom'
 import { createVisibility, resolveDeployment } from './visibility'
 import type { PageVisibility } from './visibility'
+import { pageVisibility, localizedCanonicalPath } from './page-visibility'
+import { landingVisibility } from '@/features/landing/visibility'
 
 const production = resolveDeployment(
   'https://regningen.soren.codes',
@@ -18,6 +20,105 @@ const production = resolveDeployment(
 )
 
 describe('website visibility', () => {
+  it('preserves a feature-owned social image override in both localized introductions', () => {
+    const previous = landingVisibility.socialImage
+    landingVisibility.socialImage = {
+      path: '/custom-introduction.png',
+      alt: 'A feature-owned image',
+      width: 1200,
+      height: 630,
+      type: 'image/png',
+    }
+    try {
+      const visible = pageVisibility(production)
+      for (const path of ['/de', '/en']) {
+        const page = visible.head(path)
+        expect(page.meta).toContainEqual({
+          property: 'og:image',
+          content: 'https://regningen.soren.codes/custom-introduction.png',
+        })
+        expect(page.meta).toContainEqual({
+          property: 'og:image:alt',
+          content: 'A feature-owned image',
+        })
+      }
+    } finally {
+      if (previous) landingVisibility.socialImage = previous
+      else delete landingVisibility.socialImage
+    }
+  })
+
+  it('publishes both real localized introductions without exposing working pages', () => {
+    const visible = pageVisibility(production)
+    const english = visible.head('/en')
+    expect(english.meta).toContainEqual({
+      title: 'regningen – Create invoices and download PDFs',
+    })
+    expect(english.meta).toContainEqual({
+      property: 'og:locale',
+      content: 'en_GB',
+    })
+    expect(english.meta).toContainEqual({
+      property: 'og:image:alt',
+      content: 'regningen – Create invoices and download PDFs.',
+    })
+    expect(english.meta).toContainEqual({
+      property: 'og:image',
+      content: 'https://regningen.soren.codes/social-preview-en.png',
+    })
+    expect(english.links).toEqual([
+      { rel: 'canonical', href: 'https://regningen.soren.codes/en' },
+      {
+        rel: 'alternate',
+        hrefLang: 'de',
+        href: 'https://regningen.soren.codes/de',
+      },
+      {
+        rel: 'alternate',
+        hrefLang: 'en',
+        href: 'https://regningen.soren.codes/en',
+      },
+      {
+        rel: 'alternate',
+        hrefLang: 'x-default',
+        href: 'https://regningen.soren.codes/de',
+      },
+    ])
+    expect(visible.head('/de').meta).toContainEqual({
+      title: 'regningen – Rechnungen erstellen und als PDF herunterladen',
+    })
+    expect(visible.sitemap()).toContain(
+      '<loc>https://regningen.soren.codes/de</loc>',
+    )
+    expect(visible.sitemap()).toContain(
+      '<loc>https://regningen.soren.codes/en</loc>',
+    )
+    expect(visible.sitemap()).not.toMatch(
+      /rechnung|invoice|settings|einstellungen/,
+    )
+    expect(visible.guide()).toContain(
+      '[Home](https://regningen.soren.codes/en)',
+    )
+    for (const path of [
+      '/de/rechnung',
+      '/en/invoice',
+      '/de/einstellungen',
+      '/en/settings',
+      '/de/einstellungen/profil',
+      '/en/settings/profile',
+    ]) {
+      const page = visible.head(path)
+      expect(page.meta).toContainEqual({
+        name: 'robots',
+        content: 'noindex, follow',
+      })
+      expect(
+        page.links.filter((link) => link.rel === 'alternate'),
+      ).toHaveLength(0)
+    }
+    expect(localizedCanonicalPath('/missing', 'en')).toBe('/en/missing')
+  })
+
   it.each([
     [
       'https://REGNINGEN.soren.codes:443/',

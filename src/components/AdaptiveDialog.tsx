@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { IconX } from '@tabler/icons-react'
 import { cn } from 'cn'
+import * as m from '@/paraglide/messages'
 import {
   Drawer,
   DrawerClose,
@@ -88,7 +89,7 @@ function AdaptiveDialog({
                 </DialogPrimitive.Description>
               ) : null}
               <DialogPrimitive.Close
-                aria-label="Schließen"
+                aria-label={m.common_close()}
                 className={cn(
                   buttonVariants({ variant: 'ghost', size: 'icon-sm' }),
                   'absolute top-4 right-4',
@@ -123,7 +124,7 @@ function AdaptiveDialog({
             <DrawerDescription>{description}</DrawerDescription>
           ) : null}
           <DrawerClose
-            aria-label="Schließen"
+            aria-label={m.common_close()}
             className={cn(
               buttonVariants({ variant: 'ghost', size: 'icon-sm' }),
               'absolute top-4 right-4',

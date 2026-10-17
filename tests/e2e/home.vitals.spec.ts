@@ -3,14 +3,14 @@ import { budgets } from '../support/playwright/vitals-budgets'
 
 test('homepage after acknowledging release notes', async ({ vitals }) => {
   await vitals.audit({
-    path: '/',
+    path: '/de',
     budgets: budgets.home,
     prepare: async ({ page, releaseNotes, settings }) => {
-      await page.goto('/')
+      await page.goto('/de')
       await releaseNotes.expectReleaseNotesDialog()
       await releaseNotes.acknowledgeReleaseNotes()
       await releaseNotes.expectReleaseNotesClosed()
-      await page.goto('/settings')
+      await page.goto('/de/einstellungen')
       await settings.selectAppearance('Hell')
     },
     verify: async ({ landing, releaseNotes }) => {
@@ -22,7 +22,7 @@ test('homepage after acknowledging release notes', async ({ vitals }) => {
 
 test('first visit with automatic release notes', async ({ vitals }) => {
   await vitals.audit({
-    path: '/',
+    path: '/de',
     budgets: budgets.homeFirst,
     prepare: async () => {},
     verify: async ({ landing, releaseNotes }) => {

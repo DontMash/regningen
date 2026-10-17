@@ -12,10 +12,12 @@ import { saveBusinessProfile } from '../../tests/support/vitest/business-profile
 import { createBusinessProfileScenario } from '../../tests/scenarios/business-profile'
 import { businessProfileStorageStatus } from '@/features/invoicing/business-profile-storage-status'
 import { Route } from './index'
+import { setLocale } from '@/paraglide/runtime'
 
 const Home = Route.options.component!
 
 beforeEach(() => {
+  setLocale('de', { reload: false })
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   window.localStorage.clear()
   businessProfileStorageStatus.setState(() => ({ error: null }))
@@ -28,6 +30,90 @@ afterEach(() => {
 })
 
 describe('home route', () => {
+  it('introduces the workflow in English with fictional examples and English number and date conventions', async () => {
+    setLocale('en', { reload: false })
+    const user = userEvent.setup()
+    await renderAtRoute('/', Home)
+
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Create invoices. Directly in your browser.',
+      }),
+    ).toBeVisible()
+    expect(screen.getByText(/No account required\./)).toBeVisible()
+    expect(
+      screen.getByRole('region', { name: 'Reuse your business profile' }),
+    ).toHaveTextContent('not synchronised between devices')
+    expect(
+      screen.getByRole('region', { name: 'Enter positions and totals' }),
+    ).toHaveTextContent('up to 16 invoice positions')
+    expect(
+      screen.getByRole('region', { name: 'Download the PDF directly' }),
+    ).toHaveTextContent('one A4 page')
+    expect(
+      screen.getByRole('region', {
+        name: 'Keep your draft during the session',
+      }),
+    ).toHaveTextContent('not an archive')
+    expect(
+      screen.getByRole('region', { name: 'Back up your business profile' }),
+    ).toHaveTextContent('unencrypted')
+    expect(
+      screen.getByRole('region', { name: 'Install and work offline' }),
+    ).toHaveTextContent('Ready offline')
+    const sample = screen.getByRole('figure', {
+      name: 'Illustrative invoice with fictional sample data',
+    })
+    expect(within(sample).getByText('Example Studio')).toBeVisible()
+    expect(within(sample).getByText('Flyer design')).toBeVisible()
+    expect(within(sample).getByText('12/06/2026')).toBeVisible()
+    for (const amount of ['€600.00', '€114.00', '€714.00']) {
+      expect(within(sample).getByText(amount)).toBeVisible()
+    }
+    expect(
+      screen.queryByText('Gestaltung eines Flyers'),
+    ).not.toBeInTheDocument()
+    await user.click(
+      screen.getAllByRole('button', { name: 'Create invoice' })[0],
+    )
+    expect(
+      await screen.findByRole('heading', { name: 'Profilseite geöffnet' }),
+    ).toBeVisible()
+  })
+
+  it('explains browser storage failures in English and retries entry without losing the introduction', async () => {
+    setLocale('en', { reload: false })
+    const user = userEvent.setup()
+    saveBusinessProfile(createBusinessProfileScenario())
+    const storageFault = vi
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(() => {
+        throw new Error('storage unavailable')
+      })
+    await renderAtRoute('/', Home)
+
+    expect(
+      await screen.findByRole('alert', {
+        name: 'Business profile unavailable',
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByText(/Check your browser’s storage settings/),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Create invoices. Directly in your browser.',
+      }),
+    ).toBeVisible()
+    storageFault.mockRestore()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(
+      await screen.findByRole('heading', { name: 'Rechnungsseite geöffnet' }),
+    ).toBeVisible()
+  })
+
   it('keeps its public introduction visible for a returning visitor instead of redirecting', async () => {
     saveBusinessProfile(createBusinessProfileScenario())
     await renderAtRoute('/', Home)
@@ -123,7 +209,9 @@ describe('home route', () => {
         name: 'Unternehmensprofil nicht verfügbar',
       }),
     ).toBeVisible()
-    expect(screen.getByText(/Prüfe die Speichereinstellungen/)).toBeVisible()
+    expect(
+      screen.getByText(/Prüfen Sie die Speichereinstellungen/),
+    ).toBeVisible()
     expect(
       screen.getByRole('heading', {
         level: 1,
@@ -216,7 +304,7 @@ describe('home route', () => {
     expect(within(offline).getByText(/„Offline bereit“/)).toBeVisible()
     expect(within(offline).getByText(/optional/)).toBeVisible()
     expect(
-      within(offline).getByText(/hängt von deinem Browser ab/),
+      within(offline).getByText(/hängt von Ihrem Browser ab/),
     ).toBeVisible()
 
     const sample = screen.getByRole('figure', {

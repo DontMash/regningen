@@ -1,3 +1,8 @@
+import { cookieName } from '@/paraglide/runtime'
+import {
+  INVOICE_LANGUAGE_KEY,
+  resetInvoiceLanguage,
+} from '@/lib/invoice-language'
 import { clearInvoiceDraftForApplicationReset } from '../invoicing/invoice-draft-store'
 import {
   runPwaCriticalOperation,
@@ -14,6 +19,7 @@ export {
 } from './reset-generation'
 
 const USER_DATA_KEYS = [
+  INVOICE_LANGUAGE_KEY,
   'regningen.business-profile',
   'theme',
   'regningen.pwa.pdf-notifications',
@@ -29,6 +35,8 @@ export async function resetApplication(): Promise<void> {
     await draftInvalidation
     await clearInvoiceDraftForApplicationReset(generation)
     for (const key of USER_DATA_KEYS) window.localStorage.removeItem(key)
+    document.cookie = `${cookieName}=; path=/; max-age=0; samesite=lax`
+    resetInvoiceLanguage()
     await publishApplicationReset(generation)
   })
 }

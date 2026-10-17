@@ -2,6 +2,9 @@ package-lock.json
 pnpm-lock.yaml
 yarn.lock
 .vitals/
+src/paraglide/
+project.inlang/.lix/
+project.inlang/cache/
 
 # Agent skills follow their own authoring format.
 .agents/

@@ -3,6 +3,7 @@ import { createStorage } from 'unstorage'
 import sessionStorageDriver from 'unstorage/drivers/session-storage'
 import type { InvoiceDraft, InvoiceLineDraft } from './invoice'
 import { z } from '@/lib/validation'
+import * as m from '@/paraglide/messages'
 import {
   getApplicationResetGeneration,
   INITIAL_APPLICATION_RESET_GENERATION,
@@ -16,7 +17,11 @@ const INVOICE_DRAFT_SCHEMA_VERSION = 1
 const INVOICE_DRAFT_RESET_STAMP_KEY = 'regningen.invoice-draft.reset-generation'
 
 const invoiceLineDraftSchema = z
-  .object({ description: z.string(), amount: z.string() })
+  .object({
+    description: z.string(),
+    amount: z.string(),
+    amountLocale: z.enum(['de', 'en']).optional(),
+  })
   .strict()
 const invoiceDraftSchema = z
   .object({
@@ -147,7 +152,9 @@ function markStorageFailure(error: unknown) {
   setPersistenceState({
     pending: false,
     saved: false,
-    error: `Der Invoice Draft konnte nicht in dieser Browsersitzung gespeichert werden. ${messageFor(error, 'Der Sitzungsspeicher ist nicht verfügbar.')}`,
+    error: m.invoice_storage_save_failed({
+      error: messageFor(error, m.invoice_storage_unavailable()),
+    }),
   })
 }
 
@@ -172,7 +179,7 @@ function scheduleSave() {
       )
       return
     }
-    if (!storage) throw new Error('Der Sitzungsspeicher ist nicht verfügbar.')
+    if (!storage) throw new Error(m.invoice_storage_unavailable())
     await storage.setItem(INVOICE_DRAFT_RESET_STAMP_KEY, generation)
     if (saveRevision !== revision) return
     if (generation !== getApplicationResetGeneration()) {
@@ -236,7 +243,7 @@ export function initializeInvoiceDraftPersistence(
         storage = suppliedStorage
       } else {
         if (typeof window === 'undefined') {
-          throw new Error('Browserspeicher ist während SSR nicht verfügbar.')
+          throw new Error(m.invoice_storage_ssr())
         }
         const unstorage = createStorage({
           driver: sessionStorageDriver({ window }),
@@ -282,8 +289,7 @@ export function initializeInvoiceDraftPersistence(
             saved: true,
             pending: false,
             restored: false,
-            error:
-              'Der gespeicherte Invoice Draft ist ungültig oder nicht kompatibel. Es wurde ein leerer Entwurf geöffnet.',
+            error: m.invoice_storage_invalid(),
           })
         } else {
           invoiceDraftStore.setState(() => parsed.data.invoice)
@@ -314,7 +320,9 @@ export function initializeInvoiceDraftPersistence(
         restored: false,
         saved: true,
         pending: false,
-        error: `Der Sitzungsspeicher für den Invoice Draft ist nicht verfügbar. ${messageFor(error, 'Bitte prüfe die Browserspeichereinstellungen.')}`,
+        error: m.invoice_storage_load_failed({
+          error: messageFor(error, m.invoice_storage_settings()),
+        }),
       })
     } finally {
       subscribeToDraftChanges()
@@ -341,17 +349,13 @@ export async function clearStoredInvoiceDraft() {
   try {
     await writes
     if (clearRevision !== revision) {
-      throw new Error(
-        'Der Invoice Draft wurde während des Zurücksetzens geändert.',
-      )
+      throw new Error(m.invoice_storage_changed())
     }
-    if (!storage) throw new Error('Der Sitzungsspeicher ist nicht verfügbar.')
+    if (!storage) throw new Error(m.invoice_storage_unavailable())
     await storage.removeItem(INVOICE_DRAFT_STORAGE_KEY)
     if (clearRevision !== revision) {
       if (generation === getApplicationResetGeneration()) await scheduleSave()
-      throw new Error(
-        'Der Invoice Draft wurde während des Zurücksetzens geändert.',
-      )
+      throw new Error(m.invoice_storage_changed())
     }
     setPersistenceState({ saved: true, pending: false, error: null })
   } catch (error) {
@@ -382,7 +386,7 @@ function invalidateInvoiceDraft(generation: string): Promise<void> {
     await initialization
     if (!storage) {
       if (typeof window === 'undefined') {
-        throw new Error('Der Sitzungsspeicher ist nicht verfügbar.')
+        throw new Error(m.invoice_storage_unavailable())
       }
       // Reset must be retryable after a failed hydration, and needs deletion,
       // not a readable or compatible saved envelope.

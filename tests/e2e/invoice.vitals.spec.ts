@@ -9,7 +9,7 @@ test('populated Invoice editor retains its per-tab Invoice Draft', async ({
   const profile = createBusinessProfileScenario()
   const example = createInvoiceScenario()
   await vitals.audit({
-    path: '/invoice',
+    path: '/de/rechnung',
     budgets: budgets.invoice,
     prepare: async ({
       page,
@@ -18,11 +18,11 @@ test('populated Invoice editor retains its per-tab Invoice Draft', async ({
       businessProfile,
       invoice,
     }) => {
-      await page.goto('/')
+      await page.goto('/de')
       await releaseNotes.expectReleaseNotesDialog()
       await releaseNotes.acknowledgeReleaseNotes()
       await releaseNotes.expectReleaseNotesClosed()
-      await page.goto('/settings')
+      await page.goto('/de/einstellungen')
       await settings.selectAppearance('Hell')
       await settings.openProfile()
       await businessProfile.expectEditorReady()

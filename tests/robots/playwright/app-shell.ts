@@ -25,11 +25,15 @@ export class AppShellRobot {
   }
 
   async openMenu() {
-    await this.page.getByRole('button', { name: 'Menü öffnen' }).click()
+    await this.page
+      .getByRole('button', { name: /^(Menü öffnen|Open menu)$/ })
+      .click()
   }
 
   async closeMenu() {
-    await this.menu().getByRole('button', { name: 'Menü schließen' }).click()
+    await this.menu()
+      .getByRole('button', { name: /^(Menü schließen|Close menu)$/ })
+      .click()
   }
 
   async expectMenuOpen() {
@@ -49,7 +53,7 @@ export class AppShellRobot {
     ).toBeVisible()
     await expect(
       navigation.getByRole('link', { name: 'regningen' }),
-    ).toHaveAttribute('href', '/')
+    ).toHaveAttribute('href', '/de')
     await expect(
       navigation.getByRole('button', { name: 'Menü öffnen' }),
     ).toBeVisible()
@@ -120,17 +124,29 @@ export class AppShellRobot {
 
   async expectMenuFocusContained() {
     const close = this.menu().getByRole('button', { name: 'Menü schließen' })
+    const invoice = this.menu().getByRole('link', {
+      name: 'Rechnung',
+      exact: true,
+    })
+    const language = this.menu().getByRole('combobox', {
+      name: 'Sprache ändern',
+    })
     const theme = this.menu().getByRole('button', {
       name: 'Darstellung umschalten',
     })
+    const settings = this.menu().getByRole('link', {
+      name: 'Einstellungen',
+      exact: true,
+    })
     await close.focus()
     await this.page.keyboard.press('Shift+Tab')
-    await expect(theme).toBeFocused()
+    await expect(settings).toBeFocused()
     await this.page.keyboard.press('Tab')
     await expect(close).toBeFocused()
-    for (let index = 0; index < 3; index++)
+    for (const control of [invoice, language, theme, settings]) {
       await this.page.keyboard.press('Tab')
-    await expect(theme).toBeFocused()
+      await expect(control).toBeFocused()
+    }
   }
 
   async chooseMenuDestinationWithKeyboard(
@@ -152,11 +168,23 @@ export class AppShellRobot {
   }
 
   async expectDesktopNavigationUsable() {
-    const invoice = this.page
-      .getByRole('navigation', { name: 'Hauptnavigation' })
-      .getByRole('link', { name: 'Rechnung', exact: true })
+    const navigation = this.page.getByRole('navigation', {
+      name: 'Hauptnavigation',
+    })
+    const invoice = navigation.getByRole('link', {
+      name: 'Rechnung',
+      exact: true,
+    })
     await invoice.focus()
     await expect(invoice).toBeFocused()
+    for (const control of [
+      navigation.getByRole('combobox', { name: 'Sprache ändern' }),
+      navigation.getByRole('button', { name: 'Darstellung umschalten' }),
+      navigation.getByRole('link', { name: 'Einstellungen', exact: true }),
+    ]) {
+      await this.page.keyboard.press('Tab')
+      await expect(control).toBeFocused()
+    }
   }
 
   async expectMenuContents(businessName?: string) {
@@ -167,17 +195,20 @@ export class AppShellRobot {
     ).toBeAttached()
     await expect(
       menu.getByRole('link', { name: 'Rechnung', exact: true }),
-    ).toHaveAttribute('href', '/invoice')
+    ).toHaveAttribute('href', '/de/rechnung')
     const settings = menu.getByRole('link', {
       name: 'Einstellungen',
       exact: true,
     })
-    await expect(settings).toHaveAttribute('href', '/settings')
+    await expect(settings).toHaveAttribute('href', '/de/einstellungen')
     await expect(settings).toHaveText('')
     await expect(settings.locator('svg')).toBeVisible()
     const theme = menu.getByRole('button', { name: 'Darstellung umschalten' })
     await expect(theme).toBeEnabled()
     await expect(theme).toHaveText('')
+    const language = menu.getByRole('combobox', { name: 'Sprache ändern' })
+    await expect(language).toBeEnabled()
+    await expect(language.locator('svg')).toBeVisible()
     await expect(
       menu.getByRole('button', { name: 'Menü schließen' }),
     ).toBeVisible()
@@ -202,7 +233,7 @@ export class AppShellRobot {
   }
 
   async expectProfilePage() {
-    await expect(this.page).toHaveURL(/\/settings\/profile\/?$/)
+    await expect(this.page).toHaveURL(/\/de\/einstellungen\/profil$/)
     await expect(
       this.page.getByRole('heading', {
         name: 'Unternehmensprofil',
@@ -241,7 +272,7 @@ export class AppShellRobot {
     const link = this.page
       .getByRole('navigation', { name: 'Hauptnavigation' })
       .getByRole('link', { name: 'Einstellungen', exact: true })
-    await expect(link).toHaveAttribute('href', '/settings')
+    await expect(link).toHaveAttribute('href', '/de/einstellungen')
     await expect(link).toHaveText('')
     await expect(link.locator('svg')).toBeVisible()
     await expect(
