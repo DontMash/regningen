@@ -10,6 +10,11 @@ export const localizedPages = [
     de: '/de/einstellungen/profil',
     en: '/en/settings/profile',
   },
+  {
+    internal: '/settings/licenses',
+    de: '/de/einstellungen/lizenzen',
+    en: '/en/settings/licenses',
+  },
 ] as const
 
 export const paraglideOptions = {
@@ -25,6 +30,7 @@ export const paraglideOptions = {
     '/robots.txt',
     '/sitemap.xml',
     '/llms.txt',
+    '/third-party-notices.txt',
     '/sw.js',
     '/manifest.webmanifest',
     '/manifest-:locale.webmanifest',

@@ -25,40 +25,44 @@ export class PwaRobot {
     ).toBeVisible()
   }
 
+  private updateDialog() {
+    return this.page.getByRole('dialog', {
+      name: /^(Aktualisierung verfügbar|Update available)$/,
+    })
+  }
+
   async expectUpdateAvailable() {
-    await expect(
-      this.page.getByRole('dialog', { name: 'Aktualisierung verfügbar' }),
-    ).toBeVisible({ timeout: 30_000 })
+    await expect(this.updateDialog()).toBeVisible({ timeout: 30_000 })
   }
 
   async postponeUpdate() {
-    await this.page
-      .getByRole('dialog', { name: 'Aktualisierung verfügbar' })
-      .getByRole('button', { name: 'Später' })
+    await this.updateDialog()
+      .getByRole('button', { name: /^(Später|Later)$/ })
       .click()
     await expect(
-      this.page.getByRole('button', { name: 'Update verfügbar' }),
+      this.page.getByRole('button', {
+        name: /^(Update verfügbar|Update available)$/,
+      }),
     ).toBeVisible()
   }
 
   async reopenUpdate() {
-    await this.page.getByRole('button', { name: 'Update verfügbar' }).click()
-    await expect(
-      this.page.getByRole('dialog', { name: 'Aktualisierung verfügbar' }),
-    ).toBeVisible()
+    await this.page
+      .getByRole('button', {
+        name: /^(Update verfügbar|Update available)$/,
+      })
+      .click()
+    await expect(this.updateDialog()).toBeVisible()
   }
 
   async applyUpdate() {
-    await this.page
-      .getByRole('dialog', { name: 'Aktualisierung verfügbar' })
-      .getByRole('button', { name: 'Update jetzt' })
+    await this.updateDialog()
+      .getByRole('button', { name: /^(Update jetzt|Update now)$/ })
       .click()
   }
 
   async expectUpdateClosed() {
-    await expect(
-      this.page.getByRole('dialog', { name: 'Aktualisierung verfügbar' }),
-    ).toHaveCount(0)
+    await expect(this.updateDialog()).toHaveCount(0)
   }
 
   async enableNotifications() {

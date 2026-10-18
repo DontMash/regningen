@@ -13,7 +13,7 @@ pnpm dev
 
 The app is available at <http://localhost:3000>. No environment file is required. Optionally copy `.env.example` to `.env.local`; the safe defaults leave public identity, proxy trust, and HSTS disabled. See [environment configuration](docs/configuration.md) for supported settings, validation, file precedence, and mode selection.
 
-See the [testing guide](docs/testing.md) for test architecture and contribution conventions, and the [release guide](docs/releasing.md) for preparing a local release.
+See the [testing guide](docs/testing.md) for test architecture and contribution conventions, the [release guide](docs/releasing.md) for preparing a local release, and the [notices guide](docs/licensing.md) for generated licensing evidence and dependency review.
 
 ## Checks
 
@@ -60,13 +60,13 @@ Translations are individual messages in `messages/de/` and `messages/en/`, with 
 
 ## Settings
 
-Open **Einstellungen / Settings** using the cogwheel in the header. The settings aside links to **Allgemein / General** and **Profil / Profile** at their localized addresses. General Settings contains language, appearance, installation, local PDF notifications, and application reset. The header theme shortcut remains synchronized with the System/Light/Dark selection.
+Open **Einstellungen / Settings** using the cogwheel in the header. The settings aside links to **Allgemein / General**, **Profil / Profile**, and **Lizenzen und Hinweise / Licenses and notices** at their localized addresses. The notices page lives at `/de/einstellungen/lizenzen` or `/en/settings/licenses`, separates the project's license from third-party terms, and offers the same locally bundled notices as a plain-text download. General Settings contains language, appearance, installation, local PDF notifications, and application reset. The header theme shortcut remains synchronized with the System/Light/Dark selection.
 
 Profil contains the Business Profile form and backup/delete controls. Editing and importing change only the working form: choose **Profil speichern** to persist a valid profile. Save stays on Profil; **Rechnung** returns to invoicing without discarding the tab's Invoice Draft. Leaving with unsaved profile changes offers a discard warning; manual tab close/reload uses the browser's best-effort native warning. Ordinary saves in multiple tabs silently use the last successful save, without conflict warnings or merging.
 
 ## Installable app and offline use
 
-Production builds use `vite-plugin-pwa` to generate the manifest, receipt-derived installation artwork, and a Workbox service worker. The worker precaches the unprefixed entry and both languages' introduction, Invoice, General Settings, and Profile documents plus application chunks, fonts, styles, localized manifests, and generated icons. Both languages use one app identity and installation. Production hosting must serve the app and `/sw.js` over HTTPS (localhost is suitable for testing), keep the worker URL and `/` scope stable, and avoid caching `/sw.js`. The current deployment supports the root path; hosting under a subdirectory is not verified. `pnpm test:e2e` builds and serves isolated production deployments to exercise real offline routing, PDF generation, and prompt-managed updates.
+Production builds use `vite-plugin-pwa` to generate the manifest, receipt-derived installation artwork, and a Workbox service worker. The worker precaches the unprefixed entry and both languages' introduction, Invoice, General Settings, Profile, and Licenses and notices documents, the local plain-text notices resource, plus application chunks, fonts, styles, localized manifests, and generated icons. Both languages use one app identity and installation. Production hosting must serve the app and `/sw.js` over HTTPS (localhost is suitable for testing), keep the worker URL and `/` scope stable, and avoid caching `/sw.js`. The current deployment supports the root path; hosting under a subdirectory is not verified. `pnpm test:e2e` builds and serves isolated production deployments to exercise real offline routing, PDF generation, and prompt-managed updates.
 
 Visit online once and wait for **Offline bereit** before relying on offline startup. The generated worker prepares the core server-rendered routes, lazy-loaded assets, fonts, styles, and icons. Browser storage can still be evicted, and installation does not guarantee permanent offline access. Browser installation support varies; use the explicit Installieren control for native prompting or platform guidance. No install prompt appears automatically.
 
@@ -91,3 +91,17 @@ The profile can be exported and imported as JSON. Export includes only the last 
 Application reset preserves downloaded PDFs/backups, browser notification permissions, installation, service workers, offline caches, and unrelated storage. It does not affect other browsers/devices or guarantee secure erasure of browser-internal history or copies.
 
 This app provides an invoice-generation workflow, not a guarantee of compliance with all German tax or invoicing requirements. Review the generated PDF before sending it.
+
+## License
+
+Copyright (C) 2026 soren.codes
+
+Original project code and documentation are licensed under the **GNU Affero General Public License, version 3 only (AGPL-3.0-only)**. See [LICENSE](LICENSE) for the complete, unmodified standard license text. This project's grant does **not** select “or any later version”; the license's own explanatory application example is not an additional project grant.
+
+Commercial use is permitted. The license requires covered distributed modifications to remain under its terms and includes obligations for modified software offered for interaction over a network. It does not require publication of every purely private modification or contribution of every improvement upstream. “soren.codes” is the chosen author designation, not a declaration of a newly formed company.
+
+This default does not relicense third-party dependencies, fonts, copied UI source, vendored agent materials or other imported work. Those retain their applicable original licenses, copyright notices and attribution. In particular, the bundled Inter, Lora and JetBrains Mono fonts retain their OFL terms and any Reserved Font Names.
+
+Generated Invoices and user-supplied Business Profile and Invoice Draft data do not become AGPL-covered merely because this application produces or processes them. Independently included third-party material keeps its own terms.
+
+The application bundles license texts and notices locally, including with its server distribution; see [license generation and review](docs/licensing.md). Notice delivery is distinct from corresponding-source obligations. This feature does not publish application source, add source-repository links, implement corresponding-source delivery or certify deployment compliance; deferring that work does not waive applicable obligations.

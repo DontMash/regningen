@@ -27,6 +27,14 @@ export class PwaBrowserControls {
     await this.context.close()
   }
 
+  // Context observation includes the worker's own precache requests, not just
+  // page fetches, so local-only offline preparation can be checked as delivered.
+  observeRequestUrls() {
+    const urls: string[] = []
+    this.context.on('request', (request) => urls.push(request.url()))
+    return { snapshot: () => [...urls] }
+  }
+
   async createUnrelatedOriginCache(page: Page) {
     await page.evaluate(async (cacheName) => {
       await caches.open(cacheName)

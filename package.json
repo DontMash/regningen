@@ -2,14 +2,18 @@
   "name": "regningen",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3000",
+    "predev": "pnpm notices:generate",
+    "notices:generate": "node scripts/notices.mjs",
+    "notices:check": "node scripts/notices.mjs --check",
     "i18n:compile": "node scripts/compile-i18n.mjs",
-    "pretypecheck": "pnpm i18n:compile",
-    "prelint": "pnpm i18n:compile",
-    "pretest": "pnpm i18n:compile",
-    "pretest:coverage": "pnpm i18n:compile",
+    "pretypecheck": "pnpm i18n:compile && pnpm notices:generate",
+    "prelint": "pnpm i18n:compile && pnpm notices:check",
+    "pretest": "pnpm i18n:compile && pnpm notices:generate",
+    "pretest:coverage": "pnpm i18n:compile && pnpm notices:generate",
     "build": "node scripts/build.mjs",
     "build:routes": "tsr generate",
     "preview": "node scripts/preview.mjs",
@@ -90,6 +94,7 @@
     "vite": "^8.0.0",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.0.2",
-    "workbox-window": "^7.4.1"
+    "workbox-window": "^7.4.1",
+    "yaml": "^2.9.1"
   }
 }

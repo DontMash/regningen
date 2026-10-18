@@ -29,6 +29,7 @@ test.describe('production browser security', () => {
   let deployment: PwaDeployment
 
   test.beforeAll(async () => {
+    test.setTimeout(240_000)
     deployment = await PwaDeployment.create({
       updates: true,
       failedPage: true,

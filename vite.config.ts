@@ -11,6 +11,7 @@ import { resolve } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import { validateReleaseData } from './src/lib/release-data-validation.ts'
+import { noticeEvidence } from './src/lib/notices/build.ts'
 import { readEnvironment } from './src/env.ts'
 import { devtools } from '@tanstack/devtools-vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -203,6 +204,7 @@ const config = defineConfig(({ command, mode }) => {
       paraglideVitePlugin(paraglideOptions),
       developmentManifests(),
       releaseDataValidation(),
+      noticeEvidence(),
       VitePWA({
         strategies: 'generateSW',
         outDir: '.output/public',
@@ -211,7 +213,7 @@ const config = defineConfig(({ command, mode }) => {
         scope: '/',
         filename: 'sw.js',
         manifestFilename: 'manifest.webmanifest',
-        includeAssets: ['favicon.svg'],
+        includeAssets: ['favicon.svg', 'third-party-notices.txt'],
         includeManifestIcons: true,
         manifest: baseManifest,
         pwaAssets: {
@@ -229,6 +231,8 @@ const config = defineConfig(({ command, mode }) => {
             preparePwaWorker(options, environment),
         },
         workbox: {
+          // Preserve final generated-worker provenance for release validation.
+          sourcemap: true,
           navigateFallback: null,
           // VitePWA already injects the base manifest with its own revision.
           // Include localized manifests via globbing, but never the base twice.
@@ -243,7 +247,10 @@ const config = defineConfig(({ command, mode }) => {
       devtools(),
       nitro({
         buildDir: resolve(process.cwd(), '.nitro'),
-        rollupConfig: { external: [/^@sentry\//] },
+        rollupConfig: {
+          external: [/^@sentry\//],
+          plugins: [noticeEvidence('nitro')],
+        },
         // The built runtime (including preview) owns enforcement. Development
         // serves Vite's inline bootstrap/HMR instead and must not use its fallback.
         plugins:

@@ -1,7 +1,10 @@
 import { landingVisibility } from '@/features/landing/visibility'
 import { invoiceVisibility } from '@/features/invoicing/invoice-visibility'
 import { profileVisibility } from '@/features/invoicing/profile-visibility'
-import { settingsVisibility } from '@/features/settings/visibility'
+import {
+  licensesVisibility,
+  settingsVisibility,
+} from '@/features/settings/visibility'
 import { localizedPages } from '@/i18n/config'
 import * as m from '@/paraglide/messages'
 import { createVisibility, localizedSocialMetadata } from './visibility'
@@ -14,6 +17,7 @@ export const pageDeclarations = [
   invoiceVisibility,
   settingsVisibility,
   profileVisibility,
+  licensesVisibility,
 ]
 
 export function localizedCanonicalPath(path: string, locale: Locale) {
@@ -41,6 +45,10 @@ function translatedDeclaration(
     '/settings': () => ({
       title: m.meta_settings_title({}, options),
       description: m.meta_settings_description({}, options),
+    }),
+    '/settings/licenses': () => ({
+      title: m.meta_licenses_title({}, options),
+      description: m.meta_licenses_description({}, options),
     }),
     '/settings/profile': () => ({
       title: m.meta_profile_title({}, options),

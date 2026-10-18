@@ -1,0 +1,204 @@
+[
+  {
+    "id": "ibantools@4.5.4",
+    "license": "MIT",
+    "reason": "Explicitly select the supplied MIT alternative, not MPL-2.0 or both; the root LICENSE contains only a license label.",
+    "files": ["LICENSE.MIT"],
+    "evidence": [
+      {
+        "file": "package.json",
+        "sha256": "0839f577d7a3ce71d52402b031be967b89d20c99984f6443d83e02910196cd85"
+      },
+      {
+        "file": "LICENSE",
+        "sha256": "e3a3a3a6dfc0f885eea840461a1629f52fea36098240666143e6c3bdf3356e17"
+      },
+      {
+        "file": "LICENSE.MIT",
+        "sha256": "2742df4a1aa0c67d1281f09dc2dffae8b429e69878cf22e1f377be94e04fb756"
+      }
+    ]
+  },
+  {
+    "id": "pako@1.0.11",
+    "reason": "Cumulative MIT wrapper and Zlib port obligations. The complete supplied Zlib grant, copyright and acknowledgments are in lib/zlib/README. Preserve differing upstream author spellings.",
+    "files": ["LICENSE", "lib/zlib/README"],
+    "evidence": [
+      {
+        "file": "package.json",
+        "sha256": "0014f350a6834ed6a2d1211e0a2e3aa471cb426edf63379c785f9647ea2b4e01"
+      },
+      {
+        "file": "lib/zlib/README",
+        "sha256": "d8b499598e43d755ea8918448128259ff01820c50d94d5a48c8883d0a594ddb1"
+      }
+    ]
+  },
+  {
+    "id": "class-variance-authority@0.7.1",
+    "reason": "Retain the supplied source attribution including All rights reserved; no separate upstream NOTICE exists and none is invented.",
+    "files": ["LICENSE"],
+    "evidence": [
+      {
+        "file": "package.json",
+        "sha256": "f487885eb010b36aec829ab8fb5fc845918006c4633e3c88c750e73bd35c6381"
+      },
+      {
+        "file": "dist/index.mjs",
+        "sha256": "3e9deb809896235089fd6719c56631f25bd67878100d5fa771a4864bfbd0e299"
+      }
+    ],
+    "texts": [
+      {
+        "file": "dist/index.mjs (upstream copyright header)",
+        "text": "/**\n * Copyright 2022 Joe Bell. All rights reserved.\n *\n * This file is licensed to you under the Apache License, Version 2.0\n * (the \"License\"); you may not use this file except in compliance with the\n * License. You may obtain a copy of the License at\n *\n *   http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an \"AS IS\" BASIS, WITHOUT\n * WARRANTIES OR REPRESENTATIONS OF ANY KIND, either express or implied. See the\n * License for the specific language governing permissions and limitations under\n * the License.\n */"
+      }
+    ]
+  },
+  {
+    "id": "@t3-oss/env-core@0.13.11",
+    "reason": "Published package omits LICENSE despite its file list. npm gitHead and the immutable core package manifest both identify version0.13.11 at this commit. Retain the full original upstream MIT grant locally; no author metadata substitution.",
+    "evidence": [
+      {
+        "file": "package.json",
+        "sha256": "1e641520b8cb5c87635b00331cd8b7a3d2a5a03771ed6243af7e3eaa724508d0"
+      },
+      {
+        "file": "dist/index.js",
+        "sha256": "bb509d63358f1bdf687d2e1d7158469d7f46c4a743b5cff2c418456f2a9402de"
+      }
+    ],
+    "upstream": [
+      {
+        "url": "https://raw.githubusercontent.com/t3-oss/t3-env/23ddb79a92800665daa54b90c99f7c1099eeb6fb/LICENSE",
+        "sha256": "a45df7d7f8a36144864a3ac08a25be6856d455239dfcbf502519245e1e1f87df"
+      }
+    ],
+    "texts": [
+      {
+        "file": "upstream t3-env/LICENSE (23ddb79a92800665daa54b90c99f7c1099eeb6fb)",
+        "text": "MIT License\n\nCopyright (c) 2025 Julius Marminge\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    ]
+  },
+  {
+    "id": "@pdf-lib/standard-fonts@1.0.0",
+    "reason": "Preserve the separate original-repository attribution and the full actual linked MIT grant. The upstream page substitutes its URL fragment into the copyright date; the README links #2015-2018. The independently supplied Andrew Dillon grant is retained too.",
+    "files": ["LICENSE.md"],
+    "evidence": [
+      {
+        "file": "package.json",
+        "sha256": "55f26afbf621e1993e6e4828fd3ef4570acef13dcb8e3878b43a14adbb43f944"
+      },
+      {
+        "file": "README.md",
+        "sha256": "3d90382b943272684c0387f6a25fc22ba93b823bbb5836b899a624b4a848450b"
+      }
+    ],
+    "upstream": [
+      {
+        "url": "https://chbrown.github.io/licenses/MIT/#2015-2018",
+        "immutableSource": "https://raw.githubusercontent.com/chbrown/licenses/85c14f7a6df0c7cf2c9b3b5d801a59244bc58ec8/MIT/index.html",
+        "sha256": "e03c2f13f8a96d630177421ed460320415b7f854100ffe5238f964d860559ed0",
+        "rendering": "Paragraph text with the documented #2015-2018 fragment substitution; no grant wording rewritten."
+      }
+    ],
+    "texts": [
+      {
+        "file": "README.md (original license section)",
+        "text": "## License\n[MIT](https://choosealicense.com/licenses/mit/)\n\n## Original Repo's License\n\nCopyright 2015–2018 Christopher Brown.\n[MIT Licensed](https://chbrown.github.io/licenses/MIT/#2015-2018).\n"
+      },
+      {
+        "file": "Christopher Brown original MIT grant",
+        "text": "Copyright © 2015-2018 Christopher Brown <io@henrian.com>\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    ]
+  },
+  {
+    "id": "nitro@3.0.260610-beta",
+    "reason": "Node target only: the emitted vendored Croner and ufo source bytes match the exact upstream releases. The supplied compressed bundle also includes provider/tool/type-only declarations without full grants; preserving it does not approve those absent components for delivery. Re-review any different runtime file, bundled source bytes, notice, version or target.",
+    "evidence": [
+      {
+        "file": "package.json",
+        "sha256": "e0884cb7fab7a5d22a4e54a098d4ed6ca2aab09e5bca45ecde3d54ef11a0f3be"
+      },
+      {
+        "file": "dist/node_modules/croner/dist/croner.js",
+        "sha256": "a2eb1f669c605d4775116947209c91dfec4afdcc76fe8407134938bf5a09a600"
+      },
+      {
+        "file": "dist/node_modules/ufo/dist/index.mjs",
+        "sha256": "893199faf3aafc1b2a03018de7c87738bcd78ed5153e7c2767d62e09b323b042"
+      },
+      {
+        "file": "dist/THIRD-PARTY-LICENSES.md.gz",
+        "sha256": "30fcd12fb9320ef30d183f853f01625f1cb3a90c5f99b9f6776e952da6ead74f"
+      }
+    ],
+    "runtimeFiles": [
+      "dist/node_modules/croner/dist/croner.js",
+      "dist/node_modules/ufo/dist/index.mjs",
+      "dist/presets/node/runtime/node-server.mjs",
+      "dist/runtime/app.mjs",
+      "dist/runtime/internal/app.mjs",
+      "dist/runtime/internal/cache.mjs",
+      "dist/runtime/internal/error/hooks.mjs",
+      "dist/runtime/internal/error/prod.mjs",
+      "dist/runtime/internal/error/utils.mjs",
+      "dist/runtime/internal/meta.mjs",
+      "dist/runtime/internal/plugin.mjs",
+      "dist/runtime/internal/route-rules.mjs",
+      "dist/runtime/internal/static.mjs",
+      "dist/runtime/internal/storage.mjs",
+      "dist/runtime/internal/task.mjs",
+      "dist/runtime/internal/vite/ssr-renderer.mjs",
+      "dist/runtime/nitro.mjs",
+      "dist/runtime/vite.mjs"
+    ],
+    "decisions": [
+      "Bundled alternative @cloudflare/workers-utils: MIT OR Apache-2.0; selected MIT. The supplied notice gives no exact component version or full grant. Cloudflare provider software is excluded from this reviewed Node target; this selection is not approval to distribute it.",
+      "Declaration-only sections for @apphosting/common (Firebase), @rollup/plugin-inject, @scalar/openapi-types, is-module and is-reference concern excluded provider/build/type material in this target. A changed emitted scope requires fresh evidence review."
+    ],
+    "bundled": [
+      {
+        "directory": "dist/node_modules/croner",
+        "id": "croner@10.0.1",
+        "name": "croner",
+        "version": "10.0.1",
+        "license": "MIT",
+        "kind": "software",
+        "texts": [
+          {
+            "file": "croner@10.0.1/LICENSE",
+            "text": "The MIT License (MIT)\r\n\r\nCopyright (c) 2015-2021 Hexagon <github.com/Hexagon>\r\n\r\nPermission is hereby granted, free of charge, to any person obtaining a copy\r\nof this software and associated documentation files (the \"Software\"), to deal\r\nin the Software without restriction, including without limitation the rights\r\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\r\ncopies of the Software, and to permit persons to whom the Software is\r\nfurnished to do so, subject to the following conditions:\r\n\r\nThe above copyright notice and this permission notice shall be included in all\r\ncopies or substantial portions of the Software.\r\n\r\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\r\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\r\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\r\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\r\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\r\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\r\nSOFTWARE.\r\n\r\n"
+          }
+        ]
+      },
+      {
+        "directory": "dist/node_modules/ufo",
+        "id": "ufo@1.6.4",
+        "name": "ufo",
+        "version": "1.6.4",
+        "license": "MIT",
+        "kind": "software",
+        "texts": [
+          {
+            "file": "ufo@1.6.4/LICENSE",
+            "text": "MIT License\n\nCopyright (c) Pooya Parsa <pooya@pi0.io>\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+          }
+        ]
+      }
+    ],
+    "upstream": [
+      {
+        "url": "https://registry.npmjs.org/croner/-/croner-10.0.1.tgz",
+        "sha256": "d6d93c286125fed567b986a576ff1daa74e72d56bb63fe28248ca17cfcb00cee",
+        "sourceSha256": "a2eb1f669c605d4775116947209c91dfec4afdcc76fe8407134938bf5a09a600"
+      },
+      {
+        "source": "Installed active-lock ufo@1.6.4/dist/index.mjs",
+        "sourceSha256": "893199faf3aafc1b2a03018de7c87738bcd78ed5153e7c2767d62e09b323b042"
+      }
+    ]
+  }
+]

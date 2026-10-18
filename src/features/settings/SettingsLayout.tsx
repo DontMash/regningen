@@ -10,7 +10,7 @@ export default function SettingsLayout() {
         <aside>
           <nav
             aria-label={m.settings_title()}
-            className="flex gap-2 md:flex-col"
+            className="flex flex-wrap gap-2 md:flex-col"
           >
             <Link
               to="/settings"
@@ -38,6 +38,19 @@ export default function SettingsLayout() {
               className="justify-start"
             >
               {m.settings_profile()}
+            </Link>
+            <Link
+              to="/settings/licenses"
+              activeProps={{
+                'aria-current': 'page',
+                className: buttonVariants({ variant: 'secondary' }),
+              }}
+              inactiveProps={{
+                className: buttonVariants({ variant: 'ghost' }),
+              }}
+              className="h-auto min-h-9 min-w-0 justify-start text-left whitespace-normal"
+            >
+              {m.licenses_title()}
             </Link>
           </nav>
         </aside>

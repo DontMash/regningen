@@ -23,6 +23,7 @@ test.describe('server-delivered visibility', () => {
   let deployment: PwaDeployment
 
   test.beforeAll(async () => {
+    test.setTimeout(240_000)
     deployment = await PwaDeployment.create({
       updates: false,
       failedPage: true,

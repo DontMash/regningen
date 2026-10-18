@@ -72,6 +72,7 @@ test.describe('loaded deployment configuration', () => {
   let deployment: PwaDeployment
 
   test.beforeAll(async () => {
+    test.setTimeout(240_000)
     deployment = await PwaDeployment.create({ build: false, updates: false })
     // Lower-priority malformed inputs must not be validated before the selected
     // production-local override is loaded. Files never come from the checkout.

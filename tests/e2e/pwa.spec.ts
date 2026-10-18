@@ -525,6 +525,239 @@ test('a configuration-only rebuild refreshes offline visibility through the exis
   }
 })
 
+test('an unreviewed copied-source license fails the production build without leaving a prior distributable output', async () => {
+  test.setTimeout(240_000)
+  const deployment = await PwaDeployment.create({ updates: false })
+  const distributedFiles = [
+    'LICENSE',
+    'THIRD-PARTY-NOTICES.txt',
+    'licensing-artifacts.json',
+    'public/third-party-notices.txt',
+    'server/index.mjs',
+  ]
+  try {
+    // Establish a successful prior output before invalidating its reviewed
+    // licensing input: a clean-directory failure alone cannot prove cleanup.
+    for (const path of distributedFiles)
+      expect(await readFile(deployment.buildOutputPath(path), 'utf8')).not.toBe(
+        '',
+      )
+
+    await deployment.changeCopiedSourceLicense('Unreviewed-License-1.0')
+    const build = await deployment.build({
+      ORIGIN: deployment.baseUrl,
+      TRUST_PROXY: 'false',
+      HSTS_STAGE: 'off',
+    })
+    expect(build.exitCode, build.output).toBeGreaterThan(0)
+    expect(build.output).toContain('Unreviewed-License-1.0')
+    expect(build.output).toMatch(/review|policy/i)
+    // Inspect the actual build output, not the intentionally retained archive
+    // of release A used by the deployment/update harness.
+    for (const path of distributedFiles)
+      await expect(
+        readFile(deployment.buildOutputPath(path)),
+      ).rejects.toMatchObject({
+        code: 'ENOENT',
+      })
+  } finally {
+    await deployment.dispose()
+  }
+})
+
+test('unvisited notices stay complete offline and follow a postponed then accepted same-version notices-only update', async ({
+  browser,
+  robotsForPage,
+}) => {
+  test.setTimeout(240_000)
+  const deployment = await PwaDeployment.create({ updateKind: 'notices' })
+  const controls = await PwaBrowserControls.create(browser)
+  const page = await controls.openPage()
+  const { pwa, language, settings } = robotsForPage(page)
+  const requests = new RequestObserver(page).observeRequests()
+  const contextRequests = controls.observeRequestUrls()
+  const updateText = '\nNotices-only release B fixture attribution\n'
+  const noticesPages = [
+    ['/de/einstellungen/lizenzen', 'de'],
+    ['/en/settings/licenses', 'en'],
+  ] as const
+
+  try {
+    expect(deployment.version('a')).toBe(deployment.version('b'))
+    await deployment.deploy('a')
+    // Preparation starts elsewhere: neither notices document nor the text
+    // resource may rely on having been visited online in this browser.
+    await page.goto(`${deployment.baseUrl}/de/rechnung`)
+    await pwa.acknowledgeRunningReleaseNotes()
+    await pwa.expectOfflineReady()
+    expect(
+      requests
+        .snapshot()
+        .filter(({ url }) =>
+          [
+            ...noticesPages.map(([path]) => path),
+            '/third-party-notices.txt',
+          ].some((path) => new URL(url).pathname === path),
+        ),
+    ).toEqual([])
+
+    const projectLicense = (await readFile('LICENSE', 'utf8')).trim()
+    const copiedSources = JSON.parse(
+      await readFile('legal/copied-source.json', 'utf8'),
+    ) as Array<{
+      name: string
+      version: string
+      texts: Array<{ text: string }>
+    }>
+    const copiedSource = copiedSources[0]
+    const copiedNotice = copiedSource.texts[0].text
+    const noticesA = await readFile(
+      deployment.artifactPath('a', 'THIRD-PARTY-NOTICES.txt'),
+      'utf8',
+    )
+    expect(noticesA).toContain('Copyright (C) 2026 soren.codes')
+    expect(noticesA).toContain(projectLicense)
+    expect(noticesA).toContain(copiedNotice)
+    expect(noticesA).not.toContain(updateText.trim())
+    expect(
+      await readFile(
+        deployment.artifactPath('a', 'public/third-party-notices.txt'),
+        'utf8',
+      ),
+    ).toBe(noticesA)
+
+    await controls.setOffline(true)
+    for (const [path, locale] of noticesPages) {
+      await page.goto(`${deployment.baseUrl}${path}`)
+      await language.expectInterfaceLanguage(locale)
+      await settings.expectLicensesPage(locale)
+      await settings.openNoticesTexts(copiedSource)
+      await settings.expectNoticesText(projectLicense)
+      await settings.expectNoticesText(copiedNotice)
+      expect(
+        await controls.fetchResource(page, '/third-party-notices.txt'),
+      ).toEqual({
+        status: 200,
+        body: noticesA,
+      })
+      await page.reload()
+      await settings.expectLicensesPage(locale)
+      await settings.openNoticesTexts(copiedSource)
+      await settings.expectNoticesText(projectLicense)
+      await settings.expectNoticesText(copiedNotice)
+    }
+
+    // Keep one old-build document open during reloads, as in the other worker
+    // acceptance journeys; no test-side worker installation or activation.
+    const heldPage = await controls.openPage(
+      `${deployment.baseUrl}/de/rechnung`,
+    )
+    await robotsForPage(heldPage).appShell.expectApplicationShell()
+    await page.goto(`${deployment.baseUrl}/de/einstellungen/lizenzen`)
+    await settings.expectLicensesPage('de')
+    await settings.openNoticesTexts(copiedSource)
+    await controls.observeWorkerActivation(page)
+    await controls.setOffline(false)
+    await deployment.deploy('b')
+    await controls.requestWorkerUpdate(page)
+    await pwa.expectUpdateAvailable()
+    await pwa.postponeUpdate()
+    await pwa.expectUpdateClosed()
+    await settings.expectNoticesText(copiedNotice)
+    await settings.expectNoNoticesText(updateText.trim())
+    expect(
+      await controls.fetchResource(page, '/third-party-notices.txt'),
+    ).toEqual({
+      status: 200,
+      body: noticesA,
+    })
+
+    await controls.setOffline(true)
+    await language.changeInterfaceLanguage('en')
+    // Language changes reload the document. The existing updater may offer its
+    // still-waiting worker again; postponement is not a cross-document veto.
+    await pwa.expectUpdateAvailable()
+    await pwa.postponeUpdate()
+    await pwa.expectUpdateClosed()
+    await settings.expectLicensesPage('en')
+    await settings.openNoticesTexts(copiedSource)
+    await settings.expectNoticesText(projectLicense)
+    await settings.expectNoticesText(copiedNotice)
+    await settings.expectNoNoticesText(updateText.trim())
+    expect(
+      await controls.fetchResource(page, '/third-party-notices.txt'),
+    ).toEqual({
+      status: 200,
+      body: noticesA,
+    })
+    expect(await controls.workerState(page)).toMatchObject({
+      waiting: 'installed',
+      controllerChanges: 0,
+    })
+    await language.changeInterfaceLanguage('de')
+    await pwa.expectUpdateAvailable()
+    await pwa.postponeUpdate()
+    await pwa.expectUpdateClosed()
+    await settings.expectLicensesPage('de')
+    await settings.expectNoNoticesText(updateText.trim())
+
+    await controls.setOffline(false)
+    await pwa.reopenUpdate()
+    const reloaded = page.waitForEvent('framenavigated', {
+      predicate: (frame) => frame === page.mainFrame(),
+      timeout: 15_000,
+    })
+    await pwa.applyUpdate()
+    await reloaded
+    await settings.expectLicensesPage('de')
+    await settings.openNoticesTexts(copiedSource)
+    await pwa.expectRunningVersion(deployment.version('b'))
+    await settings.expectNoticesText(copiedNotice + updateText)
+    const noticesB = await readFile(
+      deployment.artifactPath('b', 'THIRD-PARTY-NOTICES.txt'),
+      'utf8',
+    )
+    expect(noticesB).toContain(projectLicense)
+    expect(noticesB).toContain(copiedNotice + updateText)
+    expect(noticesB).not.toBe(noticesA)
+    expect(
+      await readFile(
+        deployment.artifactPath('b', 'public/third-party-notices.txt'),
+        'utf8',
+      ),
+    ).toBe(noticesB)
+
+    await controls.setOffline(true)
+    for (const [path, locale] of noticesPages) {
+      await page.goto(`${deployment.baseUrl}${path}`)
+      await settings.expectLicensesPage(locale)
+      await settings.openNoticesTexts(copiedSource)
+      await settings.expectNoticesText(projectLicense)
+      await settings.expectNoticesText(copiedNotice + updateText)
+      await page.reload()
+      await settings.expectLicensesPage(locale)
+      await settings.openNoticesTexts(copiedSource)
+      await settings.expectNoticesText(copiedNotice + updateText)
+      expect(
+        await controls.fetchResource(page, '/third-party-notices.txt'),
+      ).toEqual({
+        status: 200,
+        body: noticesB,
+      })
+    }
+    for (const request of requests.snapshot()) {
+      expect(new URL(request.url).origin).toBe(deployment.baseUrl)
+      expect(request.method).toBe('GET')
+      expect(request.body).toBeNull()
+    }
+    for (const url of contextRequests.snapshot())
+      expect(new URL(url).origin).toBe(deployment.baseUrl)
+  } finally {
+    await controls.dispose()
+    await deployment.dispose()
+  }
+})
+
 test('one prepared worker opens both languages offline and exports a real English PDF without translation services', async ({
   browser,
   robotsForPage,
@@ -696,10 +929,13 @@ async function expectGeneratedWorker(
     '/de/rechnung',
     '/de/einstellungen',
     '/de/einstellungen/profil',
+    '/de/einstellungen/lizenzen',
     '/en',
     '/en/invoice',
     '/en/settings',
     '/en/settings/profile',
+    '/en/settings/licenses',
+    'third-party-notices.txt',
   ]) {
     expect(body).toContain(route)
   }

@@ -58,7 +58,7 @@ export class PwaDeployment {
   }: {
     updates?: boolean
     failedPage?: boolean
-    updateKind?: 'content' | 'security-policy' | 'configuration'
+    updateKind?: 'content' | 'security-policy' | 'configuration' | 'notices'
     build?: boolean
     environment?: DeploymentEnvironment
     environmentFiles?: Record<string, string>
@@ -114,6 +114,33 @@ export class PwaDeployment {
           )
         } else if (updateKind === 'configuration') {
           await createReleaseSource(releaseBSource, failedPage)
+        } else if (updateKind === 'notices') {
+          await createReleaseSource(releaseBSource, failedPage)
+          const copiedSourcePath = join(
+            releaseBSource,
+            'legal/copied-source.json',
+          )
+          const copiedSources = JSON.parse(
+            await readFile(copiedSourcePath, 'utf8'),
+          ) as Array<{ kind: string; texts: Array<{ text: string }> }>
+          const first = copiedSources.at(0)
+          const text = first?.texts.at(0)
+          if (
+            first?.kind !== 'copied-source' ||
+            typeof text?.text !== 'string' ||
+            !text.text.trim()
+          ) {
+            throw new Error(
+              'Could not locate reviewed copied-source notice text.',
+            )
+          }
+          // The source files and their reviewed hashes stay untouched. Only
+          // the local legal text changes, without changing the package version.
+          text.text += '\nNotices-only release B fixture attribution\n'
+          await writeFile(
+            copiedSourcePath,
+            `${JSON.stringify(copiedSources, null, 2)}\n`,
+          )
         } else {
           await createReleaseBSource(
             releaseBSource,
@@ -146,6 +173,31 @@ export class PwaDeployment {
       await rm(temporaryDirectory, { recursive: true, force: true })
       throw error
     }
+  }
+
+  async changeCopiedSourceLicense(license: string) {
+    const path = join(
+      this.temporaryDirectory,
+      'release-a-source/legal/copied-source.json',
+    )
+    const records = JSON.parse(await readFile(path, 'utf8')) as Array<{
+      license: string
+    }>
+    const first = records.at(0)
+    if (!first)
+      throw new Error('Could not locate a reviewed copied-source record.')
+    first.license = license
+    await writeFile(path, `${JSON.stringify(records, null, 2)}\n`)
+  }
+
+  // Unlike artifactPath(), this inspects the live build directory, so a failed
+  // build can prove it removed stale distributable output rather than reusing it.
+  buildOutputPath(relativePath: string) {
+    return join(
+      this.temporaryDirectory,
+      'release-a-source/.output',
+      relativePath,
+    )
   }
 
   // Sources never inherit the checkout's .env files. Replacing the set makes
@@ -310,6 +362,8 @@ async function createReleaseSource(directory: string, failedPage = false) {
     'messages',
     'project.inlang',
     'docs',
+    'legal',
+    'LICENSE',
     'vite.config.ts',
     'pwa-assets.config.ts',
     'scripts',
