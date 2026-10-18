@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { IconArrowUp, IconHeartFilled } from '@tabler/icons-react'
+import { IconArrowUp, IconCup, IconHeartFilled } from '@tabler/icons-react'
 import { Link } from '@tanstack/react-router'
 import { cn } from 'cn'
 import { buttonVariants } from '@/components/ui/button'
@@ -103,6 +103,15 @@ export default function Footer() {
                 </Fragment>
               ))}
             </p>
+            <a
+              href="https://kofi.soren.codes"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="paragraph-small inline-flex items-center gap-1 text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <IconCup aria-hidden="true" className="size-4 shrink-0" />
+              {m.shell_support()}
+            </a>
             {pwa?.offlineReady ? (
               <span
                 className="paragraph-small text-muted-foreground"

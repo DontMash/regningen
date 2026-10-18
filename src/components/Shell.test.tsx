@@ -240,6 +240,40 @@ describe('application shell', () => {
     ).toBeVisible()
   })
 
+  it.each([
+    ['de', 'Meine Arbeit unterstützen', 'Verstanden'],
+    ['en', 'Support my work', 'Understood'],
+  ] as const)(
+    'offers a safe support link in the %s footer',
+    async (locale, label, acknowledgment) => {
+      setLocale(locale, { reload: false })
+      const user = userEvent.setup()
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => mediaQuery(false)),
+      )
+      await renderAtRoute('/', function FooterWithReleaseNotes() {
+        return (
+          <ReleaseNotesProvider>
+            <Footer />
+          </ReleaseNotesProvider>
+        )
+      })
+      await user.click(
+        await screen.findByRole('button', { name: acknowledgment }),
+      )
+
+      const support = within(screen.getByRole('contentinfo')).getByRole(
+        'link',
+        { name: label },
+      )
+      expect(support).toBeVisible()
+      expect(support).toHaveAttribute('href', 'https://kofi.soren.codes')
+      expect(support).toHaveAttribute('target', '_blank')
+      expect(support).toHaveAttribute('rel', 'noopener noreferrer')
+    },
+  )
+
   it('shows navigation without a profile name and then shows the saved business name', async () => {
     vi.stubGlobal(
       'matchMedia',
