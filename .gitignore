@@ -18,6 +18,3 @@ __unconfig*
 todos.json
 .scratch
 .vitals
-.notices
-src/generated/notices.json
-public/third-party-notices.txt

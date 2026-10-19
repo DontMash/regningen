@@ -2,6 +2,8 @@
 
 ## Releases
 
+Before distributing dependency, copied-source, font or runtime-generator changes, review and update `public/third-party-notices.txt` manually; see [license and notices maintenance](licensing.md). Builds copy that text unchanged, without checking its legal completeness or freshness. Ship the complete `.output`, including its server and public assets.
+
 Prepare a local release from a clean working tree:
 
 ```bash

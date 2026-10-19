@@ -3,6 +3,13 @@ import type { Page } from '@playwright/test'
 import { expect, test } from '../support/playwright/playwright'
 import { createBusinessProfileScenario } from '../scenarios/business-profile'
 import { createInvoiceScenario } from '../scenarios/invoice'
+import {
+  ibantoolsMit,
+  pakoMit,
+  pakoZlib,
+  fontNotices,
+  openFontLicense,
+} from '../scenarios/license-notices'
 import { ArtifactSupport } from '../support/playwright/artifacts'
 import { PwaBrowserControls } from '../support/playwright/pwa-browser'
 import { PwaBrowserCapabilities } from '../support/playwright/pwa-capabilities'
@@ -525,47 +532,7 @@ test('a configuration-only rebuild refreshes offline visibility through the exis
   }
 })
 
-test('an unreviewed copied-source license fails the production build without leaving a prior distributable output', async () => {
-  test.setTimeout(240_000)
-  const deployment = await PwaDeployment.create({ updates: false })
-  const distributedFiles = [
-    'LICENSE',
-    'THIRD-PARTY-NOTICES.txt',
-    'licensing-artifacts.json',
-    'public/third-party-notices.txt',
-    'server/index.mjs',
-  ]
-  try {
-    // Establish a successful prior output before invalidating its reviewed
-    // licensing input: a clean-directory failure alone cannot prove cleanup.
-    for (const path of distributedFiles)
-      expect(await readFile(deployment.buildOutputPath(path), 'utf8')).not.toBe(
-        '',
-      )
-
-    await deployment.changeCopiedSourceLicense('Unreviewed-License-1.0')
-    const build = await deployment.build({
-      ORIGIN: deployment.baseUrl,
-      TRUST_PROXY: 'false',
-      HSTS_STAGE: 'off',
-    })
-    expect(build.exitCode, build.output).toBeGreaterThan(0)
-    expect(build.output).toContain('Unreviewed-License-1.0')
-    expect(build.output).toMatch(/review|policy/i)
-    // Inspect the actual build output, not the intentionally retained archive
-    // of release A used by the deployment/update harness.
-    for (const path of distributedFiles)
-      await expect(
-        readFile(deployment.buildOutputPath(path)),
-      ).rejects.toMatchObject({
-        code: 'ENOENT',
-      })
-  } finally {
-    await deployment.dispose()
-  }
-})
-
-test('unvisited notices stay complete offline and follow a postponed then accepted same-version notices-only update', async ({
+test('unvisited license pages and accompanying notices stay available offline through a same-version update', async ({
   browser,
   robotsForPage,
 }) => {
@@ -577,7 +544,7 @@ test('unvisited notices stay complete offline and follow a postponed then accept
   const requests = new RequestObserver(page).observeRequests()
   const contextRequests = controls.observeRequestUrls()
   const updateText = '\nNotices-only release B fixture attribution\n'
-  const noticesPages = [
+  const licensePages = [
     ['/de/einstellungen/lizenzen', 'de'],
     ['/en/settings/licenses', 'en'],
   ] as const
@@ -585,8 +552,8 @@ test('unvisited notices stay complete offline and follow a postponed then accept
   try {
     expect(deployment.version('a')).toBe(deployment.version('b'))
     await deployment.deploy('a')
-    // Preparation starts elsewhere: neither notices document nor the text
-    // resource may rely on having been visited online in this browser.
+    // Prepare elsewhere so neither license page nor the text resource has
+    // already been cached through an incidental online visit.
     await page.goto(`${deployment.baseUrl}/de/rechnung`)
     await pwa.acknowledgeRunningReleaseNotes()
     await pwa.expectOfflineReady()
@@ -595,67 +562,83 @@ test('unvisited notices stay complete offline and follow a postponed then accept
         .snapshot()
         .filter(({ url }) =>
           [
-            ...noticesPages.map(([path]) => path),
+            ...licensePages.map(([path]) => path),
             '/third-party-notices.txt',
           ].some((path) => new URL(url).pathname === path),
         ),
     ).toEqual([])
 
-    const projectLicense = (await readFile('LICENSE', 'utf8')).trim()
-    const copiedSources = JSON.parse(
-      await readFile('legal/copied-source.json', 'utf8'),
-    ) as Array<{
-      name: string
-      version: string
-      texts: Array<{ text: string }>
-    }>
-    const copiedSource = copiedSources[0]
-    const copiedNotice = copiedSource.texts[0].text
-    const noticesA = await readFile(
-      deployment.artifactPath('a', 'THIRD-PARTY-NOTICES.txt'),
+    const projectLicense = await readFile('LICENSE', 'utf8')
+    const maintainedNotices = await readFile(
+      'public/third-party-notices.txt',
       'utf8',
     )
-    expect(noticesA).toContain('Copyright (C) 2026 soren.codes')
-    expect(noticesA).toContain(projectLicense)
-    expect(noticesA).toContain(copiedNotice)
-    expect(noticesA).not.toContain(updateText.trim())
+    const noticesA = await readFile(
+      deployment.artifactPath('a', 'public/third-party-notices.txt'),
+      'utf8',
+    )
+    expect(noticesA).toBe(maintainedNotices)
     expect(
-      await readFile(
-        deployment.artifactPath('a', 'public/third-party-notices.txt'),
-        'utf8',
+      await readFile(deployment.artifactPath('a', 'LICENSE'), 'utf8'),
+    ).toBe(projectLicense)
+    for (const notice of [ibantoolsMit, pakoMit, pakoZlib]) {
+      expect(noticesA).toContain(notice)
+    }
+    expect(noticesA).toContain(
+      ibantoolsMit.replace(
+        'Copyright (c) Saša Jovanić',
+        'Copyright (c) 2023 shadcn',
       ),
-    ).toBe(noticesA)
+    )
+    for (const font of fontNotices) {
+      expect(noticesA).toContain(`${font.copyright}\n\n${openFontLicense}`)
+    }
+    for (const passage of [
+      'ibantools@4.5.4 — MIT',
+      'Copyright (c) Saša Jovanić',
+      '@fontsource-variable/lora@5.3.0 — OFL-1.1',
+      'Reserved Font Name "Lora"',
+      'class-variance-authority@0.7.1 — Apache-2.0',
+      'shadcn-copied-source@repository-import — MIT',
+      'croner@10.0.1 — MIT',
+      'ufo@1.6.4 — MIT',
+      'Copyright (c) 2012 Niklas von Hertzen',
+      'Copyright (c) 2014 Devon Govett',
+      'Updated for pdf-lib & TypeScript by Jeremy Messenger',
+      'Copyright 2012 Mozilla Foundation',
+      'Copyright 1996-2003 Glyph & Cog, LLC',
+      'Grant of Patent License.',
+      'END OF TERMS AND CONDITIONS',
+    ])
+      expect(noticesA).toContain(passage)
+    expect(noticesA).not.toContain(updateText.trim())
 
     await controls.setOffline(true)
-    for (const [path, locale] of noticesPages) {
+    for (const [path, locale] of licensePages) {
       await page.goto(`${deployment.baseUrl}${path}`)
       await language.expectInterfaceLanguage(locale)
       await settings.expectLicensesPage(locale)
-      await settings.openNoticesTexts(copiedSource)
-      await settings.expectNoticesText(projectLicense)
-      await settings.expectNoticesText(copiedNotice)
+      await settings.openProjectLicense()
+      await settings.expectProjectLicenseScope(locale)
+      expect(await settings.readProjectLicense()).toBe(projectLicense)
       expect(
         await controls.fetchResource(page, '/third-party-notices.txt'),
-      ).toEqual({
-        status: 200,
-        body: noticesA,
-      })
+      ).toEqual({ status: 200, body: noticesA })
       await page.reload()
       await settings.expectLicensesPage(locale)
-      await settings.openNoticesTexts(copiedSource)
-      await settings.expectNoticesText(projectLicense)
-      await settings.expectNoticesText(copiedNotice)
+      await settings.openProjectLicense()
+      expect(await settings.readProjectLicense()).toBe(projectLicense)
     }
 
-    // Keep one old-build document open during reloads, as in the other worker
-    // acceptance journeys; no test-side worker installation or activation.
+    // Keep an old-build page open during the normal postpone/accept lifecycle.
     const heldPage = await controls.openPage(
       `${deployment.baseUrl}/de/rechnung`,
     )
     await robotsForPage(heldPage).appShell.expectApplicationShell()
     await page.goto(`${deployment.baseUrl}/de/einstellungen/lizenzen`)
     await settings.expectLicensesPage('de')
-    await settings.openNoticesTexts(copiedSource)
+    await settings.openProjectLicense()
+    await settings.expectProjectLicenseScope()
     await controls.observeWorkerActivation(page)
     await controls.setOffline(false)
     await deployment.deploy('b')
@@ -663,33 +646,24 @@ test('unvisited notices stay complete offline and follow a postponed then accept
     await pwa.expectUpdateAvailable()
     await pwa.postponeUpdate()
     await pwa.expectUpdateClosed()
-    await settings.expectNoticesText(copiedNotice)
-    await settings.expectNoNoticesText(updateText.trim())
+    expect(await settings.readProjectLicense()).toBe(projectLicense)
     expect(
       await controls.fetchResource(page, '/third-party-notices.txt'),
-    ).toEqual({
-      status: 200,
-      body: noticesA,
-    })
+    ).toEqual({ status: 200, body: noticesA })
 
     await controls.setOffline(true)
     await language.changeInterfaceLanguage('en')
-    // Language changes reload the document. The existing updater may offer its
-    // still-waiting worker again; postponement is not a cross-document veto.
+    // The waiting update remains available after localized navigation/reload.
     await pwa.expectUpdateAvailable()
     await pwa.postponeUpdate()
     await pwa.expectUpdateClosed()
     await settings.expectLicensesPage('en')
-    await settings.openNoticesTexts(copiedSource)
-    await settings.expectNoticesText(projectLicense)
-    await settings.expectNoticesText(copiedNotice)
-    await settings.expectNoNoticesText(updateText.trim())
+    await settings.openProjectLicense()
+    await settings.expectProjectLicenseScope('en')
+    expect(await settings.readProjectLicense()).toBe(projectLicense)
     expect(
       await controls.fetchResource(page, '/third-party-notices.txt'),
-    ).toEqual({
-      status: 200,
-      body: noticesA,
-    })
+    ).toEqual({ status: 200, body: noticesA })
     expect(await controls.workerState(page)).toMatchObject({
       waiting: 'installed',
       controllerChanges: 0,
@@ -699,7 +673,6 @@ test('unvisited notices stay complete offline and follow a postponed then accept
     await pwa.postponeUpdate()
     await pwa.expectUpdateClosed()
     await settings.expectLicensesPage('de')
-    await settings.expectNoNoticesText(updateText.trim())
 
     await controls.setOffline(false)
     await pwa.reopenUpdate()
@@ -710,40 +683,33 @@ test('unvisited notices stay complete offline and follow a postponed then accept
     await pwa.applyUpdate()
     await reloaded
     await settings.expectLicensesPage('de')
-    await settings.openNoticesTexts(copiedSource)
+    await settings.openProjectLicense()
     await pwa.expectRunningVersion(deployment.version('b'))
-    await settings.expectNoticesText(copiedNotice + updateText)
+    expect(await settings.readProjectLicense()).toBe(projectLicense)
     const noticesB = await readFile(
-      deployment.artifactPath('b', 'THIRD-PARTY-NOTICES.txt'),
+      deployment.artifactPath('b', 'public/third-party-notices.txt'),
       'utf8',
     )
-    expect(noticesB).toContain(projectLicense)
-    expect(noticesB).toContain(copiedNotice + updateText)
+    expect(noticesB).toBe(maintainedNotices + updateText)
     expect(noticesB).not.toBe(noticesA)
     expect(
-      await readFile(
-        deployment.artifactPath('b', 'public/third-party-notices.txt'),
-        'utf8',
-      ),
-    ).toBe(noticesB)
+      await readdir(deployment.artifactPath('b', 'public/assets')),
+    ).toEqual(await readdir(deployment.artifactPath('a', 'public/assets')))
 
     await controls.setOffline(true)
-    for (const [path, locale] of noticesPages) {
+    for (const [path, locale] of licensePages) {
       await page.goto(`${deployment.baseUrl}${path}`)
       await settings.expectLicensesPage(locale)
-      await settings.openNoticesTexts(copiedSource)
-      await settings.expectNoticesText(projectLicense)
-      await settings.expectNoticesText(copiedNotice + updateText)
+      await settings.openProjectLicense()
+      await settings.expectProjectLicenseScope(locale)
+      expect(await settings.readProjectLicense()).toBe(projectLicense)
       await page.reload()
       await settings.expectLicensesPage(locale)
-      await settings.openNoticesTexts(copiedSource)
-      await settings.expectNoticesText(copiedNotice + updateText)
+      await settings.openProjectLicense()
+      expect(await settings.readProjectLicense()).toBe(projectLicense)
       expect(
         await controls.fetchResource(page, '/third-party-notices.txt'),
-      ).toEqual({
-        status: 200,
-        body: noticesB,
-      })
+      ).toEqual({ status: 200, body: noticesB })
     }
     for (const request of requests.snapshot()) {
       expect(new URL(request.url).origin).toBe(deployment.baseUrl)

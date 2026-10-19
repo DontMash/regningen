@@ -25,9 +25,7 @@ export class SettingsRobot {
 
   async openLicenses() {
     await this.navigation()
-      .getByRole('link', {
-        name: /^(Lizenzen und Hinweise|Licenses and notices)$/,
-      })
+      .getByRole('link', { name: /^(Lizenz|License)$/ })
       .click()
   }
 
@@ -39,8 +37,7 @@ export class SettingsRobot {
     )
     await expect(
       this.page.getByRole('heading', {
-        name:
-          locale === 'de' ? 'Lizenzen und Hinweise' : 'Licenses and notices',
+        name: locale === 'de' ? 'Lizenz' : 'License',
         exact: true,
       }),
     ).toBeVisible()
@@ -52,10 +49,21 @@ export class SettingsRobot {
     ).toBeVisible()
     await expect(
       this.page.getByRole('heading', {
-        name: locale === 'de' ? 'Drittanbieter' : 'Third-party notices',
-        exact: true,
+        name: /^(Drittanbieter|Third-party notices)$/,
       }),
-    ).toBeVisible()
+    ).toHaveCount(0)
+    await expect(
+      this.page.getByRole('link', {
+        name: /^(Hinweise als Text herunterladen|Download notices as text)$/,
+      }),
+    ).toHaveCount(0)
+    const content = this.page.getByRole('main')
+    await expect(
+      content.locator('a[href="/third-party-notices.txt"]'),
+    ).toHaveCount(0)
+    await expect(content).not.toContainText(
+      /ibantools|@fontsource-variable|JetBrains Mono|Font · separate font license|Schrift · eigene Schriftlizenz/,
+    )
     await expect(
       this.page.getByText('Copyright (C) 2026 soren.codes', { exact: true }),
     ).toBeVisible()
@@ -64,9 +72,7 @@ export class SettingsRobot {
       /noindex/,
     )
     await expect(this.page).toHaveTitle(
-      locale === 'de'
-        ? 'Lizenzen und Hinweise – regningen'
-        : 'Licenses and notices – regningen',
+      locale === 'de' ? 'Lizenz – regningen' : 'License – regningen',
     )
   }
 
@@ -92,7 +98,7 @@ export class SettingsRobot {
     await this.page.keyboard.press('Tab')
     await expect(
       this.navigation().getByRole('link', {
-        name: /^(Lizenzen und Hinweise|Licenses and notices)$/,
+        name: /^(Lizenz|License)$/,
       }),
     ).toBeFocused()
   }
@@ -101,83 +107,6 @@ export class SettingsRobot {
     return this.page.getByRole('region', {
       name: /^(Projektlizenz|Project license)$/,
     })
-  }
-
-  private notice(name: string, version: string) {
-    return this.page.getByRole('article', {
-      name: `${name} ${version}`,
-      exact: true,
-    })
-  }
-
-  async openNotice(name: string, version: string, keyboard = false) {
-    const summary = this.notice(name, version).locator('summary')
-    if (keyboard) {
-      await summary.focus()
-      await summary.press('Enter')
-    } else {
-      await summary.click()
-    }
-  }
-
-  async expectNotice(
-    name: string,
-    version: string,
-    license: string,
-    texts: string[],
-  ) {
-    const notice = this.notice(name, version)
-    await expect(
-      notice.getByRole('heading', { name: `${name} ${version}`, exact: true }),
-    ).toBeVisible()
-    await expect(notice.getByText(license, { exact: true })).toBeVisible()
-    const legalText = notice.locator('pre')
-    await expect(legalText.first()).toBeVisible()
-    const actual = (await legalText.allTextContents()).join('\n')
-    for (const text of texts) expect(actual).toContain(text)
-  }
-
-  async expectFontNotice(
-    name: string,
-    version: string,
-    locale: 'de' | 'en' = 'de',
-  ) {
-    await expect(
-      this.notice(name, version).getByText(
-        locale === 'de'
-          ? 'Schrift · eigene Schriftlizenz'
-          : 'Font · separate font license',
-        { exact: true },
-      ),
-    ).toBeVisible()
-  }
-
-  async readNoticeTexts(name: string, version: string) {
-    return this.notice(name, version).locator('pre').allTextContents()
-  }
-
-  async openNoticesTexts(copiedSource: { name: string; version: string }) {
-    for (const section of [
-      this.projectLicense(),
-      this.notice(copiedSource.name, copiedSource.version),
-    ]) {
-      const disclosure = section.locator('details')
-      if ((await disclosure.getAttribute('open')) === null)
-        await disclosure.locator('summary').click()
-    }
-  }
-
-  async expectNoticesText(text: string) {
-    await expect(
-      this.page
-        .getByRole('main')
-        .getByText(text.trim(), { exact: false })
-        .first(),
-    ).toBeVisible()
-  }
-
-  async expectNoNoticesText(text: string) {
-    await expect(this.page.getByRole('main')).not.toContainText(text)
   }
 
   async openProjectLicense(keyboard = false) {
@@ -216,14 +145,6 @@ export class SettingsRobot {
     await expect(project.locator('pre')).toBeVisible()
   }
 
-  async downloadNotices() {
-    await this.page
-      .getByRole('link', {
-        name: /^(Hinweise als Text herunterladen|Download notices as text)$/,
-      })
-      .click()
-  }
-
   async expectGeneralPage(locale: 'de' | 'en' = 'de') {
     await expect(this.page).toHaveURL(
       locale === 'de' ? /\/de\/einstellungen$/ : /\/en\/settings$/,
@@ -253,8 +174,7 @@ export class SettingsRobot {
   }
 
   async expectActivePage(
-    name:
-      'Allgemein' | 'Profil' | 'Lizenzen und Hinweise' | 'Licenses and notices',
+    name: 'Allgemein' | 'Profil' | 'Lizenz' | 'License',
     locale: 'de' | 'en' = 'de',
   ) {
     const navigation = this.navigation()
@@ -276,8 +196,7 @@ export class SettingsRobot {
     )
     await expect(
       navigation.getByRole('link', {
-        name:
-          locale === 'de' ? 'Lizenzen und Hinweise' : 'Licenses and notices',
+        name: locale === 'de' ? 'Lizenz' : 'License',
         exact: true,
       }),
     ).toHaveAttribute(

@@ -10,7 +10,7 @@ export default function SettingsLayout() {
         <aside>
           <nav
             aria-label={m.settings_title()}
-            className="flex flex-wrap gap-2 md:flex-col"
+            className="sticky top-6 flex flex-wrap gap-2 md:flex-col"
           >
             <Link
               to="/settings"
