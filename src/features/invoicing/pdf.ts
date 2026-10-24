@@ -1,10 +1,10 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
-import type { BusinessProfileDraft } from './business-profile'
-import type { InvoiceDraft } from './invoice'
-import { calculateInvoiceTotals, parseEuroAmount } from './invoice'
+import type {
+  InvoiceDocument,
+  InvoicePdfCapability,
+} from './generation-contract'
+import { InvoicePdfFailure } from './generation-contract'
 import * as m from '@/paraglide/messages'
-import { getLocale } from '@/paraglide/runtime'
-import type { Locale } from '@/paraglide/runtime'
 import { formatDate, formatEuro } from '@/lib/i18n'
 
 const PAGE_WIDTH = 595.28
@@ -49,29 +49,31 @@ function wrapText(
   return lines
 }
 
-export async function createInvoicePdf(
-  profile: BusinessProfileDraft,
-  invoice: InvoiceDraft,
-  locale: Locale = getLocale(),
-): Promise<Uint8Array> {
-  try {
-    return await renderInvoicePdf(profile, invoice, locale)
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes('WinAnsi cannot encode')
-    ) {
-      throw new Error(m.pdf_error_characters(), { cause: error })
+export const invoicePdfCapability: InvoicePdfCapability = {
+  async render(document) {
+    try {
+      return await renderInvoicePdf(document)
+    } catch (error) {
+      // pdf-lib's standard-font encoder exposes this specific format limitation
+      // only as an Error message. Other errors are defects, not format failures.
+      if (
+        error instanceof Error &&
+        error.message.includes('WinAnsi cannot encode')
+      ) {
+        throw new InvoicePdfFailure('characters', { cause: error })
+      }
+      throw error
     }
-    throw error
-  }
+  },
 }
 
-async function renderInvoicePdf(
-  profile: BusinessProfileDraft,
-  invoice: InvoiceDraft,
-  locale: Locale,
-): Promise<Uint8Array> {
+async function renderInvoicePdf({
+  profile,
+  invoice: validated,
+  totals,
+  language: locale,
+}: InvoiceDocument): Promise<Uint8Array> {
+  const invoice = validated.draft
   const pdf = await PDFDocument.create()
   pdf.setTitle(m.pdf_title({ number: invoice.number }, { locale }))
   pdf.setLanguage(locale)
@@ -123,7 +125,7 @@ async function renderInvoicePdf(
     RIGHT - LEFT,
   )
   if (businessNameLines.length > 2) {
-    throw new Error(m.pdf_error_business_name())
+    throw new InvoicePdfFailure('business-name')
   }
   businessNameLines.forEach((value, index) =>
     write(value, LEFT, 790 - index * 19, 16, bold),
@@ -137,7 +139,7 @@ async function renderInvoicePdf(
       RIGHT - LEFT,
     )
     if (serviceLines.length > 1) {
-      throw new Error(m.pdf_error_service())
+      throw new InvoicePdfFailure('service')
     }
     write(serviceLines[0] ?? '', LEFT, headingBottom, 10, font, MUTED)
   }
@@ -169,7 +171,7 @@ async function renderInvoicePdf(
 
   let y = Math.min(recipientLines, issuerLines) - 26
   if (y < 560) {
-    throw new Error(m.pdf_error_addresses())
+    throw new InvoicePdfFailure('addresses')
   }
 
   write(m.pdf_heading({}, { locale }), LEFT, y, 14, bold)
@@ -189,7 +191,7 @@ async function renderInvoicePdf(
       RIGHT - LEFT - 44,
     )
     if (subjectLines.length > 2) {
-      throw new Error(m.pdf_error_subject())
+      throw new InvoicePdfFailure('subject')
     }
     subjectLines.forEach((part, index) =>
       write(
@@ -207,24 +209,12 @@ async function renderInvoicePdf(
   line(y - 8)
   y -= 27
 
-  const completedItems = invoice.items.filter(
-    (item) => item.description.trim() || item.amount.trim(),
-  )
-  const amounts = completedItems.map((item) =>
-    parseEuroAmount(item.amount, item.amountLocale ?? 'de'),
-  )
-  if (amounts.some((amount) => amount === null || amount <= 0)) {
-    throw new Error(m.pdf_error_amounts())
-  }
-
-  for (let index = 0; index < completedItems.length; index++) {
-    const item = completedItems[index]
-    const amount = amounts[index]
-    if (amount === null) continue
+  for (const item of validated.positions) {
+    const amount = item.grossAmount
 
     const descriptionLines = wrapText(item.description.trim(), font, 9, 350)
     if (descriptionLines.length > 2) {
-      throw new Error(m.pdf_error_description())
+      throw new InvoicePdfFailure('description')
     }
 
     descriptionLines.forEach((part, lineIndex) =>
@@ -238,13 +228,9 @@ async function renderInvoicePdf(
   }
 
   if (y < 285) {
-    throw new Error(m.pdf_error_positions())
+    throw new InvoicePdfFailure('positions')
   }
 
-  const totals = calculateInvoiceTotals(
-    amounts.filter((amount): amount is number => amount !== null),
-    invoice.rate,
-  )
   const totalRows = [
     {
       label: m.pdf_net({}, { locale }),
@@ -283,7 +269,7 @@ async function renderInvoicePdf(
   }
 
   if (y < 165) {
-    throw new Error(m.pdf_error_invoice())
+    throw new InvoicePdfFailure('invoice')
   }
 
   const bankDetails = [
