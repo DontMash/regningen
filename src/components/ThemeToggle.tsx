@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
 import { IconSun, IconMoon, IconDeviceDesktop } from '@tabler/icons-react'
 import { useSelector } from '@tanstack/react-store'
-import { applyThemeMode, themeModeLabels, themeStore } from '@/lib/theme-store'
+import {
+  applyThemeMode,
+  restoreBrowserTheme,
+  selectThemeMode,
+  themeModeLabels,
+  themeStore,
+} from '@/lib/theme-store'
 import { Button } from '@/components/ui/button'
 import * as m from '@/paraglide/messages'
 
@@ -10,11 +16,7 @@ export default function ThemeToggle() {
   const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
-    try {
-      applyThemeMode(themeStore.restore(window.localStorage))
-    } catch {
-      applyThemeMode('auto')
-    }
+    restoreBrowserTheme()
     setIsHydrated(true)
   }, [])
 
@@ -31,7 +33,7 @@ export default function ThemeToggle() {
   }, [mode])
 
   function toggleMode() {
-    applyThemeMode(themeStore.cycle(window.localStorage))
+    selectThemeMode()
   }
 
   return (
