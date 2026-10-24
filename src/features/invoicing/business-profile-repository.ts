@@ -1,11 +1,10 @@
 import { z } from '@/lib/validation'
 import * as m from '@/paraglide/messages'
-import { businessProfileDraftSchema } from './business-profile'
-import type { BusinessProfileDraft } from './business-profile'
+import type { BusinessProfileDraft } from './validation-contract'
 import {
   getApplicationResetGeneration,
   INITIAL_APPLICATION_RESET_GENERATION,
-} from '../settings/reset-generation'
+} from '@/lib/application-reset-generation'
 
 export const BUSINESS_PROFILE_STORAGE_KEY = 'regningen.business-profile'
 const BACKUP_FORMAT = 'regningen-business-profile'
@@ -17,6 +16,23 @@ export type BusinessProfileStorage = Pick<
   Storage,
   'getItem' | 'setItem' | 'removeItem'
 >
+
+/** Structural decoding accepts incomplete editable profiles, not business validity. */
+const businessProfileDraftSchema = z
+  .object({
+    businessName: z.string(),
+    serviceDescription: z.string(),
+    ownerName: z.string(),
+    street: z.string(),
+    postalCode: z.string(),
+    town: z.string(),
+    phone: z.string(),
+    mobile: z.string(),
+    iban: z.string(),
+    vatId: z.string(),
+    taxNumber: z.string(),
+  })
+  .strict()
 
 const backupSchema = z
   .object({
@@ -43,8 +59,11 @@ function readBackup(text: string, stored = false) {
 
   try {
     decoded = JSON.parse(text)
-  } catch {
-    throw new InvalidBusinessProfileBackupError(m.profile_backup_invalid_json())
+  } catch (cause) {
+    throw new InvalidBusinessProfileBackupError(
+      m.profile_backup_invalid_json(),
+      { cause },
+    )
   }
 
   const result = (stored ? storedProfileSchema : backupSchema).safeParse(
@@ -53,6 +72,7 @@ function readBackup(text: string, stored = false) {
   if (!result.success) {
     throw new InvalidBusinessProfileBackupError(
       m.profile_backup_invalid_format(),
+      { cause: result.error },
     )
   }
 

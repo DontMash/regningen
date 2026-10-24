@@ -15,8 +15,14 @@ import {
   waitForInvoiceDraftPersistence,
 } from './invoice-draft-store'
 
-import { initializeInvoiceDraftPersistence } from './invoice-draft'
 import { createInvoiceDraftPersistence } from './invoice-draft-storage'
+import type { InvoiceDraftStorage } from './invoice-draft-storage'
+
+// Tests explicitly supply their persistence capability; production composition
+// selects browser storage and no longer accepts a test-only raw driver override.
+function initializeInvoiceDraftPersistence(storage: InvoiceDraftStorage) {
+  return initializeWithPersistence(() => createInvoiceDraftPersistence(storage))
+}
 
 const expectedEmptyDraft = {
   number: '',

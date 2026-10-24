@@ -1,9 +1,11 @@
 //  @ts-check
 
 import { tanstackConfig } from '@tanstack/eslint-config'
+import { dependencyBoundaries } from './scripts/dependency-boundaries.mjs'
 
 export default [
   ...tanstackConfig,
+  dependencyBoundaries(import.meta.dirname),
   {
     rules: {
       'import/no-cycle': 'off',

@@ -42,6 +42,9 @@ describe('local business profile repository', () => {
     expect(() => parseBusinessProfileBackup('{')).toThrow(
       'The profile backup does not contain valid JSON.',
     )
+    expect(() => parseBusinessProfileBackup('{')).toThrow(
+      expect.objectContaining({ cause: expect.any(SyntaxError) }),
+    )
     expect(() => parseBusinessProfileBackup('{}')).toThrow(
       'The profile backup has an invalid format.',
     )

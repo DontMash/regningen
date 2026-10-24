@@ -15,7 +15,7 @@
     "build:routes": "tsr generate",
     "preview": "node scripts/preview.mjs",
     "release": "changelogen --release --clean --no-github",
-    "lint": "eslint",
+    "lint": "node --test scripts/dependency-boundaries.test.mjs && eslint",
     "lint:fix": "eslint --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

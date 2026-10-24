@@ -6,7 +6,7 @@ import type { ProfileBackup, ProfileOperations } from './profile-contract'
 import type { createProfileQueryHooks } from './profile-query-state'
 import { validationMessage } from './validation-feedback'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
-import { getApplicationResetGeneration } from '@/features/settings/reset-generation'
+import { getApplicationResetGeneration } from '@/lib/application-reset-generation'
 import {
   registerProfileDiscardHandler,
   setUnsavedProfileChanges,

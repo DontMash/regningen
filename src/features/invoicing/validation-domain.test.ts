@@ -4,9 +4,22 @@ import {
   parseEuroAmount,
   calculateInvoiceTotals,
 } from './validation-domain'
-import { emptyBusinessProfile } from './business-profile'
 import { businessValidation } from './validation-composition'
 import type { InvoiceDraft } from './validation-contract'
+
+const emptyBusinessProfile = {
+  businessName: '',
+  serviceDescription: '',
+  ownerName: '',
+  street: '',
+  postalCode: '',
+  town: '',
+  phone: '',
+  mobile: '',
+  iban: '',
+  vatId: '',
+  taxNumber: '',
+}
 
 const profile = {
   ...emptyBusinessProfile,

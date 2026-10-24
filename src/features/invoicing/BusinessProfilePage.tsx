@@ -23,7 +23,7 @@ import {
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import * as m from '@/paraglide/messages'
-import type { BusinessProfileDraft } from './business-profile'
+import type { BusinessProfileDraft } from './validation-contract'
 import { useBusinessProfile, useProfileEditor } from './business-profile-query'
 import {
   IconDeviceFloppy,

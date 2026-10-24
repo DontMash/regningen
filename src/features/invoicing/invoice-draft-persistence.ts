@@ -1,4 +1,4 @@
-import type { InvoiceDraft, InvoiceLineDraft } from './invoice'
+import type { InvoiceDraft, InvoiceLineDraft } from './validation-contract'
 
 export const INVOICE_DRAFT_STORAGE_KEY = 'regningen.invoice-draft'
 export const INVOICE_DRAFT_RESET_STAMP_KEY =
