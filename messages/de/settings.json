@@ -15,7 +15,7 @@
   "settings_appearance": "Darstellung",
   "settings_appearance_description": "Wählen Sie eine Darstellung oder folgen Sie den Einstellungen Ihres Geräts.",
   "settings_colour_scheme": "Farbschema",
-  "settings_theme_failed": "Darstellung konnte nicht gespeichert werden.",
+  "settings_theme_failed": "Darstellung konnte nicht gespeichert werden. Die Auswahl gilt für diese Sitzung.",
   "settings_notifications": "Benachrichtigungen",
   "settings_notifications_description": "Lokale Benachrichtigungen informieren Sie nach einem erfolgreichen PDF-Export. Es gibt keine Erinnerungen oder Nachrichten von einem Server.",
   "settings_installation": "Installation",

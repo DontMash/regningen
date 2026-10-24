@@ -53,11 +53,54 @@ function installDraftStorageFault({
 }
 
 export class StorageFaults {
+  private themeFaultCleanup: JSHandle<() => void> | null = null
   private draftFaultCleanup: JSHandle<() => void> | null = null
   private profileRemovalCleanup: JSHandle<() => void> | null = null
   private profileWriteCleanup: JSHandle<() => void> | null = null
 
   constructor(private readonly page: Page) {}
+
+  async preventThemePersistence(fault: 'access' | 'write') {
+    this.themeFaultCleanup = await this.page.evaluateHandle((kind) => {
+      if (kind === 'access') {
+        const descriptor = Object.getOwnPropertyDescriptor(
+          window,
+          'localStorage',
+        )
+        if (!descriptor) throw new Error('Local storage descriptor unavailable')
+        Object.defineProperty(window, 'localStorage', {
+          configurable: true,
+          get() {
+            throw new DOMException(
+              'Injected appearance access failure',
+              'SecurityError',
+            )
+          },
+        })
+        return () => Object.defineProperty(window, 'localStorage', descriptor)
+      }
+      const local = window.localStorage
+      const setItem = Storage.prototype.setItem
+      Storage.prototype.setItem = function (key, value) {
+        if (this === local && key === 'theme') {
+          throw new DOMException(
+            'Injected appearance write failure',
+            'QuotaExceededError',
+          )
+        }
+        return setItem.call(this, key, value)
+      }
+      return () => {
+        Storage.prototype.setItem = setItem
+      }
+    }, fault)
+  }
+
+  async restoreThemePersistence() {
+    await this.themeFaultCleanup?.evaluate((restore) => restore())
+    await this.themeFaultCleanup?.dispose()
+    this.themeFaultCleanup = null
+  }
 
   async preventDraftRecovery(fault: 'access' | 'read') {
     await this.page.addInitScript(installDraftStorageFault, {

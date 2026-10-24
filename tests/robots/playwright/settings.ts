@@ -304,7 +304,7 @@ export class SettingsRobot {
 
   async selectAppearance(mode: ThemePreference) {
     await this.page
-      .getByRole('group', { name: 'Farbschema', exact: true })
+      .getByRole('group', { name: /^(Farbschema|Colour scheme)$/, exact: true })
       .getByRole('button', { name: mode, exact: true })
       .click()
   }
@@ -312,7 +312,10 @@ export class SettingsRobot {
   async expectAppearance(mode: ThemePreference) {
     await expect(
       this.page
-        .getByRole('group', { name: 'Farbschema', exact: true })
+        .getByRole('group', {
+          name: /^(Farbschema|Colour scheme)$/,
+          exact: true,
+        })
         .getByRole('button', { name: mode, exact: true }),
     ).toHaveAttribute('aria-pressed', 'true')
   }
