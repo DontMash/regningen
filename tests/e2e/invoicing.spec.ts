@@ -544,6 +544,7 @@ test('configures a Business Profile through its UI before opening Invoices', asy
 
 test('creates and downloads a one-page invoice PDF in the browser', async ({
   harness,
+  language,
   appShell,
   releaseNotes,
   businessProfile,
@@ -553,7 +554,7 @@ test('creates and downloads a one-page invoice PDF in the browser', async ({
   const pageErrors = await harness.observePageErrors()
   const profile = createBusinessProfileScenario()
   await harness.open('/settings/profile')
-  await releaseNotes.dismissReleaseNotes()
+  await releaseNotes.acknowledgeReleaseNotes()
   await establishBusinessProfile(businessProfile, profile)
   await appShell.navigateToInvoice()
   await invoice.expectPdfDisabled()
@@ -626,6 +627,66 @@ test('creates and downloads a one-page invoice PDF in the browser', async ({
   }
   expect(document.text).toContain('Catering & Service')
   await invoice.expectPdfCreated()
+
+  await invoice.addPosition({ description: 'Removed charge', amount: '50,00' })
+  await invoice.editPosition(1, 'amount', '119,00')
+  await invoice.removePosition(2)
+  await invoice.chooseVatRate(19)
+  await invoice.enterInvoiceNumber('edited-002')
+  await invoice.enterNewPosition({
+    description: ' Unfinished charge ',
+    amount: '1,',
+  })
+  await harness.reload()
+  await invoice.expectInvoiceNumber('edited-002')
+  await invoice.expectPositionValue(1, 'amount', '119,00')
+  await invoice.expectNewPositionValues({
+    description: ' Unfinished charge ',
+    amount: '1,',
+  })
+  await invoice.expectSummaryTotals({
+    net: '100,00 €',
+    tax: '19,00 €',
+    gross: '119,00 €',
+  })
+  await language.changeInterfaceLanguage('en')
+  await language.expectInterfaceLanguage('en')
+  await invoice.expectPositionValue(1, 'amount', '119.00')
+  await invoice.expectNewPositionValues({
+    description: ' Unfinished charge ',
+    amount: '1,',
+  })
+  await invoice.expectSummaryTotals({
+    net: '€100.00',
+    tax: '€19.00',
+    gross: '€119.00',
+  })
+  const editedDownload = await artifacts.captureDownload(() =>
+    invoice.createPdf(),
+  )
+  const editedPdf = await artifacts.readPdf(editedDownload)
+  for (const text of [
+    'Invoice number edited-002',
+    'Catering & Service',
+    '€119.00',
+    '€100.00',
+    '19% VAT:',
+    '€19.00',
+  ])
+    expect(editedPdf.text).toContain(text)
+  expect(editedPdf.text).not.toContain('Removed charge')
+  expect(editedPdf.text).not.toContain('Unfinished charge')
+  await language.changeInterfaceLanguage('de')
+  await language.expectInterfaceLanguage('de')
+  await invoice.startNewInvoice()
+  await invoice.cancelNewInvoice()
+  await invoice.expectInvoiceNumber('edited-002')
+  await invoice.startNewInvoice()
+  await invoice.confirmNewInvoice()
+  await harness.reload()
+  await invoice.expectNewInvoiceDraft()
+  await invoice.expectNewPositionValues({ description: '', amount: '' })
+  await invoice.expectPdfDisabled()
   expect(pageErrors).toEqual([])
 })
 

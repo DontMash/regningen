@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { act, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PDFDocument } from 'pdf-lib'
 import InvoicePage from './invoice-page-composition'
+import { beginApplicationReset } from '@/lib/application-reset-generation'
 import {
   resetInvoiceLanguage,
   setInvoiceLanguage,
@@ -18,6 +20,8 @@ import {
   disposeInvoiceDraftPersistence,
   invoiceDraftStore,
   invoicePositionDraftStore,
+  waitForInvoiceDraftPersistence,
+  INVOICE_DRAFT_STORAGE_KEY,
 } from './invoice-draft-store'
 import { initializeInvoiceDraftPersistence } from './invoice-draft'
 import { createBusinessProfileRepository } from './business-profile-repository'
@@ -50,6 +54,121 @@ afterEach(async () => {
 })
 
 describe('invoice editor', () => {
+  it('keeps programmatic working changes visible, validated and persisted through the next ordinary edit', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    saveBusinessProfile(createBusinessProfileScenario())
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+    await invoice.addPosition({ description: 'Earlier charge', amount: '7' })
+    await act(async () => {
+      invoiceDraftStore.setState((current) => ({
+        ...current,
+        number: 'external-change',
+        date: '2026-06-15',
+        company: 'Recipient Ltd',
+        street: 'Test Street 1',
+        postalCode: '12345',
+        town: 'Berlin',
+        items: [
+          { description: 'Working charge', amount: '119', amountLocale: 'en' },
+        ],
+        rate: 19,
+      }))
+      invoicePositionDraftStore.setState(() => ({
+        description: 'Unfinished',
+        amount: '1.',
+        amountLocale: 'en',
+      }))
+    })
+    invoice.expectInvoiceNumber('external-change')
+    invoice.expectTotals({ net: '100,00 €', tax: '19,00 €', gross: '119,00 €' })
+    invoice.expectPdfEnabled()
+    await invoice.enterInvoiceNumber('ordinary-edit')
+    invoice.expectPositionValues(1, {
+      description: 'Working charge',
+      amount: '119,00',
+    })
+    invoice.expectDateLabel('15.06.2026')
+    invoice.expectPdfEnabled()
+    await waitForInvoiceDraftPersistence()
+    expect(
+      JSON.parse(sessionStorage.getItem(INVOICE_DRAFT_STORAGE_KEY) ?? 'null'),
+    ).toMatchObject({
+      invoice: {
+        number: 'ordinary-edit',
+        date: '2026-06-15',
+        rate: 19,
+        items: [
+          { description: 'Working charge', amount: '119', amountLocale: 'en' },
+        ],
+      },
+      newPosition: {
+        description: 'Unfinished',
+        amount: '1.',
+        amountLocale: 'en',
+      },
+    })
+    const downloads: Blob[] = []
+    vi.stubGlobal(
+      'URL',
+      Object.assign(URL, {
+        createObjectURL: (blob: Blob) => {
+          downloads.push(blob)
+          return 'blob:invoice'
+        },
+        revokeObjectURL: vi.fn(),
+      }),
+    )
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    await invoice.createPdf()
+    await invoice.expectMessage('PDF wurde erstellt')
+    const bytes = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () =>
+        reader.result instanceof ArrayBuffer
+          ? resolve(reader.result)
+          : reject(new Error('Expected PDF bytes'))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsArrayBuffer(downloads[0])
+    })
+    expect((await PDFDocument.load(bytes)).getTitle()).toBe(
+      'Rechnung ordinary-edit',
+    )
+    await act(async () => {
+      invoiceDraftStore.setState((current) => ({ ...current, street: '' }))
+    })
+    await invoice.touchRecipient('street')
+    await invoice.expectMessage('Straße und Hausnummer fehlen.')
+    await invoice.expectPdfDisabled()
+  })
+
+  it('cannot resurrect pre-reset working values through a subsequent edit', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    saveBusinessProfile(createBusinessProfileScenario())
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+    await invoice.enterInvoiceNumber('old-number')
+    await invoice.addPosition({ description: 'Old charge', amount: '107' })
+    await invoice.enterNewPosition({
+      description: 'Old unfinished',
+      amount: '0,',
+    })
+    await act(async () => {
+      await beginApplicationReset('rendered-reset')
+    })
+    invoice.expectInvoiceNumber('')
+    invoice.expectNewPositionValues({ description: '', amount: '' })
+    await invoice.expectPdfDisabled()
+    await invoice.enterInvoiceNumber('after-reset')
+    await waitForInvoiceDraftPersistence()
+    expect(
+      JSON.parse(sessionStorage.getItem(INVOICE_DRAFT_STORAGE_KEY) ?? 'null'),
+    ).toMatchObject({
+      invoice: { number: 'after-reset', items: [], date: '' },
+      newPosition: { description: '', amount: '' },
+    })
+  })
+
   it('renders English editor text, tax wording and day-first dates from the interface locale', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())
     saveBusinessProfile(createBusinessProfileScenario())
