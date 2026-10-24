@@ -5,6 +5,8 @@ export default defineConfig({
   testDir: './tests/e2e',
   testIgnore: '**/*.vitals.spec.ts',
   fullyParallel: true,
+  // Browser journeys and isolated production builds share CPU and memory.
+  workers: 4,
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:3000',

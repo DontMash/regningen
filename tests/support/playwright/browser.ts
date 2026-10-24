@@ -20,11 +20,28 @@ export class BrowserControls {
     await this.page.reload()
   }
 
-  observePageErrors() {
+  async observePageErrors() {
     const errors: string[] = []
     this.page.on('pageerror', (error) => errors.push(error.message))
     this.page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text())
+    })
+    await this.page.exposeBinding(
+      '__observeWindowError',
+      (_source, message: string) => {
+        errors.push(message)
+      },
+    )
+    // Native layout errors do not necessarily emit Playwright's pageerror event.
+    await this.page.addInitScript(() => {
+      window.addEventListener('error', (event) => {
+        const report = (
+          window as unknown as Window & {
+            __observeWindowError: (message: string) => Promise<void>
+          }
+        ).__observeWindowError
+        void report(event.message)
+      })
     })
     return errors
   }

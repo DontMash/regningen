@@ -393,6 +393,7 @@ test('creates and downloads a one-page invoice PDF in the browser', async ({
   invoice,
   artifacts,
 }) => {
+  const pageErrors = await harness.observePageErrors()
   const profile = createBusinessProfileScenario()
   await harness.open('/settings/profile')
   await releaseNotes.dismissReleaseNotes()
@@ -468,6 +469,7 @@ test('creates and downloads a one-page invoice PDF in the browser', async ({
   }
   expect(document.text).toContain('Catering & Service')
   await invoice.expectPdfCreated()
+  expect(pageErrors).toEqual([])
 })
 
 test('can read release notes from the footer without losing the in-memory invoice', async ({

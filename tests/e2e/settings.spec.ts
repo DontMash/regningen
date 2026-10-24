@@ -90,7 +90,6 @@ test('opens the project license with the keyboard at 320px in both themes', asyn
   await theme.expectResolvedTheme('dark')
   await settings.expectProjectLicenseScope()
   expect(await layout.documentOverflows()).toBe(false)
-  await appShell.openMenuWithKeyboard()
   await language.changeInterfaceLanguageWithKeyboard('en')
   await appShell.expectMenuClosed()
   await settings.expectLicensesPage('en')

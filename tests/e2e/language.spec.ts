@@ -72,7 +72,7 @@ test('fixed Invoice Language persists across UI switches and returning to automa
   invoice,
   artifacts,
 }) => {
-  const pageErrors = harness.observePageErrors()
+  const pageErrors = await harness.observePageErrors()
   await harness.open('/de/einstellungen/profil')
   await releaseNotes.acknowledgeReleaseNotes()
   await businessProfile.configureBusinessProfile(
