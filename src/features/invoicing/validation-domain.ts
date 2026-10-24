@@ -4,6 +4,8 @@ import type {
   EntryLanguage,
   IbanVerification,
   InvoiceDraft,
+  InvoiceEditing,
+  InvoiceLineDraft,
   InvoiceTotals,
   ValidationFailure,
   VatRate,
@@ -101,33 +103,30 @@ export function createBusinessValidation(
       text('street', 85, true)
       text('postalCode', 85, true)
       text('town', 85, true)
-      if (draft.items.length > 16)
-        failures.push({ path: ['items'], reason: 'position-limit', limit: 16 })
+      if (draft.items.length > positionLimit)
+        failures.push({
+          path: ['items'],
+          reason: 'position-limit',
+          limit: positionLimit,
+        })
       if (!draft.company && !draft.name)
         failures.push({ path: ['company'], reason: 'recipient-required' })
       const positions: { description: string; grossAmount: number }[] = []
       let filled = false
       for (const [index, item] of draft.items.entries()) {
-        if (item.description.length > 85)
-          failures.push({
-            path: ['items', index, 'description'],
-            reason: 'too-long',
-            limit: 85,
-          })
-        if (!item.description.trim() && !item.amount.trim()) continue
+        const positionFailures = validatePosition(item).filter(
+          (failure) => hasPositionData(item) || failure.reason === 'too-long',
+        )
+        failures.push(
+          ...positionFailures.map((failure) => ({
+            ...failure,
+            path: ['items', index, ...failure.path],
+          })),
+        )
+        if (!hasPositionData(item)) continue
         filled = true
-        if (!item.description.trim())
-          failures.push({
-            path: ['items', index, 'description'],
-            reason: 'required',
-          })
-        const amount = parseEuroAmount(item.amount, item.amountLocale ?? 'de')
-        if (amount === null || amount <= 0)
-          failures.push({
-            path: ['items', index, 'amount'],
-            reason: 'invalid-amount',
-          })
-        else
+        const amount = parsePositionAmount(item)
+        if (amount !== null && amount > 0)
           positions.push({ description: item.description, grossAmount: amount })
       }
       if (!filled)
@@ -137,6 +136,67 @@ export function createBusinessValidation(
         : { valid: true, data: { draft, positions } }
     },
   }
+}
+
+const positionLimit = 16
+const descriptionLimit = 85
+
+function hasPositionData(position: InvoiceLineDraft) {
+  return Boolean(position.description.trim() || position.amount.trim())
+}
+
+function parsePositionAmount(position: InvoiceLineDraft) {
+  return parseEuroAmount(position.amount, position.amountLocale ?? 'de')
+}
+
+function validatePosition(position: InvoiceLineDraft): ValidationFailure[] {
+  const failures: ValidationFailure[] = []
+  if (!position.description.trim())
+    failures.push({ path: ['description'], reason: 'required' })
+  if (position.description.length > descriptionLimit)
+    failures.push({
+      path: ['description'],
+      reason: 'too-long',
+      limit: descriptionLimit,
+    })
+  const amount = parsePositionAmount(position)
+  if (amount === null || amount <= 0)
+    failures.push({ path: ['amount'], reason: 'invalid-amount' })
+  return failures
+}
+
+export const invoiceEditingDomain: InvoiceEditing = {
+  hasPositionData,
+  validatePosition,
+  descriptionLimit,
+  parseAmount: parsePositionAmount,
+  canAddPosition: (items) => items.length < positionLimit,
+  addPosition(items, position) {
+    const failures = validatePosition(position)
+    if (items.length >= positionLimit)
+      failures.push({
+        path: [],
+        reason: 'position-limit',
+        limit: positionLimit,
+      })
+    return failures.length
+      ? { valid: false, failures }
+      : { valid: true, data: [...items, { ...position }] }
+  },
+  removePosition: (items, index) =>
+    items.filter((_, itemIndex) => itemIndex !== index),
+  previewTotals(draft) {
+    const items = draft.items.filter(hasPositionData)
+    if (!items.length || items.some((item) => validatePosition(item).length))
+      return null
+    const amounts: number[] = []
+    for (const item of items) {
+      const amount = parsePositionAmount(item)
+      if (amount === null) return null
+      amounts.push(amount)
+    }
+    return calculateInvoiceTotals(amounts, draft.rate)
+  },
 }
 
 function isCalendarDate(value: string): boolean {
