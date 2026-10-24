@@ -5,7 +5,7 @@ import { act, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
-import InvoicePage from './InvoicePage'
+import InvoicePage from './invoice-page-composition'
 import { beginApplicationReset } from '@/lib/application-reset-generation'
 import {
   resetInvoiceLanguage,
@@ -478,6 +478,30 @@ describe('invoice editor', () => {
     },
   )
 
+  it('reports unsupported PDF characters in the interface language without downloading', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    const { input } = createInvoiceScenario({
+      positions: [{ description: 'Service 🧾', amount: '107,00' }],
+    })
+    saveBusinessProfile(createBusinessProfileScenario())
+    setInvoiceLanguage('en')
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {})
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+    await invoice.enterInvoiceNumber(input.number)
+    await invoice.enterRecipient(input.recipient)
+    await invoice.addPosition(input.positions[0])
+    await invoice.createPdf()
+    await invoice.expectMessage('PDF konnte nicht erstellt werden')
+    await invoice.expectMessage(
+      'Das PDF unterstützt einige eingegebene Zeichen nicht. Bitte Sonderzeichen in den Angaben prüfen.',
+    )
+    invoice.expectMessageAbsent('PDF wurde erstellt')
+    expect(anchorClick).not.toHaveBeenCalled()
+  })
+
   it('reports a browser download failure without claiming PDF creation succeeded', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())
     const { input } = createInvoiceScenario({
@@ -502,7 +526,9 @@ describe('invoice editor', () => {
 
     await invoice.createPdf()
     await invoice.expectMessage('PDF konnte nicht erstellt werden')
-    await invoice.expectMessage('Browser-Download nicht verfügbar.')
+    await invoice.expectMessage(
+      'PDF-Erstellung oder Download ist in diesem Browser nicht verfügbar.',
+    )
     invoice.expectMessageAbsent('PDF wurde erstellt')
     expect(anchorClick).not.toHaveBeenCalled()
   })
