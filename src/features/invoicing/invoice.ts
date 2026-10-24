@@ -1,173 +1,54 @@
 import { z } from '@/lib/validation'
 import { getLocale } from '@/paraglide/runtime'
-import type { Locale } from '@/paraglide/runtime'
-import * as m from '@/paraglide/messages'
+import { businessValidation } from './validation-composition'
+import { validationMessage } from './validation-feedback'
+import { parseEuroAmount as parseAmount } from './validation-domain'
+import type { EntryLanguage } from './validation-contract'
 
-export type VatRate = 7 | 19
+export type {
+  InvoiceDraft,
+  InvoiceLineDraft,
+  InvoiceTotals,
+  VatRate,
+} from './validation-contract'
+export { calculateInvoiceTotals } from './validation-domain'
 
-export type InvoiceLineDraft = {
-  description: string
-  amount: string
-  amountLocale?: Locale
-}
-
-export type InvoiceDraft = {
-  number: string
-  date: string
-  subject: string
-  company: string
-  name: string
-  street: string
-  postalCode: string
-  town: string
-  rate: VatRate
-  items: InvoiceLineDraft[]
-}
-
-const lineItemSchema = z.object({
-  description: z
-    .string()
-    .max(85, { error: () => m.invoice_maximum_characters({ limit: 85 }) }),
-  amount: z.string(),
-  amountLocale: z.enum(['de', 'en']).optional(),
-})
-
+/** Temporary localized compatibility adapter, not a second set of rules. */
 export const invoiceFormSchema = z
   .object({
-    number: z
-      .string()
-      .trim()
-      .min(1, { error: () => m.invoice_number_required() })
-      .max(40, { error: () => m.invoice_maximum_characters({ limit: 40 }) }),
-    date: z
-      .string()
-      .refine(isCalendarDate, { error: () => m.invoice_date_invalid() }),
-    subject: z
-      .string()
-      .max(100, { error: () => m.invoice_maximum_characters({ limit: 100 }) }),
-    company: z
-      .string()
-      .trim()
-      .max(70, { error: () => m.invoice_maximum_characters({ limit: 70 }) }),
-    name: z
-      .string()
-      .trim()
-      .max(70, { error: () => m.invoice_maximum_characters({ limit: 70 }) }),
-    street: z
-      .string()
-      .trim()
-      .min(1, { error: () => m.invoice_street_required() })
-      .max(85, { error: () => m.invoice_maximum_characters({ limit: 85 }) }),
-    postalCode: z
-      .string()
-      .trim()
-      .min(1, { error: () => m.invoice_postal_code_required() })
-      .max(85, { error: () => m.invoice_maximum_characters({ limit: 85 }) }),
-    town: z
-      .string()
-      .trim()
-      .min(1, { error: () => m.invoice_town_required() })
-      .max(85, { error: () => m.invoice_maximum_characters({ limit: 85 }) }),
-    rate: z.union([z.literal(7), z.literal(19)]),
-    items: z
-      .array(lineItemSchema)
-      .min(1, { error: () => m.invoice_position_required() })
-      .max(16, { error: () => m.invoice_position_limit() }),
+    number: z.string(),
+    date: z.string(),
+    subject: z.string(),
+    company: z.string(),
+    name: z.string(),
+    street: z.string(),
+    postalCode: z.string(),
+    town: z.string(),
+    rate: z.number(),
+    items: z.array(
+      z.object({
+        description: z.string(),
+        amount: z.string(),
+        amountLocale: z.enum(['de', 'en']).optional(),
+      }),
+    ),
   })
-  .superRefine((invoice, context) => {
-    if (!invoice.company && !invoice.name) {
+  .transform((input, context) => {
+    const result = businessValidation.validateInvoice(input)
+    if (result.valid) return result.data.draft
+    for (const failure of result.failures)
       context.addIssue({
         code: 'custom',
-        path: ['company'],
-        message: m.invoice_recipient_required(),
+        path: failure.path,
+        message: validationMessage('invoice', failure),
       })
-    }
-
-    const filledItems = invoice.items
-      .map((item, index) => ({ item, index }))
-      .filter(({ item }) => item.description.trim() || item.amount.trim())
-
-    if (!filledItems.length) {
-      context.addIssue({
-        code: 'custom',
-        path: ['items'],
-        message: m.invoice_position_required(),
-      })
-    }
-
-    for (const { item, index } of filledItems) {
-      if (!item.description.trim()) {
-        context.addIssue({
-          code: 'custom',
-          path: ['items', index, 'description'],
-          message: m.invoice_description_required(),
-        })
-      }
-
-      const amount = parseEuroAmount(item.amount, item.amountLocale ?? 'de')
-      if (amount === null || amount <= 0) {
-        context.addIssue({
-          code: 'custom',
-          path: ['items', index, 'amount'],
-          message: m.invoice_amount_invalid(),
-        })
-      }
-    }
+    return z.NEVER
   })
 
-function isCalendarDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
-  const [year, month, day] = value.split('-').map(Number)
-  const date = new Date(Date.UTC(year, month - 1, day))
-
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  )
-}
-
-export type InvoiceTotals = {
-  gross: number
-  net: number
-  tax: number
-}
-
+/** Legacy UI default only; domain parsing always requires entry language. */
 export function parseEuroAmount(
   input: string,
-  locale: Locale = getLocale(),
+  locale: EntryLanguage = getLocale(),
 ): number | null {
-  const raw = input.trim().replace(/[\s€]/g, '')
-  if (!raw) return null
-
-  let normalized: string
-  if (locale === 'en') {
-    if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(raw)) {
-      return null
-    }
-    normalized = raw.replaceAll(',', '')
-  } else if (/^\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/.test(raw)) {
-    normalized = raw.replaceAll('.', '').replace(',', '.')
-  } else if (/^\d+(?:,\d{1,2})?$/.test(raw)) {
-    normalized = raw.replace(',', '.')
-  } else if (/^\d+\.\d{1,2}$/.test(raw)) {
-    normalized = raw
-  } else {
-    return null
-  }
-
-  const [euros, cents = ''] = normalized.split('.')
-  const amount = Number(euros) * 100 + Number(cents.padEnd(2, '0'))
-
-  return Number.isSafeInteger(amount) && amount <= 999999999 ? amount : null
-}
-
-export function calculateInvoiceTotals(
-  grossAmounts: number[],
-  rate: VatRate,
-): InvoiceTotals {
-  const gross = grossAmounts.reduce((sum, amount) => sum + amount, 0)
-  const net = Math.round((gross * 100) / (100 + rate))
-
-  return { gross, net, tax: gross - net }
+  return parseAmount(input, locale)
 }
