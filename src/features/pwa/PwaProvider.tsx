@@ -9,10 +9,10 @@ import {
   initializeInvoiceDraftPersistence,
   invoiceDraftPersistenceStore,
   waitForInvoiceDraftPersistence,
-} from '@/features/invoicing/invoice-draft-store'
+} from '@/features/invoicing/invoice-draft'
 import { waitForPwaCriticalOperations } from './pwa-critical-operations'
 import { confirmDiscardProfileChanges } from '@/features/settings/unsaved-profile'
-import { getCompletedApplicationResetGeneration } from '@/features/settings/reset-generation'
+import { getCompletedApplicationResetGeneration } from '@/lib/application-reset-generation'
 import * as m from '@/paraglide/messages'
 
 interface InstallPromptEvent extends Event {

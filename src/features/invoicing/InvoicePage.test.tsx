@@ -16,10 +16,10 @@ import { createInvoiceScenario } from '../../../tests/scenarios/invoice'
 import {
   createEmptyInvoiceDraft,
   disposeInvoiceDraftPersistence,
-  initializeInvoiceDraftPersistence,
   invoiceDraftStore,
   invoicePositionDraftStore,
 } from './invoice-draft-store'
+import { initializeInvoiceDraftPersistence } from './invoice-draft'
 import { createBusinessProfileRepository } from './business-profile-repository'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
 import { saveBusinessProfile } from '../../../tests/support/vitest/business-profile'

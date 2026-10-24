@@ -4,6 +4,7 @@ import { budgets } from '../support/playwright/vitals-budgets'
 test('general settings in its normal usable state', async ({ vitals }) => {
   await vitals.audit({
     path: '/de/einstellungen',
+    expectedNoindex: true,
     budgets: budgets.settings,
     prepare: async ({ page, releaseNotes, settings }) => {
       await page.goto('/de')
