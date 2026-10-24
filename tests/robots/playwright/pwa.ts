@@ -39,6 +39,9 @@ export class PwaRobot {
     await this.updateDialog()
       .getByRole('button', { name: /^(Später|Later)$/ })
       .click()
+  }
+
+  async expectUpdateDiscoverable() {
     await expect(
       this.page.getByRole('button', {
         name: /^(Update verfügbar|Update available)$/,

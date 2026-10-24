@@ -480,6 +480,7 @@ test.describe('production browser security', () => {
       await businessProfile.expectUnsavedChangesWarning()
       await businessProfile.keepUnsavedChanges()
       await pwa.postponeUpdate()
+      await pwa.expectUpdateDiscoverable()
       await businessProfile.expectFieldValue(
         'businessName',
         'Unsaved security update',
