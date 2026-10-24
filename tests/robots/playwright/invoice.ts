@@ -138,11 +138,11 @@ export class InvoiceRobot {
       locale === 'de'
         ? 'Positiver Bruttopreis in Euro, z. B. 107,00.'
         : 'Positive gross amount in euros, e.g. 107.00.'
-    await expect(
-      this.page.getByRole('dialog', {
-        name: /^(Brutto in Euro|Gross amount in euros)$/,
-      }),
-    ).toHaveAccessibleDescription(guidance)
+    const popup = this.page.getByRole('dialog', {
+      name: /^(Brutto in Euro|Gross amount in euros)$/,
+    })
+    await expect(popup).toHaveAccessibleDescription(guidance)
+    await expect(popup.getByText(guidance, { exact: true })).toBeVisible()
     await expect(
       this.control('new position amount'),
     ).toHaveAccessibleDescription(guidance)

@@ -106,9 +106,9 @@ export class BusinessProfileRobot {
       locale === 'de'
         ? 'Die IBAN muss gültig sein. Leerzeichen sind erlaubt. Maximal 42 Zeichen.'
         : 'The IBAN must be valid. Spaces are allowed. Maximum 42 characters.'
-    await expect(
-      this.page.getByRole('dialog', { name: 'IBAN', exact: true }),
-    ).toHaveAccessibleDescription(guidance)
+    const popup = this.page.getByRole('dialog', { name: 'IBAN', exact: true })
+    await expect(popup).toHaveAccessibleDescription(guidance)
+    await expect(popup.getByText(guidance, { exact: true })).toBeVisible()
     await expect(
       this.page.getByRole('textbox', { name: 'IBAN', exact: true }),
     ).toHaveAccessibleDescription(new RegExp(guidance.replaceAll('.', '\\.')))
