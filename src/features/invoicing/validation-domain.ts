@@ -166,6 +166,14 @@ function validatePosition(position: InvoiceLineDraft): ValidationFailure[] {
 }
 
 export const invoiceEditingDomain: InvoiceEditing = {
+  hasWorkingData(draft, unfinished, defaults) {
+    return Boolean(
+      draft.number.trim() || draft.subject.trim() || draft.company.trim() ||
+      draft.name.trim() || draft.street.trim() || draft.postalCode.trim() ||
+      draft.town.trim() || draft.date !== defaults.date || draft.rate !== defaults.rate ||
+      draft.items.some(hasPositionData) || hasPositionData(unfinished)
+    )
+  },
   hasPositionData,
   validatePosition,
   descriptionLimit,

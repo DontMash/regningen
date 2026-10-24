@@ -44,6 +44,14 @@ export class InvoiceRobot {
     )
   }
 
+  async enterSubject(subject: string) {
+    await this.replaceValue(screen.getByRole('textbox', { name: /^Betreff/ }), subject)
+  }
+
+  expectSubject(subject: string) {
+    expect(screen.getByRole('textbox', { name: /^Betreff/ })).toHaveValue(subject)
+  }
+
   async enterInvoiceNumber(number: string) {
     await this.replaceValue(
       screen.getByRole('textbox', { name: /^Rechnungsnummer/ }),

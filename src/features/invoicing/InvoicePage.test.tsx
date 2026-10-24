@@ -54,6 +54,22 @@ afterEach(async () => {
 })
 
 describe('invoice editor', () => {
+  it('preserves subject-only work on cancellation and clears it only on confirmation', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    saveBusinessProfile(createBusinessProfileScenario())
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+    await invoice.enterSubject('Only working subject')
+    await invoice.startNewInvoice()
+    await invoice.cancelNewInvoice()
+    invoice.expectSubject('Only working subject')
+    await invoice.startNewInvoice()
+    await invoice.confirmNewInvoice()
+    invoice.expectSubject('')
+    await waitForInvoiceDraftPersistence()
+    expect(JSON.parse(sessionStorage.getItem(INVOICE_DRAFT_STORAGE_KEY) ?? 'null')).toMatchObject({ invoice: { subject: '' } })
+  })
+
   it('keeps programmatic working changes visible, validated and persisted through the next ordinary edit', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())
     saveBusinessProfile(createBusinessProfileScenario())

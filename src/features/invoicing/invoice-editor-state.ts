@@ -23,13 +23,32 @@ export function createInvoiceEditorState({
   unfinished,
   editing,
   validation,
+  freshInvoice,
+  clearPersisted,
 }: {
   invoice: Store<InvoiceDraft>
   unfinished: Store<InvoiceLineDraft>
   editing: InvoiceEditing
   validation: BusinessValidation
+  freshInvoice: () => InvoiceDraft
+  clearPersisted: () => Promise<void>
 }) {
+  let exportGeneration = 0
   return {
+    getExportGeneration: () => exportGeneration,
+    applyFreshDate() {
+      invoice.setState((current) => ({ ...current, date: freshInvoice().date }))
+    },
+    requiresResetConfirmation() {
+      return editing.hasWorkingData(invoice.state, unfinished.state, freshInvoice())
+    },
+    async reset() {
+      // A confirmed new Invoice abandons snapshot exports, even if clearing fails.
+      exportGeneration++
+      await clearPersisted()
+      invoice.setState(() => freshInvoice())
+      unfinished.setState(() => ({ description: '', amount: '' }))
+    },
     derive() {
       const outcome = validation.validateInvoice(invoice.state)
       return {

@@ -13,6 +13,16 @@ const position = {
 }
 
 describe('Invoice Position editing decisions', () => {
+  it('protects subject-only work and compares working inputs to current defaults', () => {
+    const defaults = { ...createEmptyInvoiceDraft(), date: '2026-06-15' }
+    const unfinished = { description: '', amount: '' }
+    expect(invoiceEditingDomain.hasWorkingData(defaults, unfinished, defaults)).toBe(false)
+    for (const change of [{ subject: 'Consulting' }, { date: '2026-06-14' }, { rate: 19 as const }]) {
+      expect(invoiceEditingDomain.hasWorkingData({ ...defaults, ...change }, unfinished, defaults)).toBe(true)
+    }
+    expect(invoiceEditingDomain.hasWorkingData(defaults, { description: '', amount: '1.' }, defaults)).toBe(true)
+  })
+
   it('keeps incomplete working data out of completed charges until explicitly added', () => {
     expect(
       invoiceEditingDomain.addPosition([], { description: 'Work', amount: '' })
@@ -96,6 +106,8 @@ describe('Invoice Position editing decisions', () => {
       unfinished,
       editing: invoiceEditingDomain,
       validation: businessValidation,
+      freshInvoice: createEmptyInvoiceDraft,
+      clearPersisted: async () => {},
     })
     expect(editor.derive().canAddPosition).toBe(false)
     expect(editor.addPosition().valid).toBe(false)
