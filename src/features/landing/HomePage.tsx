@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { useBusinessProfile } from '@/features/invoicing/business-profile-query'
-import { businessProfileSchema } from '@/features/invoicing/business-profile'
 import * as m from '@/paraglide/messages'
 import { formatDate, formatEuro } from '@/lib/i18n'
 
@@ -139,12 +138,8 @@ export default function HomePage() {
   async function enterApplication() {
     setIsEntering(true)
     try {
-      const result = await profileQuery.refetch()
-      if (!result.isSuccess) return
-      const complete =
-        result.data !== null &&
-        businessProfileSchema.safeParse(result.data).success
-      await navigate({ to: complete ? '/invoice' : '/settings/profile' })
+      const destination = await profileQuery.entryDestination()
+      if (destination) await navigate({ to: destination })
     } finally {
       setIsEntering(false)
     }

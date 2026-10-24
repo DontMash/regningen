@@ -1,110 +1,57 @@
-import { useEffect, useSyncExternalStore } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { BusinessProfileDraft } from './business-profile'
+/** Supported feature composition: consumers receive operations, never concrete repositories. */
 import {
-  BUSINESS_PROFILE_STORAGE_KEY,
   createBrowserBusinessProfileRepository,
+  parseBusinessProfileBackup,
+  BUSINESS_PROFILE_STORAGE_KEY,
 } from './business-profile-repository'
-import {
-  clearBusinessProfileStorageFailure,
-  markBusinessProfileStorageFailure,
-} from './business-profile-storage-status'
-import { runPwaCriticalOperation } from '@/features/pwa/pwa-critical-operations'
-import { getApplicationResetGeneration } from '@/features/settings/reset-generation'
+import { createProfileOperations } from './profile-domain'
+import { businessValidation } from './validation-composition'
+import { createProfileQueryHooks } from './profile-query-state'
+import { createProfileEditorHook } from './profile-editor-state'
+import type { ProfilePersistence, ProfileBackup } from './profile-contract'
+import * as m from '@/paraglide/messages'
 
-export const BUSINESS_PROFILE_QUERY_KEY = ['business-profile'] as const
-
-const subscribeToHydration = () => () => {}
-const browserReady = () => true
-const serverReady = () => false
-
-export function useBusinessProfile() {
-  const hydrated = useSyncExternalStore(
-    subscribeToHydration,
-    browserReady,
-    serverReady,
-  )
-
-  return useQuery<BusinessProfileDraft | null>({
-    networkMode: 'always',
-    queryKey: BUSINESS_PROFILE_QUERY_KEY,
-    queryFn: async () => {
-      try {
-        const profile =
-          await createBrowserBusinessProfileRepository().loadProfile()
-        clearBusinessProfileStorageFailure()
-        return profile
-      } catch (error) {
-        markBusinessProfileStorageFailure()
-        throw error
-      }
-    },
-    enabled: hydrated,
-    staleTime: Infinity,
-    retry: false,
-  })
+// Browser access is deferred until an operation; composition also executes during SSR.
+const persistence: ProfilePersistence = {
+  loadProfile: () => createBrowserBusinessProfileRepository().loadProfile(),
+  saveProfile: (profile, generation) =>
+    createBrowserBusinessProfileRepository().saveProfile(profile, generation),
+  deleteProfile: (generation) =>
+    createBrowserBusinessProfileRepository().deleteProfile(generation),
+  exportProfile: () => createBrowserBusinessProfileRepository().exportProfile(),
 }
-
-export function useSaveBusinessProfile(generation: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    networkMode: 'always',
-    mutationFn: (profile: BusinessProfileDraft) =>
-      runPwaCriticalOperation(async () => {
-        await createBrowserBusinessProfileRepository().saveProfile(
-          profile,
-          generation,
-        )
-        return profile
-      }),
-    onSuccess: (profile) => {
-      if (generation !== getApplicationResetGeneration()) return
-      clearBusinessProfileStorageFailure()
-      queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, profile)
-    },
-    onError: () => {
-      if (generation === getApplicationResetGeneration())
-        markBusinessProfileStorageFailure()
-    },
-  })
+const backup: ProfileBackup = {
+  read: async (file) => parseBusinessProfileBackup(await file.text()),
+  download(contents) {
+    const url = URL.createObjectURL(
+      new Blob([contents], { type: 'application/json' }),
+    )
+    const link = document.createElement('a')
+    link.href = url
+    link.download = m.profile_backup_filename()
+    document.body.append(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  },
 }
-
-export function useDeleteBusinessProfile(generation: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    networkMode: 'always',
-    mutationFn: () =>
-      runPwaCriticalOperation(() =>
-        createBrowserBusinessProfileRepository().deleteProfile(generation),
-      ),
-    onSuccess: () => {
-      if (generation !== getApplicationResetGeneration()) return
-      clearBusinessProfileStorageFailure()
-      queryClient.setQueryData(BUSINESS_PROFILE_QUERY_KEY, null)
-    },
-    onError: () => {
-      if (generation === getApplicationResetGeneration())
-        markBusinessProfileStorageFailure()
-    },
-  })
-}
-
-export function useProfileStorageSync(onExternalChange?: () => void) {
-  const queryClient = useQueryClient()
-
-  useEffect(() => {
-    function handleStorageChange(event: StorageEvent) {
-      if (event.key !== BUSINESS_PROFILE_STORAGE_KEY) return
-
-      onExternalChange?.()
-      void queryClient.invalidateQueries({
-        queryKey: BUSINESS_PROFILE_QUERY_KEY,
-      })
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
-  }, [onExternalChange, queryClient])
-}
+const operations = createProfileOperations(businessValidation, persistence)
+const hooks = createProfileQueryHooks(operations, (listener) => {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === BUSINESS_PROFILE_STORAGE_KEY) listener()
+  }
+  window.addEventListener('storage', onStorage)
+  return () => window.removeEventListener('storage', onStorage)
+})
+export const {
+  useBusinessProfile,
+  useSaveBusinessProfile,
+  useDeleteBusinessProfile,
+  useProfileStorageSync,
+} = hooks
+export const useProfileEditor = createProfileEditorHook(
+  operations,
+  backup,
+  hooks,
+)
+export { BUSINESS_PROFILE_QUERY_KEY } from './profile-query-state'

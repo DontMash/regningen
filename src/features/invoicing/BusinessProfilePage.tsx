@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ComponentProps } from 'react'
-import { useForm } from '@tanstack/react-form'
-import { useSelector } from '@tanstack/react-store'
 import { Link } from '@tanstack/react-router'
 import {
   AlertDialog,
@@ -24,26 +22,9 @@ import {
 } from '@/components/ui/card'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { toast } from '@/components/ui/toast'
 import * as m from '@/paraglide/messages'
-import { businessProfileSchema, emptyBusinessProfile } from './business-profile'
 import type { BusinessProfileDraft } from './business-profile'
-import {
-  createBrowserBusinessProfileRepository,
-  parseBusinessProfileBackup,
-} from './business-profile-repository'
-import {
-  useBusinessProfile,
-  useDeleteBusinessProfile,
-  useProfileStorageSync,
-  useSaveBusinessProfile,
-} from './business-profile-query'
-import { businessProfileStorageStatus } from './business-profile-storage-status'
-import { getApplicationResetGeneration } from '@/features/settings/reset-generation'
-import {
-  registerProfileDiscardHandler,
-  setUnsavedProfileChanges,
-} from '@/features/settings/unsaved-profile'
+import { useBusinessProfile, useProfileEditor } from './business-profile-query'
 import {
   IconDeviceFloppy,
   IconDownload,
@@ -67,28 +48,6 @@ function ProfileInput({
   return (
     <FormInput {...props} maxLength={maxLength} hint={inputHint || undefined} />
   )
-}
-
-function getProfileErrors(profile: BusinessProfileDraft) {
-  const result = businessProfileSchema.safeParse(profile)
-  if (result.success) return {}
-
-  return Object.fromEntries(
-    result.error.issues.map((issue) => [String(issue.path[0]), issue.message]),
-  ) as Partial<Record<ProfileFieldName, string>>
-}
-
-function downloadBackup(contents: string) {
-  const url = URL.createObjectURL(
-    new Blob([contents], { type: 'application/json' }),
-  )
-  const link = document.createElement('a')
-  link.href = url
-  link.download = m.profile_backup_filename()
-  document.body.append(link)
-  link.click()
-  link.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 export default function BusinessProfilePage() {
@@ -140,140 +99,27 @@ function ProfileEditor({
   profile: BusinessProfileDraft | null
   retryProfileRead: () => Promise<boolean>
 }) {
-  // Query refreshes update saved-profile actions, never this tab's working form.
-  const [initialProfile] = useState(profile ?? emptyBusinessProfile)
-  const savedBaseline = useRef(initialProfile)
-  const [resetGeneration] = useState(getApplicationResetGeneration)
-  const saveMutation = useSaveBusinessProfile(resetGeneration)
-  const deleteMutation = useDeleteBusinessProfile(resetGeneration)
-  const storageError = useSelector(
-    businessProfileStorageStatus,
-    (state) => state.error,
-  )
-  const [storageDialogOpen, setStorageDialogOpen] = useState(false)
-  const [retryingStorage, setRetryingStorage] = useState(false)
+  const {
+    form,
+    saveMutation,
+    deleteMutation,
+    storageError,
+    storageDialogOpen,
+    setStorageDialogOpen,
+    retryingStorage,
+    recoverStorage,
+    exportProfile,
+    importProfile,
+    deleteProfile,
+    changeProfileField,
+    getProfileErrors,
+    taxIdentifiersMissing,
+    needsImportConfirmation,
+    isValidProfile,
+    savedReady,
+  } = useProfileEditor(profile, retryProfileRead)
   const [pendingImport, setPendingImport] = useState<File | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-
-  useProfileStorageSync()
-
-  useEffect(() => {
-    if (storageError) setStorageDialogOpen(true)
-  }, [storageError])
-
-  const form = useForm({
-    defaultValues: initialProfile,
-    onSubmit: async ({ value }) => {
-      if (!businessProfileSchema.safeParse(value).success) return
-
-      try {
-        await saveMutation.mutateAsync(value)
-      } catch {
-        toast.add({
-          title: m.profile_save_failed(),
-          type: 'error',
-        })
-        return
-      }
-
-      if (resetGeneration !== getApplicationResetGeneration()) return
-      savedBaseline.current = { ...value }
-      updateUnsavedChanges()
-      toast.add({ title: m.profile_saved(), type: 'success' })
-    },
-  })
-
-  const updateUnsavedChanges = useCallback(() => {
-    setUnsavedProfileChanges(
-      Object.keys(savedBaseline.current).some(
-        (name) =>
-          form.state.values[name as ProfileFieldName] !==
-          savedBaseline.current[name as ProfileFieldName],
-      ),
-    )
-  }, [form])
-
-  useEffect(() => {
-    updateUnsavedChanges()
-    const subscription = form.store.subscribe(updateUnsavedChanges)
-    const unregisterDiscard = registerProfileDiscardHandler(() => {
-      form.reset(savedBaseline.current, { keepDefaultValues: true })
-      setUnsavedProfileChanges(false)
-    })
-    return () => {
-      subscription.unsubscribe()
-      unregisterDiscard()
-      setUnsavedProfileChanges(false)
-    }
-  }, [form, updateUnsavedChanges])
-
-  const changeProfileField = (name: ProfileFieldName, value: string) => {
-    form.setFieldValue(name, value)
-  }
-
-  async function recoverStorage() {
-    setRetryingStorage(true)
-    try {
-      if (await retryProfileRead()) setStorageDialogOpen(false)
-    } finally {
-      setRetryingStorage(false)
-    }
-  }
-
-  async function exportProfile() {
-    try {
-      const contents =
-        await createBrowserBusinessProfileRepository().exportProfile()
-      downloadBackup(contents)
-      toast.add({
-        title: m.profile_backup_created(),
-        description: m.profile_backup_sensitive(),
-        type: 'success',
-      })
-    } catch {
-      toast.add({
-        title: m.profile_backup_export_failed(),
-        type: 'error',
-      })
-    }
-  }
-
-  async function importProfile(file: File) {
-    try {
-      const imported = parseBusinessProfileBackup(await file.text())
-      form.reset(imported, { keepDefaultValues: true })
-      toast.add({
-        title: m.profile_backup_loaded(),
-        type: 'success',
-      })
-    } catch (error) {
-      toast.add({
-        title: m.profile_backup_import_failed(),
-        description: error instanceof Error ? error.message : undefined,
-        type: 'error',
-      })
-    }
-  }
-
-  async function deleteProfile() {
-    try {
-      await deleteMutation.mutateAsync()
-      if (resetGeneration !== getApplicationResetGeneration()) return
-      savedBaseline.current = emptyBusinessProfile
-      form.reset(emptyBusinessProfile, { keepDefaultValues: true })
-      updateUnsavedChanges()
-      toast.add({
-        title: m.profile_deleted(),
-        description: m.profile_deleted_draft_retained(),
-        type: 'success',
-      })
-    } catch {
-      toast.add({
-        title: m.profile_delete_failed(),
-        type: 'error',
-      })
-    }
-  }
 
   return (
     <section className="flex min-w-0 flex-col gap-6">
@@ -302,9 +148,7 @@ function ProfileEditor({
               <form.Subscribe
                 selector={(state) => ({
                   errors: getProfileErrors(state.values),
-                  taxIdentifiersMissing:
-                    !state.values.vatId.trim() &&
-                    !state.values.taxNumber.trim(),
+                  taxIdentifiersMissing: taxIdentifiersMissing(state.values),
                   taxIdentifiersTouched: Boolean(
                     state.fieldMeta.vatId?.isTouched ||
                     state.fieldMeta.taxNumber?.isTouched,
@@ -558,9 +402,7 @@ function ProfileEditor({
 
             <div className="mt-6 flex flex-wrap gap-3">
               <form.Subscribe
-                selector={(state) =>
-                  businessProfileSchema.safeParse(state.values).success
-                }
+                selector={(state) => isValidProfile(state.values)}
               >
                 {(valid) => (
                   <Button
@@ -572,7 +414,7 @@ function ProfileEditor({
                   </Button>
                 )}
               </form.Subscribe>
-              {businessProfileSchema.safeParse(profile).success && (
+              {savedReady && (
                 <Link
                   to="/invoice"
                   className={buttonVariants({ variant: 'outline' })}
@@ -614,10 +456,7 @@ function ProfileEditor({
                 const file = event.currentTarget.files?.[0]
                 event.currentTarget.value = ''
                 if (!file) return
-                if (
-                  profile ||
-                  Object.values(form.state.values).some((value) => value.trim())
-                ) {
+                if (needsImportConfirmation()) {
                   setPendingImport(file)
                 } else {
                   void importProfile(file)
@@ -730,11 +569,7 @@ function ProfileEditor({
             >
               {m.profile_storage_retry_read()}
             </Button>
-            <form.Subscribe
-              selector={(state) =>
-                businessProfileSchema.safeParse(state.values).success
-              }
-            >
+            <form.Subscribe selector={(state) => isValidProfile(state.values)}>
               {(valid) =>
                 valid && (
                   <AlertDialogAction

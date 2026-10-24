@@ -49,7 +49,6 @@ import {
   RequiredMark,
 } from './FormFields'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { businessProfileSchema } from './business-profile'
 import type { BusinessProfileDraft } from './business-profile'
 import {
   useBusinessProfile,
@@ -427,12 +426,9 @@ function InvoicePage() {
   )
   const [profileChanged, setProfileChanged] = useState(false)
   useProfileStorageSync(() => setProfileChanged(true))
-  const profile = profileQuery.data
-  const profileValidation = profile
-    ? businessProfileSchema.safeParse(profile)
+  const validProfile = profileQuery.readiness.ready
+    ? profileQuery.readiness.profile
     : null
-  const validProfile =
-    profileValidation?.success === true ? profileValidation.data : null
 
   useEffect(() => {
     if (!profileQuery.isFetching && profileChanged) setProfileChanged(false)
