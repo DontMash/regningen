@@ -13,14 +13,12 @@ import type {
 import type { CliFlags, Flags } from 'lighthouse'
 import type { PlaywrightRobots } from './playwright'
 import type { Metrics } from './vitals-metrics'
-import type { VitalsSummary } from './vitals-reporter'
 import { createRobotsForPage } from './playwright'
 import { coldNavigation } from './vitals-browser'
 import {
   budgetViolations,
-  median,
-  measurementProgress,
   metricsFromReport,
+  summarizeVitals,
 } from './vitals-metrics'
 
 const categories = ['performance', 'accessibility', 'best-practices', 'seo']
@@ -29,6 +27,7 @@ type Device = 'mobile' | 'desktop'
 type AuditPage = PlaywrightRobots & { page: Page }
 type AuditOptions = {
   path: string
+  expectedNoindex: boolean
   budgets: Record<Device, Metrics> | undefined
   prepare: (screen: AuditPage) => Promise<void>
   verify: (screen: AuditPage) => Promise<void>
@@ -40,7 +39,13 @@ class PageVitals {
     private readonly info: TestInfo,
   ) {}
 
-  async audit({ path, budgets, prepare, verify }: AuditOptions) {
+  async audit({
+    path,
+    expectedNoindex,
+    budgets,
+    prepare,
+    verify,
+  }: AuditOptions) {
     const device = this.info.project.name
     if (device !== 'mobile' && device !== 'desktop')
       throw new Error(`Unknown Lighthouse device: ${device}`)
@@ -163,26 +168,19 @@ class PageVitals {
         })
       }
     } finally {
-      const progress = measurementProgress(measurements)
-      metrics = progress.metrics
+      const summary = summarizeVitals({
+        page: this.info.title,
+        path,
+        device,
+        calibration,
+        measurements,
+        scores,
+        budget: budget ?? null,
+        expectedNoindex,
+      })
+      metrics = summary.metrics
       await this.info.attach('vitals-summary', {
-        body: JSON.stringify({
-          page: this.info.title,
-          path,
-          device,
-          calibration,
-          ...progress,
-          scores: metrics
-            ? Object.fromEntries(
-                Object.entries(scores).map(([key, values]) => [
-                  key,
-                  median(values),
-                ]),
-              )
-            : null,
-          budget: budget ?? null,
-          expectedNoindex: path !== '/',
-        } satisfies VitalsSummary),
+        body: JSON.stringify(summary),
         contentType: 'application/json',
       })
     }

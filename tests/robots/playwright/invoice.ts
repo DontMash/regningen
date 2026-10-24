@@ -181,7 +181,52 @@ export class InvoiceRobot {
   }
 
   async openDatePicker() {
-    await this.page.getByRole('button', { name: /^Datum/ }).click()
+    await this.datePickerTrigger().click()
+  }
+
+  async openDatePickerWithKeyboard() {
+    await this.datePickerTrigger().focus()
+    await this.page.keyboard.press('Enter')
+  }
+
+  async pressCalendarKey(
+    key:
+      | 'ArrowLeft'
+      | 'ArrowRight'
+      | 'ArrowUp'
+      | 'ArrowDown'
+      | 'Enter'
+      | 'Escape'
+      | 'Tab'
+      | 'Shift+Tab',
+  ) {
+    await this.page.keyboard.press(key)
+  }
+
+  async expectFocusedCalendarDate(label: string) {
+    await expect(
+      this.page
+        .getByRole('grid')
+        .getByRole('button', { name: label, exact: true }),
+    ).toBeFocused()
+  }
+
+  async navigateCalendarMonthWithKeyboard(direction: 'previous' | 'next') {
+    const name =
+      direction === 'next'
+        ? /^(Nächster Monat|Next month)$/
+        : /^(Vorheriger Monat|Previous month)$/
+    await this.page.getByRole('button', { name }).focus()
+    await this.page.keyboard.press('Enter')
+  }
+
+  async expectDatePickerDismissedWithTriggerFocused() {
+    await expect(this.page.getByRole('grid')).toHaveCount(0)
+    await expect(this.datePickerTrigger()).toBeFocused()
+  }
+
+  private datePickerTrigger() {
+    return this.page.getByRole('button', { name: /^(Datum|Date)/ })
   }
 
   async expectDatePickerOpen() {
@@ -197,7 +242,7 @@ export class InvoiceRobot {
     await days.nth(1).click()
   }
 
-  async chooseInvoiceDate(isoDate: string) {
+  async chooseInvoiceDate(isoDate: string, locale: 'de' | 'en' = 'de') {
     const target = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate)
     if (!target)
       throw new Error(`Invoice date must be ISO formatted: ${isoDate}`)
@@ -206,7 +251,7 @@ export class InvoiceRobot {
     const month = Number(monthText)
     const day = Number(dayText)
     const visibleDate = await this.readSelectedDate()
-    const current = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(visibleDate.trim())
+    const current = /^(\d{2})[./](\d{2})[./](\d{4})$/.exec(visibleDate.trim())
     if (!current)
       throw new Error(`Unexpected selected invoice date: ${visibleDate}`)
     const currentMonth = Number(current[3]) * 12 + Number(current[2]) - 1
@@ -223,7 +268,7 @@ export class InvoiceRobot {
         .click()
     }
     const localeDate = new Date(year, month - 1, day).toLocaleDateString(
-      'de-DE',
+      locale === 'de' ? 'de-DE' : 'en-GB',
     )
     await this.page
       .locator(`[data-slot="calendar"] button[data-day="${localeDate}"]`)
@@ -231,13 +276,11 @@ export class InvoiceRobot {
   }
 
   async readSelectedDate() {
-    return this.page.getByRole('button', { name: /^Datum/ }).innerText()
+    return this.datePickerTrigger().innerText()
   }
 
   async expectDateLabelMatches(pattern: RegExp) {
-    await expect(
-      this.page.getByRole('button', { name: /^Datum/ }),
-    ).toContainText(pattern)
+    await expect(this.datePickerTrigger()).toContainText(pattern)
   }
 
   async expectInvoiceNumber(number: string) {
@@ -252,15 +295,15 @@ export class InvoiceRobot {
     await expect(this.recipientControl(field)).toHaveValue(value)
   }
 
-  async expectSelectedDate(isoDate: string) {
+  async expectSelectedDate(isoDate: string, locale: 'de' | 'en' = 'de') {
     const [year, month, day] = isoDate.split('-').map(Number)
     const expectedDate = new Date(year, month - 1, day).toLocaleDateString(
-      'de-DE',
+      locale === 'de' ? 'de-DE' : 'en-GB',
       { day: '2-digit', month: '2-digit', year: 'numeric' },
     )
-    await expect(
-      this.page.getByRole('button', { name: /^Datum/ }),
-    ).toContainText(expectedDate)
+    await expect(this.datePickerTrigger()).toContainText(
+      new RegExp(expectedDate.split(/[./]/).join('[./]')),
+    )
   }
 
   async expectVatRate(rate: 7 | 19) {

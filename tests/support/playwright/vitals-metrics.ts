@@ -1,5 +1,40 @@
 export type Metrics = { lcp: number; cls: number; tbt: number }
 
+export type VitalsSummary = {
+  page: string
+  path: string
+  device: 'mobile' | 'desktop'
+  calibration: boolean
+  measurements: Metrics[]
+  metrics: Metrics | null
+  scores: Record<string, number> | null
+  completedRepetitions: number[]
+  missingRepetitions: number[]
+  budget: Metrics | null
+  /** Test-owned visibility policy; never inferred from the route or Lighthouse scores. */
+  expectedNoindex: boolean
+}
+
+/** Aggregate verified measurements for the overview without altering raw reports. */
+export function summarizeVitals({
+  scores,
+  ...input
+}: Omit<
+  VitalsSummary,
+  'metrics' | 'scores' | 'completedRepetitions' | 'missingRepetitions'
+> & { scores: Record<string, number[]> }): VitalsSummary {
+  const progress = measurementProgress(input.measurements)
+  return {
+    ...input,
+    ...progress,
+    scores: progress.metrics
+      ? Object.fromEntries(
+          Object.entries(scores).map(([key, values]) => [key, median(values)]),
+        )
+      : null,
+  }
+}
+
 export function metricsFromReport(report: {
   audits: Partial<
     Record<

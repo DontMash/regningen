@@ -172,6 +172,91 @@ for (const width of [375, 1024]) {
   }
 }
 
+for (const locale of ['de', 'en'] as const) {
+  for (const width of [375, 1024]) {
+    test(`keyboard date navigation moves actual focus and restores editing in ${locale} at ${width}px`, async ({
+      harness,
+      releaseNotes,
+      businessProfile,
+      invoice,
+    }) => {
+      await harness.setViewport(width, 900)
+      await harness.open(
+        locale === 'de' ? '/de/einstellungen/profil' : '/en/settings/profile',
+      )
+      await releaseNotes.dismissReleaseNotes()
+      await establishBusinessProfile(businessProfile)
+      await businessProfile.expectProfileSaved()
+      await harness.open(locale === 'de' ? '/de/rechnung' : '/en/invoice')
+      await releaseNotes.dismissReleaseNotes()
+      await invoice.expectReady(locale)
+      await invoice.chooseInvoiceDate('2026-06-24', locale)
+      await invoice.openDatePickerWithKeyboard()
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de'
+          ? 'Mittwoch, 24. Juni 2026, ausgewählt'
+          : 'Wednesday, 24 June 2026, selected',
+      )
+      await invoice.pressCalendarKey('ArrowDown')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de' ? 'Mittwoch, 1. Juli 2026' : 'Wednesday, 1 July 2026',
+      )
+      await invoice.pressCalendarKey('ArrowLeft')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de' ? 'Dienstag, 30. Juni 2026' : 'Tuesday, 30 June 2026',
+      )
+      await invoice.pressCalendarKey('ArrowUp')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de' ? 'Dienstag, 23. Juni 2026' : 'Tuesday, 23 June 2026',
+      )
+      await invoice.pressCalendarKey('ArrowRight')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de'
+          ? 'Mittwoch, 24. Juni 2026, ausgewählt'
+          : 'Wednesday, 24 June 2026, selected',
+      )
+      await invoice.pressCalendarKey('ArrowDown')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de' ? 'Mittwoch, 1. Juli 2026' : 'Wednesday, 1 July 2026',
+      )
+      await invoice.pressCalendarKey('Enter')
+      await invoice.expectSelectedDate('2026-07-01')
+      await invoice.expectDatePickerDismissedWithTriggerFocused()
+      await invoice.openDatePickerWithKeyboard()
+      await invoice.pressCalendarKey('ArrowRight')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de' ? 'Donnerstag, 2. Juli 2026' : 'Thursday, 2 July 2026',
+      )
+      await invoice.pressCalendarKey('Escape')
+      await invoice.expectDatePickerDismissedWithTriggerFocused()
+      await invoice.expectSelectedDate('2026-07-01')
+      await invoice.openDatePickerWithKeyboard()
+      await invoice.navigateCalendarMonthWithKeyboard('next')
+      await invoice.pressCalendarKey('Tab')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de' ? 'Samstag, 1. August 2026' : 'Saturday, 1 August 2026',
+      )
+      await invoice.pressCalendarKey('ArrowRight')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de' ? 'Sonntag, 2. August 2026' : 'Sunday, 2 August 2026',
+      )
+      await invoice.pressCalendarKey('Enter')
+      await invoice.expectSelectedDate('2026-08-02')
+      await invoice.expectDatePickerDismissedWithTriggerFocused()
+      await invoice.openDatePickerWithKeyboard()
+      await invoice.navigateCalendarMonthWithKeyboard('previous')
+      await invoice.pressCalendarKey('Tab')
+      await invoice.pressCalendarKey('Tab')
+      await invoice.expectFocusedCalendarDate(
+        locale === 'de' ? 'Mittwoch, 1. Juli 2026' : 'Wednesday, 1 July 2026',
+      )
+      await invoice.pressCalendarKey('Enter')
+      await invoice.expectSelectedDate('2026-07-01')
+      await invoice.expectDatePickerDismissedWithTriggerFocused()
+    })
+  }
+}
+
 test('submits new positions with Enter without downloading or validating the invoice form', async ({
   harness,
   appShell,
