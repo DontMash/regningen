@@ -95,15 +95,55 @@ export class BusinessProfileRobot {
       .click()
   }
 
+  async openIbanGuidanceWithKeyboard() {
+    await this.focusField('mobile')
+    await this.page.keyboard.press('Tab')
+    await this.page.keyboard.press('Enter')
+  }
+
+  async expectAccessibleIbanGuidance(locale: 'de' | 'en') {
+    const guidance =
+      locale === 'de'
+        ? 'Die IBAN muss gültig sein. Leerzeichen sind erlaubt. Maximal 42 Zeichen.'
+        : 'The IBAN must be valid. Spaces are allowed. Maximum 42 characters.'
+    const popup = this.page.getByRole('dialog', { name: 'IBAN', exact: true })
+    await expect(popup).toHaveAccessibleDescription(guidance)
+    await expect(popup.getByText(guidance, { exact: true })).toBeVisible()
+    await expect(
+      this.page.getByRole('textbox', { name: 'IBAN', exact: true }),
+    ).toHaveAccessibleDescription(new RegExp(guidance.replaceAll('.', '\\.')))
+  }
+
+  async expectIbanFeedbackAssociated(locale: 'de' | 'en') {
+    await expect(
+      this.page.getByRole('textbox', { name: 'IBAN', exact: true }),
+    ).toHaveAccessibleDescription(
+      locale === 'de'
+        ? 'Die IBAN muss gültig sein. Leerzeichen sind erlaubt. Maximal 42 Zeichen. Bitte eine gültige IBAN eingeben.'
+        : 'The IBAN must be valid. Spaces are allowed. Maximum 42 characters. Please enter a valid IBAN.',
+    )
+  }
+
+  async dismissIbanGuidanceAndContinue(value: string) {
+    await this.page.keyboard.press('Escape')
+    await expect(
+      this.page.getByRole('button', {
+        name: /^(Hinweis zu IBAN|Hint for IBAN)$/,
+      }),
+    ).toBeFocused()
+    await this.page.keyboard.press('Tab')
+    await this.page.keyboard.type(value)
+  }
+
   async openIbanGuidance() {
     await this.page.getByRole('button', { name: 'Hinweis zu IBAN' }).click()
   }
 
   async expectIbanGuidance() {
     await expect(
-      this.page.getByText(
-        'Die IBAN muss gültig sein. Leerzeichen sind erlaubt.',
-      ),
+      this.page
+        .getByRole('dialog', { name: 'IBAN', exact: true })
+        .getByText('Die IBAN muss gültig sein. Leerzeichen sind erlaubt.'),
     ).toBeVisible()
   }
 

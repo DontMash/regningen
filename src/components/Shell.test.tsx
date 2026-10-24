@@ -135,12 +135,18 @@ describe('application shell', () => {
       </FieldHint>,
     )
 
-    await user.click(
-      screen.getByRole('button', { name: 'Hint for Business name' }),
+    const trigger = screen.getByRole('button', {
+      name: 'Hint for Business name',
+    })
+    await user.tab()
+    expect(trigger).toHaveFocus()
+    await user.keyboard('{Enter}')
+    const hint = await screen.findByRole('dialog', { name: 'Business name' })
+    expect(hint).toHaveAccessibleDescription(
+      'Use the registered business name.',
     )
-    expect(
-      await screen.findByText('Use the registered business name.'),
-    ).toBeVisible()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(trigger).toHaveFocus())
   })
 
   it('provides English desktop and mobile navigation without translating the saved business name', async () => {

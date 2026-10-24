@@ -127,6 +127,50 @@ export class InvoiceRobot {
       await this.control('new position amount').fill(position.amount)
   }
 
+  async openAmountGuidanceWithKeyboard() {
+    await this.control('new position description').focus()
+    await this.page.keyboard.press('Tab')
+    await this.page.keyboard.press('Space')
+  }
+
+  async expectAccessibleAmountGuidance(locale: 'de' | 'en') {
+    const guidance =
+      locale === 'de'
+        ? 'Positiver Bruttopreis in Euro, z. B. 107,00.'
+        : 'Positive gross amount in euros, e.g. 107.00.'
+    const popup = this.page.getByRole('dialog', {
+      name: /^(Brutto in Euro|Gross amount in euros)$/,
+    })
+    await expect(popup).toHaveAccessibleDescription(guidance)
+    await expect(popup.getByText(guidance, { exact: true })).toBeVisible()
+    await expect(
+      this.control('new position amount'),
+    ).toHaveAccessibleDescription(guidance)
+  }
+
+  async dismissAmountGuidanceAndContinue(value: string) {
+    await this.page.keyboard.press('Escape')
+    await expect(
+      this.page
+        .getByRole('button', {
+          name: /^(Hinweis zu Brutto in Euro|Hint for Gross amount in euros)$/,
+        })
+        .last(),
+    ).toBeFocused()
+    await this.page.keyboard.press('Tab')
+    await this.page.keyboard.type(value)
+  }
+
+  async expectPositionAmountGuidance(position: number, locale: 'de' | 'en') {
+    await expect(
+      this.positionControl(position, 'amount'),
+    ).toHaveAccessibleDescription(
+      locale === 'de'
+        ? 'Positiver Bruttopreis in Euro, z. B. 107,00.'
+        : 'Positive gross amount in euros, e.g. 107.00.',
+    )
+  }
+
   async blurNewPositionAmount() {
     await this.control('new position amount').blur()
   }

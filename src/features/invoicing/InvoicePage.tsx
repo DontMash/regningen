@@ -141,13 +141,25 @@ function InvoiceAmountInput({
       <InvoiceInput
         {...props}
         value={value}
-        aria-description={sourceHint}
+        aria-describedby={
+          [
+            props['aria-describedby'],
+            sourceHint ? `${props.id}-source-hint` : undefined,
+          ]
+            .filter(Boolean)
+            .join(' ') || undefined
+        }
         onChange={(amount) =>
           onChange(amount, amount.trim() ? entryLocale : locale)
         }
       />
       {sourceHint ? (
-        <p className="paragraph-small text-muted-foreground">{sourceHint}</p>
+        <p
+          id={`${props.id}-source-hint`}
+          className="paragraph-small text-muted-foreground"
+        >
+          {sourceHint}
+        </p>
       ) : null}
     </div>
   )
@@ -208,6 +220,7 @@ function AmountCell({
   return (
     <InvoiceAmountInput
       id={`item-amount-${index}`}
+      aria-describedby="invoice-position-amount-hint"
       label={m.invoice_position_amount({ position: index + 1 })}
       hideLabel
       required={invoiceEditorState.hasPositionData(item)}
@@ -260,7 +273,7 @@ const invoicePositionColumns: ColumnDef<{}, InvoiceLineDraft>[] = [
       <div className="flex items-center gap-1">
         {m.invoice_amount()}
         <RequiredMark />
-        <FieldHint label={m.invoice_amount()}>
+        <FieldHint id="invoice-position-amount-hint" label={m.invoice_amount()}>
           {m.invoice_amount_hint()}
         </FieldHint>
       </div>

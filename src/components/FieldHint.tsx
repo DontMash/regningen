@@ -11,13 +11,21 @@ import {
 
 export function FieldHint({
   label,
+  id,
   children,
 }: {
   label: string
+  /** Stable description target for the field, available even while closed. */
+  id?: string
   children: React.ReactNode
 }) {
   return (
     <Popover>
+      {id && (
+        <span id={id} hidden>
+          {children}
+        </span>
+      )}
       <PopoverTrigger
         render={
           <Button
@@ -25,15 +33,21 @@ export function FieldHint({
             variant="ghost"
             size="icon-xs"
             aria-label={m.shell_field_hint({ label })}
-            tabIndex={-1}
           />
         }
       >
         <IconInfoCircle aria-hidden="true" data-icon="inline-start" />
       </PopoverTrigger>
-      <PopoverContent>
+      <PopoverContent {...(id ? { 'aria-describedby': id } : {})}>
         <PopoverTitle className="sr-only">{label}</PopoverTitle>
-        <PopoverDescription>{children}</PopoverDescription>
+        {/* The stable description supplies the announcement; this copy is visual only. */}
+        {id ? (
+          <p className="text-muted-foreground" aria-hidden="true">
+            {children}
+          </p>
+        ) : (
+          <PopoverDescription>{children}</PopoverDescription>
+        )}
       </PopoverContent>
     </Popover>
   )

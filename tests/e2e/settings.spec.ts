@@ -3,6 +3,38 @@ import { createBusinessProfileScenario } from '../scenarios/business-profile'
 import { PwaBrowserCapabilities } from '../support/playwright/pwa-capabilities'
 import { expect, test } from '../support/playwright/playwright'
 
+for (const width of [320, 1280]) {
+  for (const locale of ['de', 'en'] as const) {
+    test(`reads profile guidance by keyboard and continues editing in ${locale} at ${width}px`, async ({
+      harness,
+      releaseNotes,
+      businessProfile,
+      language,
+    }) => {
+      await harness.setViewport(width, 900)
+      await harness.open('/settings/profile')
+      await releaseNotes.acknowledgeReleaseNotes()
+      if (locale === 'en') await language.changeInterfaceLanguage('en')
+      await businessProfile.openIbanGuidanceWithKeyboard()
+      await businessProfile.expectAccessibleIbanGuidance(locale)
+      await businessProfile.dismissIbanGuidanceAndContinue('invalid')
+      await businessProfile.expectFieldValue('iban', 'invalid')
+      await businessProfile.blurField('iban')
+      await businessProfile.expectValidationMessage(
+        locale === 'de'
+          ? 'Bitte eine gültige IBAN eingeben.'
+          : 'Please enter a valid IBAN.',
+      )
+      await businessProfile.expectIbanFeedbackAssociated(locale)
+      await businessProfile.openIbanGuidanceWithKeyboard()
+      await businessProfile.expectAccessibleIbanGuidance(locale)
+      await businessProfile.expectIbanFeedbackAssociated(locale)
+      await businessProfile.dismissIbanGuidanceAndContinue('')
+      await businessProfile.expectIbanFeedbackAssociated(locale)
+    })
+  }
+}
+
 test('opens all Settings destinations with one active link, normal history and localized license', async ({
   harness,
   appShell,

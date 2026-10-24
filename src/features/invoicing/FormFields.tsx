@@ -69,6 +69,7 @@ export function FormInput({
   hint,
   hideLabel = false,
   required = false,
+  'aria-describedby': externalDescription,
   ...inputProps
 }: Omit<ComponentProps<'input'>, 'id' | 'value' | 'onChange'> & {
   id: string
@@ -83,8 +84,10 @@ export function FormInput({
   const invalid = Boolean(error || alternative?.error)
   const describedBy =
     [
+      hint ? `${id}-hint` : undefined,
       error ? `${id}-error` : undefined,
       alternative?.error ? alternative.id : undefined,
+      externalDescription,
     ]
       .filter(Boolean)
       .join(' ') || undefined
@@ -101,8 +104,17 @@ export function FormInput({
             {label}
             {required && <RequiredMark />}
           </FieldLabel>
-          {hint && <FieldHint label={label}>{hint}</FieldHint>}
+          {hint && (
+            <FieldHint id={`${id}-hint`} label={label}>
+              {hint}
+            </FieldHint>
+          )}
         </div>
+      )}
+      {hideLabel && hint && (
+        <span id={`${id}-hint`} hidden>
+          {hint}
+        </span>
       )}
       <Input
         {...inputProps}
