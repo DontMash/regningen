@@ -270,6 +270,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
     await pwaBrowser.requestWorkerUpdate(pageA)
     await pwaA.expectUpdateAvailable()
     await pwaA.postponeUpdate()
+    await pwaA.expectUpdateDiscoverable()
     await pwaA.expectUpdateClosed()
     await pwaA.expectRunningVersion(releaseA)
     await expect(pageA).toHaveURL(
@@ -284,6 +285,7 @@ test('generated production workers prepare offline routes and prompt for same-ve
       controllerChanges: 0,
     })
     await pwaA.postponeUpdate()
+    await pwaA.expectUpdateDiscoverable()
     await profileA.expectFieldValue('businessName', 'Unsaved update in tab A')
     await pwaA.reopenUpdate()
 
@@ -504,6 +506,7 @@ test('a configuration-only rebuild refreshes offline visibility through the exis
     await controls.requestWorkerUpdate(page)
     await pwa.expectUpdateAvailable()
     await pwa.postponeUpdate()
+    await pwa.expectUpdateDiscoverable()
     await controls.setOffline(true)
     await page.reload()
     await landing.expectIntroduction()
@@ -645,6 +648,7 @@ test('unvisited license pages and accompanying notices stay available offline th
     await controls.requestWorkerUpdate(page)
     await pwa.expectUpdateAvailable()
     await pwa.postponeUpdate()
+    await pwa.expectUpdateDiscoverable()
     await pwa.expectUpdateClosed()
     expect(await settings.readProjectLicense()).toBe(projectLicense)
     expect(
@@ -656,6 +660,7 @@ test('unvisited license pages and accompanying notices stay available offline th
     // The waiting update remains available after localized navigation/reload.
     await pwa.expectUpdateAvailable()
     await pwa.postponeUpdate()
+    await pwa.expectUpdateDiscoverable()
     await pwa.expectUpdateClosed()
     await settings.expectLicensesPage('en')
     await settings.openProjectLicense()
@@ -671,6 +676,7 @@ test('unvisited license pages and accompanying notices stay available offline th
     await language.changeInterfaceLanguage('de')
     await pwa.expectUpdateAvailable()
     await pwa.postponeUpdate()
+    await pwa.expectUpdateDiscoverable()
     await pwa.expectUpdateClosed()
     await settings.expectLicensesPage('de')
 
