@@ -10,6 +10,7 @@ test('populated Invoice editor retains its per-tab Invoice Draft', async ({
   const example = createInvoiceScenario()
   await vitals.audit({
     path: '/de/rechnung',
+    expectedNoindex: true,
     budgets: budgets.invoice,
     prepare: async ({
       page,

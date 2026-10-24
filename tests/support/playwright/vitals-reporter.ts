@@ -7,21 +7,9 @@ import type {
   TestCase,
   TestResult,
 } from '@playwright/test/reporter'
-import type { Metrics } from './vitals-metrics'
+import type { VitalsSummary } from './vitals-metrics'
 
-export type VitalsSummary = {
-  page: string
-  path: string
-  device: 'mobile' | 'desktop'
-  calibration: boolean
-  measurements: Metrics[]
-  metrics: Metrics | null
-  scores: Record<string, number> | null
-  completedRepetitions: number[]
-  missingRepetitions: number[]
-  budget: Metrics | null
-  expectedNoindex: boolean
-}
+export type { VitalsSummary } from './vitals-metrics'
 
 /** Adds a suite overview to Playwright's existing report, not a second report UI. */
 export default class VitalsReporter implements Reporter {
