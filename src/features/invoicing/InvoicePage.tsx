@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ComponentProps } from 'react'
 import { cn } from 'cn'
 import { useTable } from '@tanstack/react-table'
@@ -318,6 +318,7 @@ function InvoiceDateField({
   error?: string
 }) {
   const [open, setOpen] = useState(false)
+  const calendarPopup = useRef<HTMLDivElement>(null)
   const [year, month, day] = value.split('-').map(Number)
   const candidate = /^\d{4}-\d{2}-\d{2}$/.test(value)
     ? new Date(year, month - 1, day)
@@ -354,8 +355,18 @@ function InvoiceDateField({
           <IconCalendar aria-hidden="true" data-icon="inline-start" />
           {selected ? formatDate(value) : value || m.invoice_choose_date()}
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent
+          ref={calendarPopup}
+          initialFocus={() =>
+            calendarPopup.current?.querySelector<HTMLButtonElement>(
+              'button[data-day][tabindex="0"]',
+            ) ?? true
+          }
+          className="w-auto p-0"
+          align="start"
+        >
           <Calendar
+            autoFocus
             mode="single"
             locale={getLocale() === 'en' ? enGB : de}
             labels={{
