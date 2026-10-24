@@ -213,10 +213,14 @@ export class BusinessProfileRobot {
     expect(identifiers.getByText(message)).toBeVisible()
     expect(
       identifiers.getByRole('textbox', { name: this.fieldLabels.vatId }),
-    ).toHaveAccessibleDescription(message)
+    ).toHaveAccessibleDescription(
+      /Umsatzsteuer-ID oder Steuernummer angeben\.$/,
+    )
     expect(
       identifiers.getByRole('textbox', { name: this.fieldLabels.taxNumber }),
-    ).toHaveAccessibleDescription(message)
+    ).toHaveAccessibleDescription(
+      /Umsatzsteuer-ID oder Steuernummer angeben\.$/,
+    )
   }
 
   async expectInvalidVatIdFeedback() {

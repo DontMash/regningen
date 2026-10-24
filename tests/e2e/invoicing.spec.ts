@@ -5,6 +5,35 @@ import { createInvoiceScenario } from '../scenarios/invoice'
 import { expect, test } from '../support/playwright/playwright'
 import type { PlaywrightRobots } from '../support/playwright/playwright'
 
+for (const width of [320, 1280]) {
+  for (const locale of ['de', 'en'] as const) {
+    test(`reads Invoice amount guidance by keyboard and continues editing in ${locale} at ${width}px`, async ({
+      harness,
+      releaseNotes,
+      businessProfile,
+      appShell,
+      invoice,
+      language,
+    }) => {
+      await harness.setViewport(width, 900)
+      await harness.open('/settings/profile')
+      await releaseNotes.acknowledgeReleaseNotes()
+      await businessProfile.configureBusinessProfile(
+        createBusinessProfileScenario(),
+      )
+      if (width < 1024) await appShell.openMenu()
+      await appShell.navigateToInvoice()
+      if (locale === 'en') await language.changeInterfaceLanguage('en')
+      await invoice.openAmountGuidanceWithKeyboard()
+      await invoice.expectAccessibleAmountGuidance(locale)
+      await invoice.dismissAmountGuidanceAndContinue('12')
+      await invoice.expectNewPositionValues({ description: '', amount: '12' })
+      await invoice.addPosition({ description: 'Service', amount: '12' })
+      await invoice.expectPositionAmountGuidance(1, locale)
+    })
+  }
+}
+
 async function establishBusinessProfile(
   businessProfile: PlaywrightRobots['businessProfile'],
   profile: BusinessProfileScenarioInput = createBusinessProfileScenario(),
