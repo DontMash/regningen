@@ -221,8 +221,28 @@ test('submits new positions with Enter without downloading or validating the inv
   )
   expect(downloads.snapshot()).toEqual([])
 
-  await invoice.enterNewPosition({ amount: 'invalid' })
-  await artifacts.captureDownload(() => invoice.createPdf())
+  await invoice.enterNewPosition({
+    description: 'Never added charge',
+    amount: 'invalid',
+  })
+  const download = await artifacts.captureDownload(() => invoice.createPdf())
+  const document = await artifacts.readPdf(download)
+  expect(document.pageCount).toBe(1)
+  for (const expectedText of [
+    'Catering',
+    'Reinigung',
+    'Service',
+    '182,00 €',
+    '170,09 €',
+    '11,91 €',
+  ]) {
+    expect(document.text).toContain(expectedText)
+  }
+  expect(document.text).not.toContain('Never added charge')
+  await invoice.expectNewPositionValues({
+    description: 'Never added charge',
+    amount: 'invalid',
+  })
   expect(downloads.snapshot()).toHaveLength(1)
   await invoice.expectValidationMessageAbsent(
     'Einen positiven Bruttopreis eingeben.',

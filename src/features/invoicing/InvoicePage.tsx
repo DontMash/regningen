@@ -74,9 +74,11 @@ import {
   invoiceFormSchema,
   parseEuroAmount,
 } from './invoice'
-import { createInvoicePdf } from './pdf'
-import { useOptionalPwa } from '@/features/pwa/PwaProvider'
-import { runPwaCriticalOperation } from '@/features/pwa/pwa-critical-operations'
+import type {
+  InvoiceGeneration,
+  InvoicePdfDownload,
+} from './generation-contract'
+import { useInvoiceGeneration } from './invoice-generation-state'
 import {
   IconCalendar,
   IconEdit,
@@ -117,24 +119,6 @@ function getInvoiceErrors(invoice: InvoiceDraft): InvoiceErrors {
   return Object.fromEntries(
     result.error.issues.map((issue) => [issue.path.join('.'), issue.message]),
   )
-}
-
-function suggestedPdfFilename(invoice: InvoiceDraft, locale: Locale) {
-  const safeNumber = invoice.number.replace(/[^a-zA-Z0-9_-]/g, '_')
-  return m.pdf_filename({ number: safeNumber, date: invoice.date }, { locale })
-}
-
-function savePdf(bytes: Uint8Array, filename: string) {
-  const url = URL.createObjectURL(
-    new Blob([bytes as BlobPart], { type: 'application/pdf' }),
-  )
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.append(link)
-  link.click()
-  link.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 function InvoiceInput(props: ComponentProps<typeof FormInput>) {
@@ -401,7 +385,15 @@ function InvoiceDateField({
   )
 }
 
-function InvoicePage() {
+type InvoiceGenerationDependencies = {
+  generation: InvoiceGeneration
+  downloadPdf: InvoicePdfDownload
+}
+
+function InvoicePage({
+  generation,
+  downloadPdf,
+}: InvoiceGenerationDependencies) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   const { initialized: draftInitialized } = useSelector(
@@ -477,6 +469,8 @@ function InvoicePage() {
       profile={validProfile}
       profileChanged={profileChanged}
       storageError={storageError}
+      generation={generation}
+      downloadPdf={downloadPdf}
     />
   )
 }
@@ -485,60 +479,34 @@ function InvoiceEditor({
   profile,
   profileChanged,
   storageError,
+  generation,
+  downloadPdf,
 }: {
   profile: BusinessProfileDraft | null
   profileChanged: boolean
   storageError: string | null
-}) {
+} & InvoiceGenerationDependencies) {
   const draft = useSelector(invoiceDraftStore, (state) => state)
   const draftPersistence = useSelector(
     invoiceDraftPersistenceStore,
     (state) => state,
   )
-  const pwa = useOptionalPwa()
+  const { generate, isGenerating } = useInvoiceGeneration(
+    generation,
+    downloadPdf,
+  )
   const [touched, setTouched] = useState<Set<string>>(() => new Set())
   const newItem = useSelector(invoicePositionDraftStore, (state) => state)
   const [newItemSubmitted, setNewItemSubmitted] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [blocker, setBlocker] = useState<
     'profile' | 'storage' | 'changed' | null
   >(!profile ? 'profile' : storageError ? 'storage' : null)
   const form = useForm({
     defaultValues: draft,
-    onSubmit: async ({ value }) => {
-      if (
-        Object.keys(getInvoiceErrors(value)).length ||
-        !profile ||
-        storageError ||
-        profileChanged
-      )
-        return
-
-      const invoiceLocale = getInvoiceLanguage()
-      setIsGenerating(true)
-      try {
-        await runPwaCriticalOperation(async () => {
-          const bytes = await createInvoicePdf(profile, value, invoiceLocale)
-          const filename = suggestedPdfFilename(value, invoiceLocale)
-          savePdf(bytes, filename)
-          toast.add({
-            title: m.invoice_pdf_created(),
-            description: m.invoice_pdf_downloaded(),
-            type: 'success',
-          })
-          void pwa?.reportPdfExport(filename)
-        })
-      } catch (error) {
-        toast.add({
-          title: m.invoice_pdf_failed(),
-          description:
-            error instanceof Error ? error.message : m.invoice_check_inputs(),
-          type: 'error',
-        })
-      } finally {
-        setIsGenerating(false)
-      }
+    onSubmit: async () => {
+      if (!profile || storageError || profileChanged) return
+      await generate(profile, invoiceDraftStore.state, getInvoiceLanguage())
     },
   })
 

@@ -15,6 +15,8 @@
   "pdf_iban": "IBAN:",
   "pdf_vat_id": "USt-IdNr.:",
   "pdf_tax_number": "Steuernummer:",
+  "pdf_error_unavailable": "PDF-Erstellung oder Download ist in diesem Browser nicht verfügbar.",
+  "pdf_error_unexpected": "Das PDF konnte wegen eines unerwarteten Fehlers nicht erstellt werden. Bitte erneut versuchen.",
   "pdf_error_business_name": "Der Unternehmensname ist zu lang für das PDF.",
   "pdf_error_service": "Die Leistungsbeschreibung ist zu lang für das PDF.",
   "pdf_error_addresses": "Die Anschriften sind zu umfangreich für eine Seite.",
