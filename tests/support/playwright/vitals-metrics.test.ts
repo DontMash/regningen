@@ -1,15 +1,193 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import type { Suite, TestCase, TestResult } from '@playwright/test/reporter'
+import VitalsReporter from './vitals-reporter'
 import {
   budgetFromBaseline,
   budgetViolations,
   medianMetrics,
   measurementProgress,
   metricsFromReport,
+  summarizeVitals,
 } from './vitals-metrics'
 
 describe('page performance measurements', () => {
+  it.each([
+    { path: '/de', expectedNoindex: false },
+    { path: '/en', expectedNoindex: false },
+    { path: '/de/rechnung', expectedNoindex: true },
+    { path: '/en/invoice', expectedNoindex: true },
+    { path: '/de/einstellungen', expectedNoindex: true },
+    { path: '/en/settings/profile', expectedNoindex: true },
+    { path: '/de/einstellungen/lizenzen', expectedNoindex: true },
+    { path: '/en/settings/licenses', expectedNoindex: true },
+    { path: '/another-public-page', expectedNoindex: false },
+  ])(
+    'annotates $path only as declared ($expectedNoindex), preserving scores and findings',
+    ({ path, expectedNoindex }) => {
+      const report = {
+        audits: {
+          'largest-contentful-paint': { numericValue: 1234 },
+          'cumulative-layout-shift': { numericValue: 0.03 },
+          'total-blocking-time': { numericValue: 45 },
+          'is-crawlable': {
+            score: 0,
+            scoreDisplayMode: 'binary',
+            title: 'Page is blocked from indexing',
+          },
+          'document-title': {
+            score: 0,
+            scoreDisplayMode: 'binary',
+            title: 'Document has no title',
+          },
+        },
+      }
+      const original = structuredClone(report)
+      const sample = metricsFromReport(report)
+      const scores = {
+        performance: [70, 80, 90],
+        accessibility: [95, 96, 97],
+        'best-practices': [90, 91, 92],
+        seo: [55, 60, 65],
+      }
+      const summary = summarizeVitals({
+        page: 'screen under audit',
+        path,
+        device: 'mobile',
+        calibration: false,
+        measurements: [sample, sample, sample],
+        scores,
+        budget: { lcp: 1500, cls: 0.05, tbt: 100 },
+        expectedNoindex,
+      })
+      expect(summary.expectedNoindex).toBe(expectedNoindex)
+      expect(summary.scores).toEqual({
+        performance: 80,
+        accessibility: 96,
+        'best-practices': 91,
+        seo: 60,
+      })
+      expect(summary.metrics).toEqual({ lcp: 1234, cls: 0.03, tbt: 45 })
+      expect(summary.completedRepetitions).toEqual([1, 2, 3])
+      expect(summary.missingRepetitions).toEqual([])
+      expect(report).toEqual(original)
+      expect(scores.seo).toEqual([55, 60, 65])
+    },
+  )
+
+  it('reports only declared private screens as expected noindex and retains raw report links', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'vitals-overview-'))
+    const cwd = process.cwd()
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      process.chdir(directory)
+      const reporter = new VitalsReporter()
+      const examples = [
+        { path: '/de', expectedNoindex: false },
+        { path: '/en', expectedNoindex: false },
+        { path: '/de/rechnung', expectedNoindex: true },
+        { path: '/en/settings/profile', expectedNoindex: true },
+        { path: '/en/settings/licenses', expectedNoindex: true },
+      ]
+      // Playwright supplies these objects; the fixture provides only reporter-consumed fields.
+      const tests = examples.map(({ path }) => ({
+        id: path,
+        title: path,
+        parent: { project: () => ({ name: 'mobile' }) },
+      })) as TestCase[]
+      reporter.onBegin({}, { allTests: () => tests } as Suite)
+      for (const [index, example] of examples.entries()) {
+        const summary = summarizeVitals({
+          page: example.path,
+          ...example,
+          device: 'mobile',
+          calibration: false,
+          measurements: Array.from({ length: 3 }, () => ({
+            lcp: 1000,
+            cls: 0.01,
+            tbt: 50,
+          })),
+          scores: {
+            performance: [80, 80, 80],
+            accessibility: [95, 95, 95],
+            'best-practices': [90, 90, 90],
+            seo: [60, 60, 60],
+          },
+          budget: { lcp: 1200, cls: 0.02, tbt: 100 },
+        })
+        // The external runner's timing/worker fields are irrelevant to the reporting contract.
+        reporter.onTestEnd(tests[index], {
+          status: 'passed',
+          attachments: [
+            {
+              name: 'vitals-summary',
+              body: Buffer.from(JSON.stringify(summary)),
+              contentType: 'application/json',
+            },
+            {
+              name: 'lighthouse-1.json',
+              path: `${example.path}/raw.json`,
+              contentType: 'application/json',
+            },
+          ],
+        } as TestResult)
+      }
+      await reporter.onEnd({
+        status: 'passed',
+        startTime: new Date(),
+        duration: 1,
+      })
+      const markdown = await readFile(
+        join(directory, '.vitals/overview.md'),
+        'utf8',
+      )
+      const overview = JSON.parse(
+        await readFile(join(directory, '.vitals/overview.json'), 'utf8'),
+      )
+      for (const { path, expectedNoindex } of examples) {
+        const row = markdown
+          .split('\n')
+          .find((line) => line.startsWith(`| [${path}]`))
+        expect(row).toContain('| 80 | 95 | 90 | 60')
+        expect(row?.includes('(expected noindex)')).toBe(expectedNoindex)
+        expect(
+          overview.rows.find((item: { test: string }) => item.test === path)
+            .reports,
+        ).toEqual([{ name: 'lighthouse-1.json', path: `${path}/raw.json` }])
+      }
+      expect(markdown).toContain(
+        'Measured **5/5 selected page/device tests**, three navigations each.',
+      )
+    } finally {
+      process.chdir(cwd)
+      output.mockRestore()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('retains verified partial samples without inventing a median for missing repetitions', () => {
     const samples = [{ lcp: 1000, cls: 0.01, tbt: 50 }]
+    expect(
+      summarizeVitals({
+        page: 'interrupted audit',
+        path: '/de',
+        device: 'desktop',
+        calibration: false,
+        expectedNoindex: false,
+        measurements: samples,
+        scores: { seo: [60] },
+        budget: null,
+      }),
+    ).toMatchObject({
+      metrics: null,
+      scores: null,
+      measurements: samples,
+      completedRepetitions: [1],
+      missingRepetitions: [2, 3],
+      expectedNoindex: false,
+    })
     expect(measurementProgress(samples)).toEqual({
       measurements: samples,
       metrics: null,

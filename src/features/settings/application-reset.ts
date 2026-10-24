@@ -3,7 +3,7 @@ import {
   INVOICE_LANGUAGE_KEY,
   resetInvoiceLanguage,
 } from '@/lib/invoice-language'
-import { clearInvoiceDraftForApplicationReset } from '../invoicing/invoice-draft-store'
+import { clearInvoiceDraftForApplicationReset } from '../invoicing/invoice-draft'
 import {
   runPwaCriticalOperation,
   waitForPwaCriticalOperations,

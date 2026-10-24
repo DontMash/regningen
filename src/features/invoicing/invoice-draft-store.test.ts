@@ -6,7 +6,7 @@ import { subscribeToApplicationReset } from '../settings/application-reset'
 import {
   createEmptyInvoiceDraft,
   disposeInvoiceDraftPersistence,
-  initializeInvoiceDraftPersistence,
+  initializeInvoiceDraftPersistence as initializeWithPersistence,
   invoiceDraftPersistenceStore,
   invoiceDraftStore,
   invoicePositionDraftStore,
@@ -14,6 +14,9 @@ import {
   clearStoredInvoiceDraft,
   waitForInvoiceDraftPersistence,
 } from './invoice-draft-store'
+
+import { initializeInvoiceDraftPersistence } from './invoice-draft'
+import { createInvoiceDraftPersistence } from './invoice-draft-storage'
 
 const expectedEmptyDraft = {
   number: '',
@@ -90,6 +93,77 @@ describe('empty invoice drafts', () => {
 })
 
 describe('session-autosaved Invoice Drafts', () => {
+  it('finishes pending hydration before disposal and cannot restart autosaving afterward', async () => {
+    const storage = createSessionStorage({
+      'regningen.invoice-draft': storedDraft,
+    })
+    let releaseRead = () => {}
+    const blockedRead = new Promise<void>((resolve) => {
+      releaseRead = resolve
+    })
+    storage.getItem = async () => {
+      await blockedRead
+      return null
+    }
+    const initializing = initializeInvoiceDraftPersistence(storage)
+    let disposed = false
+    const disposing = disposeInvoiceDraftPersistence().then(() => {
+      disposed = true
+    })
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+    const disposedBeforeReadFinished = disposed
+    releaseRead()
+    await initializing
+    await disposing
+    expect(disposedBeforeReadFinished).toBe(false)
+    invoiceDraftStore.setState((draft) => ({
+      ...draft,
+      number: 'after disposal',
+    }))
+    expect(invoiceDraftPersistenceStore.state.initialized).toBe(false)
+    expect(await waitForInvoiceDraftPersistence()).toBe(true)
+    expect(storage.values.get('regningen.invoice-draft')).toEqual(storedDraft)
+  })
+
+  it('recovers failed hydration through the supplied storage when another tab resets', async () => {
+    const storage = createSessionStorage({
+      'regningen.invoice-draft': storedDraft,
+    })
+    let failedConnectionClosed = false
+    const failedConnection = {
+      ...storage,
+      async getItem() {
+        throw new Error('reading unavailable')
+      },
+      async dispose() {
+        failedConnectionClosed = true
+      },
+    }
+    await initializeWithPersistence(() =>
+      createInvoiceDraftPersistence(
+        failedConnectionClosed ? storage : failedConnection,
+      ),
+    )
+    expect(failedConnectionClosed).toBe(true)
+    expect(invoiceDraftPersistenceStore.state.error).toContain(
+      'reading unavailable',
+    )
+
+    localStorage.setItem(
+      'regningen.application-reset.generation',
+      'recovery-reset',
+    )
+    window.dispatchEvent(new Event('focus'))
+    await waitForInvoiceDraftPersistence()
+
+    expect(storage.values.has('regningen.invoice-draft')).toBe(false)
+    expect(storage.values.get('regningen.invoice-draft.reset-generation')).toBe(
+      'recovery-reset',
+    )
+    expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
+    expect(invoiceDraftPersistenceStore.state.saved).toBe(true)
+  })
+
   it('does not announce remote reset success when a missed reset is discovered by a write but local deletion fails', async () => {
     const storage = createSessionStorage({
       'regningen.invoice-draft': storedDraft,
@@ -355,6 +429,54 @@ describe('session-autosaved Invoice Drafts', () => {
     })
   })
 
+  it('drains an in-flight write before disposing the supplied connection', async () => {
+    const storage = createSessionStorage()
+    let releaseWrite = () => {}
+    let signalWrite = () => {}
+    const started = new Promise<void>((resolve) => {
+      signalWrite = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    let closed = false
+    const connection = {
+      ...storage,
+      async setItem(key: string, value: unknown) {
+        if (key === 'regningen.invoice-draft') {
+          signalWrite()
+          await blocked
+        }
+        if (closed) throw new Error('connection already disposed')
+        storage.values.set(key, value)
+      },
+      async dispose() {
+        closed = true
+      },
+    }
+    await initializeInvoiceDraftPersistence(connection)
+    invoiceDraftStore.setState((draft) => ({
+      ...draft,
+      number: 'pending work',
+    }))
+    await started
+    const disposing = disposeInvoiceDraftPersistence()
+    expect(closed).toBe(false)
+    releaseWrite()
+    await disposing
+    expect(closed).toBe(true)
+    expect(storage.values.get('regningen.invoice-draft')).toMatchObject({
+      invoice: { number: 'pending work' },
+    })
+    invoiceDraftStore.setState((draft) => ({
+      ...draft,
+      number: 'not autosaved',
+    }))
+    expect(storage.values.get('regningen.invoice-draft')).toMatchObject({
+      invoice: { number: 'pending work' },
+    })
+  })
+
   it('saves every edit as one current envelope without waiting for a debounce', async () => {
     const storage = createSessionStorage()
     await initializeInvoiceDraftPersistence(storage)
@@ -377,28 +499,38 @@ describe('session-autosaved Invoice Drafts', () => {
     })
   })
 
-  it('warns and starts empty for an unsupported envelope rather than guessing fields', async () => {
-    const storage = createSessionStorage({
-      'regningen.invoice-draft': {
-        ...storedDraft,
-        invoice: { ...storedDraft.invoice, town: 42 },
-      },
-    })
+  it.each([
+    { ...storedDraft, invoice: { ...storedDraft.invoice, town: 42 } },
+    { ...storedDraft, schemaVersion: 2 },
+    { ...storedDraft, newPosition: { description: '', amount: 42 } },
+    {
+      ...storedDraft,
+      newPosition: { description: '', amount: '', amountLocale: 'fr' },
+    },
+    { ...storedDraft, unexpected: true },
+    { schemaVersion: 1 },
+  ])(
+    'warns and starts empty for an unsupported envelope rather than guessing fields (%j)',
+    async (envelope) => {
+      const storage = createSessionStorage({
+        'regningen.invoice-draft': envelope,
+      })
 
-    await initializeInvoiceDraftPersistence(storage)
+      await initializeInvoiceDraftPersistence(storage)
 
-    expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
-    expect(invoicePositionDraftStore.state).toEqual({
-      description: '',
-      amount: '',
-    })
-    expect(invoiceDraftPersistenceStore.state).toMatchObject({
-      initialized: true,
-      saved: true,
-      error: expect.stringContaining('Entwurf'),
-    })
-    expect(storage.values.has('regningen.invoice-draft')).toBe(false)
-  })
+      expect(invoiceDraftStore.state).toEqual(expectedEmptyDraft)
+      expect(invoicePositionDraftStore.state).toEqual({
+        description: '',
+        amount: '',
+      })
+      expect(invoiceDraftPersistenceStore.state).toMatchObject({
+        initialized: true,
+        saved: true,
+        error: expect.stringContaining('Entwurf'),
+      })
+      expect(storage.values.has('regningen.invoice-draft')).toBe(false)
+    },
+  )
 
   it('keeps edits in memory and marks them unsaved when session persistence fails', async () => {
     const storage = createSessionStorage()

@@ -1,62 +1,21 @@
 import { Store } from '@tanstack/store'
-import { createStorage } from 'unstorage'
-import sessionStorageDriver from 'unstorage/drivers/session-storage'
 import type { InvoiceDraft, InvoiceLineDraft } from './invoice'
-import { z } from '@/lib/validation'
+import type {
+  InvoiceDraftEnvelope,
+  InvoiceDraftPersistence,
+  OpenInvoiceDraftPersistence,
+} from './invoice-draft-persistence'
 import * as m from '@/paraglide/messages'
 import {
   getApplicationResetGeneration,
   INITIAL_APPLICATION_RESET_GENERATION,
   subscribeToApplicationResetInvalidation,
-} from '../settings/reset-generation'
+} from '@/lib/application-reset-generation'
 
 export type { InvoiceDraft, InvoiceLineDraft } from './invoice'
 
-export const INVOICE_DRAFT_STORAGE_KEY = 'regningen.invoice-draft'
-const INVOICE_DRAFT_SCHEMA_VERSION = 1
-const INVOICE_DRAFT_RESET_STAMP_KEY = 'regningen.invoice-draft.reset-generation'
-
-const invoiceLineDraftSchema = z
-  .object({
-    description: z.string(),
-    amount: z.string(),
-    amountLocale: z.enum(['de', 'en']).optional(),
-  })
-  .strict()
-const invoiceDraftSchema = z
-  .object({
-    number: z.string(),
-    date: z.string(),
-    subject: z.string(),
-    company: z.string(),
-    name: z.string(),
-    street: z.string(),
-    postalCode: z.string(),
-    town: z.string(),
-    rate: z.union([z.literal(7), z.literal(19)]),
-    items: z.array(invoiceLineDraftSchema),
-  })
-  .strict()
-const invoiceDraftEnvelopeSchema = z
-  .object({
-    schemaVersion: z.literal(INVOICE_DRAFT_SCHEMA_VERSION),
-    invoice: invoiceDraftSchema,
-    newPosition: invoiceLineDraftSchema,
-  })
-  .strict()
-
-export interface InvoiceDraftEnvelope {
-  schemaVersion: typeof INVOICE_DRAFT_SCHEMA_VERSION
-  invoice: InvoiceDraft
-  newPosition: InvoiceLineDraft
-}
-
-export interface InvoiceDraftStorage {
-  getItem: (key: string) => Promise<unknown | null>
-  setItem: (key: string, value: unknown) => Promise<void>
-  removeItem: (key: string) => Promise<void>
-  dispose?: () => Promise<void>
-}
+export { INVOICE_DRAFT_STORAGE_KEY } from './invoice-draft-persistence'
+export type { InvoiceDraftEnvelope } from './invoice-draft-persistence'
 
 export interface InvoiceDraftPersistenceState {
   initialized: boolean
@@ -99,8 +58,8 @@ export const invoiceDraftPersistenceStore =
     error: null,
   })
 
-let storage: InvoiceDraftStorage | null = null
-let ownsStorage = false
+let storage: InvoiceDraftPersistence | null = null
+let openPersistence: OpenInvoiceDraftPersistence | null = null
 let initialization: Promise<void> | null = null
 let invoiceSubscription: { unsubscribe: () => void } | null = null
 let positionSubscription: { unsubscribe: () => void } | null = null
@@ -138,7 +97,7 @@ function syncBeforeUnloadWarning() {
 
 function createEnvelope(): InvoiceDraftEnvelope {
   return {
-    schemaVersion: INVOICE_DRAFT_SCHEMA_VERSION,
+    schemaVersion: 1,
     invoice: invoiceDraftStore.state,
     newPosition: invoicePositionDraftStore.state,
   }
@@ -180,7 +139,7 @@ function scheduleSave() {
       return
     }
     if (!storage) throw new Error(m.invoice_storage_unavailable())
-    await storage.setItem(INVOICE_DRAFT_RESET_STAMP_KEY, generation)
+    await storage.writeResetGeneration(generation)
     if (saveRevision !== revision) return
     if (generation !== getApplicationResetGeneration()) {
       void invalidateInvoiceDraft(getApplicationResetGeneration()).catch(
@@ -188,7 +147,7 @@ function scheduleSave() {
       )
       return
     }
-    await storage.setItem(INVOICE_DRAFT_STORAGE_KEY, envelope)
+    await storage.writeDraft(envelope)
     if (saveRevision !== revision) return
     if (generation !== getApplicationResetGeneration()) {
       void invalidateInvoiceDraft(getApplicationResetGeneration()).catch(
@@ -224,10 +183,11 @@ function subscribeToDraftChanges() {
  * then subscribes both working-state stores to immediate session persistence.
  */
 export function initializeInvoiceDraftPersistence(
-  suppliedStorage?: InvoiceDraftStorage,
+  open: OpenInvoiceDraftPersistence,
 ): Promise<void> {
   if (initialization) return initialization
 
+  openPersistence = open
   const initializationRevision = revision
   applicationResetGeneration = getApplicationResetGeneration()
   resetSubscription = subscribeToApplicationResetInvalidation(() => {
@@ -239,21 +199,9 @@ export function initializeInvoiceDraftPersistence(
   })
   initialization = (async () => {
     try {
-      if (suppliedStorage) {
-        storage = suppliedStorage
-      } else {
-        if (typeof window === 'undefined') {
-          throw new Error(m.invoice_storage_ssr())
-        }
-        const unstorage = createStorage({
-          driver: sessionStorageDriver({ window }),
-        })
-        storage = unstorage
-        ownsStorage = true
-      }
-
-      const encoded = await storage.getItem(INVOICE_DRAFT_STORAGE_KEY)
-      const stamp = await storage.getItem(INVOICE_DRAFT_RESET_STAMP_KEY)
+      storage = open()
+      const loaded = await storage.readDraft()
+      const stamp = await storage.readResetGeneration()
       if (initializationRevision !== revision) {
         setPersistenceState({ initialized: true })
         return
@@ -267,8 +215,8 @@ export function initializeInvoiceDraftPersistence(
       if (stale) {
         applicationResetGeneration = generation
         resetInvoiceDraft()
-        await storage.removeItem(INVOICE_DRAFT_STORAGE_KEY)
-        await storage.setItem(INVOICE_DRAFT_RESET_STAMP_KEY, generation)
+        await storage.clearDraft()
+        await storage.writeResetGeneration(generation)
         setPersistenceState({
           initialized: true,
           restored: false,
@@ -276,11 +224,10 @@ export function initializeInvoiceDraftPersistence(
           pending: false,
           error: null,
         })
-      } else if (encoded !== null) {
-        const parsed = invoiceDraftEnvelopeSchema.safeParse(encoded)
-        if (!parsed.success) {
+      } else if (loaded.status !== 'empty') {
+        if (loaded.status === 'invalid') {
           try {
-            await storage.removeItem(INVOICE_DRAFT_STORAGE_KEY)
+            await storage.clearDraft()
           } catch {
             // Never partially apply an unsupported draft, even if cleanup fails.
           }
@@ -292,8 +239,8 @@ export function initializeInvoiceDraftPersistence(
             error: m.invoice_storage_invalid(),
           })
         } else {
-          invoiceDraftStore.setState(() => parsed.data.invoice)
-          invoicePositionDraftStore.setState(() => parsed.data.newPosition)
+          invoiceDraftStore.setState(() => loaded.envelope.invoice)
+          invoicePositionDraftStore.setState(() => loaded.envelope.newPosition)
           setPersistenceState({
             initialized: true,
             restored: true,
@@ -312,9 +259,14 @@ export function initializeInvoiceDraftPersistence(
         })
       }
     } catch (error) {
-      if (ownsStorage) void storage?.dispose?.()
+      const failedStorage = storage
       storage = null
-      ownsStorage = false
+      // Cleanup must not obscure the hydration failure or skip recovery.
+      try {
+        await failedStorage?.dispose()
+      } catch (cleanupError) {
+        console.error('Invoice Draft connection cleanup failed.', cleanupError)
+      }
       setPersistenceState({
         initialized: true,
         restored: false,
@@ -352,7 +304,7 @@ export async function clearStoredInvoiceDraft() {
       throw new Error(m.invoice_storage_changed())
     }
     if (!storage) throw new Error(m.invoice_storage_unavailable())
-    await storage.removeItem(INVOICE_DRAFT_STORAGE_KEY)
+    await storage.clearDraft()
     if (clearRevision !== revision) {
       if (generation === getApplicationResetGeneration()) await scheduleSave()
       throw new Error(m.invoice_storage_changed())
@@ -385,16 +337,13 @@ function invalidateInvoiceDraft(generation: string): Promise<void> {
   const clearing = writes.then(async () => {
     await initialization
     if (!storage) {
-      if (typeof window === 'undefined') {
-        throw new Error(m.invoice_storage_unavailable())
-      }
-      // Reset must be retryable after a failed hydration, and needs deletion,
-      // not a readable or compatible saved envelope.
-      storage = createStorage({ driver: sessionStorageDriver({ window }) })
-      ownsStorage = true
+      if (!openPersistence) throw new Error(m.invoice_storage_unavailable())
+      // Reset needs deletion, not a readable envelope. Reopen through the same
+      // supplied capability even when initial hydration failed.
+      storage = openPersistence()
     }
-    await storage.removeItem(INVOICE_DRAFT_STORAGE_KEY)
-    await storage.setItem(INVOICE_DRAFT_RESET_STAMP_KEY, generation)
+    await storage.clearDraft()
+    await storage.writeResetGeneration(generation)
     if (resetRevision === revision) {
       resetInvoiceDraft()
       setPersistenceState({ saved: true, pending: false, error: null })
@@ -415,7 +364,7 @@ function invalidateInvoiceDraft(generation: string): Promise<void> {
 
 /** Application reset discards working inputs without autosaving an empty envelope. */
 export async function clearInvoiceDraftForApplicationReset(generation: string) {
-  await initializeInvoiceDraftPersistence()
+  await initialization
   await invalidateInvoiceDraft(generation)
 }
 
@@ -427,13 +376,18 @@ export async function disposeInvoiceDraftPersistence() {
   resetSubscription = null
   applicationResetting = false
   resetWork = null
+  await initialization
+  await writes
+  // Hydration installs subscriptions in its finally block, including when
+  // disposal invalidated its result. Remove those before releasing ownership.
+  clearSubscriptions()
   if (beforeUnloadAttached && typeof window !== 'undefined') {
     window.removeEventListener('beforeunload', onBeforeUnload)
     beforeUnloadAttached = false
   }
-  if (ownsStorage) await storage?.dispose?.()
+  await storage?.dispose()
   storage = null
-  ownsStorage = false
+  openPersistence = null
   initialization = null
   writes = Promise.resolve()
   invoiceDraftPersistenceStore.setState(() => ({
