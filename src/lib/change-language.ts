@@ -1,6 +1,6 @@
 import { getLocale, setLocale } from '@/paraglide/runtime'
 import type { Locale } from '@/paraglide/runtime'
-import { waitForInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft-store'
+import { waitForInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft'
 import { waitForPwaCriticalOperations } from '@/features/pwa/pwa-critical-operations'
 import { confirmDiscardProfileChanges } from '@/features/settings/unsaved-profile'
 import * as m from '@/paraglide/messages'

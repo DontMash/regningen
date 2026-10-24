@@ -8,12 +8,12 @@ import {
 import {
   clearStoredInvoiceDraft,
   disposeInvoiceDraftPersistence,
-  initializeInvoiceDraftPersistence,
   invoiceDraftStore,
   invoicePositionDraftStore,
   resetInvoiceDraft,
   waitForInvoiceDraftPersistence,
 } from '../invoicing/invoice-draft-store'
+import { initializeInvoiceDraftPersistence } from '../invoicing/invoice-draft'
 import {
   getApplicationResetGeneration,
   resetApplication,
