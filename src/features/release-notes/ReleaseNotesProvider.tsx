@@ -2,9 +2,11 @@
 
 import * as React from 'react'
 import { useCreateStore, useSelector } from '@tanstack/react-store'
-import { createStorage } from 'unstorage'
-import localStorageDriver from 'unstorage/drivers/localstorage'
-import type { Storage } from 'unstorage'
+import { AcknowledgmentPersistenceError } from './acknowledgment-persistence'
+import type {
+  AcknowledgmentPersistence,
+  OpenAcknowledgmentPersistence,
+} from './acknowledgment-persistence'
 import { toast } from '@/components/ui/toast'
 import {
   applicationReleases,
@@ -12,9 +14,6 @@ import {
 } from '@/lib/application-release'
 import ReleaseNotesDialog from './ReleaseNotesDialog'
 import * as m from '@/paraglide/messages'
-
-const ACKNOWLEDGED_VERSIONS_STORAGE_KEY =
-  'regningen.release-notes.acknowledged-versions'
 
 interface ReleaseNotesState {
   open: boolean
@@ -32,12 +31,6 @@ interface ReleaseNotesContextValue {
 const ReleaseNotesContext =
   React.createContext<ReleaseNotesContextValue | null>(null)
 
-function parseAcknowledgedVersions(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((version): version is string => typeof version === 'string')
-    : []
-}
-
 function warnAcknowledgmentStorageFailure() {
   toast.add({
     title: m.release_acknowledgment_error(),
@@ -48,9 +41,13 @@ function warnAcknowledgmentStorageFailure() {
 
 interface ReleaseNotesProviderProps {
   children: React.ReactNode
+  persistence: OpenAcknowledgmentPersistence
 }
 
-export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
+export function ReleaseNotesProvider({
+  children,
+  persistence,
+}: ReleaseNotesProviderProps) {
   const store = useCreateStore<ReleaseNotesState>({
     open: false,
     selectedVersion: applicationVersion,
@@ -59,75 +56,37 @@ export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
     automaticNotice: false,
   })
   const state = useSelector(store)
-  const storageRef = React.useRef<Storage | null>(null)
-  const persistAcknowledgedVersions = React.useCallback(
-    async (versions: string[]) => {
-      const storage = storageRef.current
-      if (!storage) throw new Error('Release-note storage is unavailable.')
-      const saveAcknowledgment = async () => {
-        const savedVersions = parseAcknowledgedVersions(
-          await storage.getItem(ACKNOWLEDGED_VERSIONS_STORAGE_KEY),
-        )
-        await storage.setItem(ACKNOWLEDGED_VERSIONS_STORAGE_KEY, [
-          ...new Set([...savedVersions, ...versions]),
-        ])
-      }
-
-      // Serialize read/merge/write across tabs that may run different releases.
-      if ('locks' in window.navigator) {
-        await window.navigator.locks.request(
-          ACKNOWLEDGED_VERSIONS_STORAGE_KEY,
-          saveAcknowledgment,
-        )
-      } else {
-        await saveAcknowledgment()
-      }
-    },
-    [],
-  )
+  const storageRef = React.useRef<AcknowledgmentPersistence | null>(null)
 
   React.useEffect(() => {
     let active = true
-    let storage: Storage | undefined
+    let storage: AcknowledgmentPersistence | undefined
 
     async function initialize() {
       let acknowledgedVersions: string[] = []
       try {
-        // Construct the browser driver only after hydration, never during SSR.
-        const browserStorage = createStorage({
-          driver: localStorageDriver({ window }),
-        })
+        const browserStorage = persistence()
         storage = browserStorage
         storageRef.current = browserStorage
-        await browserStorage.watch(async (_event, key) => {
-          if (key !== ACKNOWLEDGED_VERSIONS_STORAGE_KEY) return
-
-          try {
-            const acknowledged = parseAcknowledgedVersions(
-              await browserStorage.getItem(ACKNOWLEDGED_VERSIONS_STORAGE_KEY),
-            )
-            if (!active) return
-            store.setState((current) => {
-              const closeAutomaticNotice =
-                current.automaticNotice &&
-                acknowledged.includes(applicationVersion)
-              return {
-                ...current,
-                acknowledgedVersions: acknowledged,
-                open: closeAutomaticNotice ? false : current.open,
-                automaticNotice: closeAutomaticNotice
-                  ? false
-                  : current.automaticNotice,
-              }
-            })
-          } catch {
-            // Preference reads must not interrupt invoicing.
-          }
+        await browserStorage.subscribe((acknowledged) => {
+          if (!active) return
+          store.setState((current) => {
+            const closeAutomaticNotice =
+              current.automaticNotice &&
+              acknowledged.includes(applicationVersion)
+            return {
+              ...current,
+              acknowledgedVersions: acknowledged,
+              open: closeAutomaticNotice ? false : current.open,
+              automaticNotice: closeAutomaticNotice
+                ? false
+                : current.automaticNotice,
+            }
+          })
         })
-        acknowledgedVersions = parseAcknowledgedVersions(
-          await browserStorage.getItem(ACKNOWLEDGED_VERSIONS_STORAGE_KEY),
-        )
-      } catch {
+        acknowledgedVersions = await browserStorage.load()
+      } catch (error) {
+        if (!(error instanceof AcknowledgmentPersistenceError)) throw error
         // Unavailable storage behaves like an unacknowledged first visit.
       }
 
@@ -149,9 +108,13 @@ export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
     return () => {
       active = false
       storageRef.current = null
-      if (storage) void storage.dispose()
+      if (storage) {
+        void Promise.resolve(storage.dispose()).catch((error: unknown) => {
+          if (!(error instanceof AcknowledgmentPersistenceError)) throw error
+        })
+      }
     }
-  }, [persistAcknowledgedVersions, store])
+  }, [persistence, store])
 
   function handleOpenChange(open: boolean) {
     store.setState((current) => ({
@@ -184,10 +147,15 @@ export function ReleaseNotesProvider({ children }: ReleaseNotesProviderProps) {
       automaticNotice: false,
     }))
 
+    const owner = storageRef.current
     try {
-      await persistAcknowledgedVersions(acknowledgedVersions)
-    } catch {
-      warnAcknowledgmentStorageFailure()
+      if (!owner)
+        throw new AcknowledgmentPersistenceError('write', 'Session unavailable')
+      await owner.acknowledge(acknowledgedVersions)
+    } catch (error) {
+      if (!(error instanceof AcknowledgmentPersistenceError)) throw error
+      if (storageRef.current === owner && owner)
+        warnAcknowledgmentStorageFailure()
     }
   }
 
