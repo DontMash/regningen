@@ -16,7 +16,7 @@ import Footer from './Footer'
 import ThemeToggle from './ThemeToggle'
 import { FieldHint } from './FieldHint'
 import { PwaProvider } from '@/features/pwa/PwaProvider'
-import { ReleaseNotesProvider } from '@/features/release-notes/ReleaseNotesProvider'
+import { ReleaseNotesComposition as ReleaseNotesProvider } from '@/features/release-notes/ReleaseNotesComposition'
 import {
   triggerPwaOfflineReady,
   resetPwaRegisterMock,
