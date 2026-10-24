@@ -5,7 +5,6 @@ import { useTable } from '@tanstack/react-table'
 import type { ColumnDef } from '@tanstack/react-table'
 import { de, enGB } from 'date-fns/locale'
 import { useSelector } from '@tanstack/react-store'
-import { useForm } from '@tanstack/react-form'
 import { Link } from '@tanstack/react-router'
 import {
   AlertDialog,
@@ -494,43 +493,41 @@ function InvoiceEditor({
   const [blocker, setBlocker] = useState<
     'profile' | 'storage' | 'changed' | null
   >(!profile ? 'profile' : storageError ? 'storage' : null)
-  const form = useForm({
-    defaultValues: draft,
-    onSubmit: async ({ value }) => {
-      if (
-        Object.keys(invoiceEditorState.errorsFor(value)).length ||
-        !profile ||
-        storageError ||
-        profileChanged
-      )
-        return
+  async function submitInvoice() {
+    const value = invoiceDraftStore.state
+    if (
+      Object.keys(invoiceEditorState.errorsFor(value)).length ||
+      !profile ||
+      storageError ||
+      profileChanged
+    )
+      return
 
-      const invoiceLocale = getInvoiceLanguage()
-      setIsGenerating(true)
-      try {
-        await runPwaCriticalOperation(async () => {
-          const bytes = await createInvoicePdf(profile, value, invoiceLocale)
-          const filename = suggestedPdfFilename(value, invoiceLocale)
-          savePdf(bytes, filename)
-          toast.add({
-            title: m.invoice_pdf_created(),
-            description: m.invoice_pdf_downloaded(),
-            type: 'success',
-          })
-          void pwa?.reportPdfExport(filename)
-        })
-      } catch (error) {
+    const invoiceLocale = getInvoiceLanguage()
+    setIsGenerating(true)
+    try {
+      await runPwaCriticalOperation(async () => {
+        const bytes = await createInvoicePdf(profile, value, invoiceLocale)
+        const filename = suggestedPdfFilename(value, invoiceLocale)
+        savePdf(bytes, filename)
         toast.add({
-          title: m.invoice_pdf_failed(),
-          description:
-            error instanceof Error ? error.message : m.invoice_check_inputs(),
-          type: 'error',
+          title: m.invoice_pdf_created(),
+          description: m.invoice_pdf_downloaded(),
+          type: 'success',
         })
-      } finally {
-        setIsGenerating(false)
-      }
-    },
-  })
+        void pwa?.reportPdfExport(filename)
+      })
+    } catch (error) {
+      toast.add({
+        title: m.invoice_pdf_failed(),
+        description:
+          error instanceof Error ? error.message : m.invoice_check_inputs(),
+        type: 'error',
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   useEffect(() => {
     if (storageError) setBlocker('storage')
@@ -539,11 +536,15 @@ function InvoiceEditor({
   }, [profile, profileChanged, storageError])
 
   useEffect(() => {
-    if (draftPersistence.restored || form.state.values.date) return
-    const initial = { ...form.state.values, date: localDate() }
-    form.reset(initial)
-    invoiceDraftStore.setState(() => initial)
-  }, [draftPersistence.restored, form])
+    // The editor mounts only after hydration. Apply a fresh default once, not
+    // again when application-reset invalidation clears a previously restored draft.
+    if (
+      invoiceDraftPersistenceStore.state.restored ||
+      invoiceDraftStore.state.date
+    )
+      return
+    invoiceDraftStore.setState((current) => ({ ...current, date: localDate() }))
+  }, [])
 
   const touch = (name: string) =>
     setTouched((current) => new Set(current).add(name))
@@ -552,10 +553,7 @@ function InvoiceEditor({
     name: TName,
     value: InvoiceDraft[TName],
   ) {
-    const next = { ...form.state.values, [name]: value }
-    // Temporary form-value adapter; working stores remain the editor input seam.
-    form.reset(next)
-    invoiceDraftStore.setState(() => next)
+    invoiceDraftStore.setState((current) => ({ ...current, [name]: value }))
   }
 
   function updateItem(
@@ -568,19 +566,16 @@ function InvoiceEditor({
       [name]: value,
       ...(name === 'amount' ? { amountLocale } : {}),
     })
-    form.setFieldValue('items', invoiceDraftStore.state.items)
   }
 
   function addItem() {
     setNewItemSubmitted(true)
     if (!invoiceEditorState.addPosition().valid) return
-    form.setFieldValue('items', invoiceDraftStore.state.items)
     setNewItemSubmitted(false)
   }
 
   function removeItem(index: number) {
     invoiceEditorState.removePosition(index)
-    form.setFieldValue('items', invoiceDraftStore.state.items)
     setTouched(
       (current) =>
         new Set(
@@ -597,9 +592,9 @@ function InvoiceEditor({
 
   function startNewInvoice() {
     if (
-      hasInvoiceData(form.state.values) ||
-      form.state.values.date !== localDate() ||
-      form.state.values.rate !== createEmptyInvoiceDraft().rate ||
+      hasInvoiceData(invoiceDraftStore.state) ||
+      invoiceDraftStore.state.date !== localDate() ||
+      invoiceDraftStore.state.rate !== createEmptyInvoiceDraft().rate ||
       newItem.description.trim() ||
       newItem.amount.trim()
     ) {
@@ -623,7 +618,6 @@ function InvoiceEditor({
     }
 
     const freshInvoice = { ...createEmptyInvoiceDraft(), date: localDate() }
-    form.reset(freshInvoice)
     invoiceDraftStore.setState(() => freshInvoice)
     setTouched(new Set())
     invoicePositionDraftStore.setState(() => ({ description: '', amount: '' }))
@@ -1040,7 +1034,7 @@ function InvoiceEditor({
           onSubmit={(event) => {
             event.preventDefault()
             event.stopPropagation()
-            void form.handleSubmit()
+            void submitInvoice()
           }}
         >
           <Button
