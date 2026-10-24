@@ -1,6 +1,7 @@
 import { createRouter as createTanStackRouter } from '@tanstack/react-router'
 import { getGlobalStartContext } from '@tanstack/react-start'
 import type { DeploymentPolicy } from './lib/visibility'
+import { requireDeploymentPolicy } from './lib/deployment-policy'
 import { routeTree } from './routeTree.gen'
 import { deLocalizeUrl, localizeUrl } from './paraglide/runtime'
 
@@ -20,16 +21,12 @@ export function getRouter() {
     ssr: { nonce: getGlobalStartContext()?.securityNonce },
     context: {
       ...context,
-      visibilityPolicy: {
-        canonicalOrigin: null,
-        publish: false,
-      },
+      // Server requests already have middleware policy. The client must wait
+      // for hydrate below before evaluating routes; browser location is not policy.
+      visibilityPolicy: getGlobalStartContext()?.visibilityPolicy,
     },
-    dehydrate: () => ({
-      visibilityPolicy: getGlobalStartContext()?.visibilityPolicy ?? {
-        canonicalOrigin: null,
-        publish: false,
-      },
+    dehydrate: (): { visibilityPolicy: DeploymentPolicy } => ({
+      visibilityPolicy: requireDeploymentPolicy(router.options.context),
     }),
     hydrate: (data: { visibilityPolicy: DeploymentPolicy }) => {
       router.update({
