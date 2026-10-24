@@ -15,7 +15,7 @@
   "settings_appearance": "Appearance",
   "settings_appearance_description": "Choose an appearance or follow your device settings.",
   "settings_colour_scheme": "Colour scheme",
-  "settings_theme_failed": "Appearance could not be saved.",
+  "settings_theme_failed": "Appearance could not be saved. Your choice applies for this session.",
   "settings_notifications": "Notifications",
   "settings_notifications_description": "Local notifications inform you after a successful PDF export. There are no reminders or messages from a server.",
   "settings_installation": "Installation",

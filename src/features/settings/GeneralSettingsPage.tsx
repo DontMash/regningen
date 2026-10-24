@@ -20,9 +20,12 @@ import {
   FieldTitle,
 } from '@/components/ui/field'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { toast } from '@/components/ui/toast'
-import { applyThemeMode, themeModeLabels, themeStore } from '@/lib/theme-store'
-import type { ThemeMode } from '@/lib/theme-store'
+import {
+  isThemeMode,
+  selectThemeMode,
+  themeModeLabels,
+  themeStore,
+} from '@/lib/theme-store'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
@@ -68,17 +71,8 @@ export default function GeneralSettingsPage() {
   }
 
   function selectTheme(value: string[]) {
-    const selected = value[0] as ThemeMode | undefined
-    if (!selected) return
-    try {
-      themeStore.setMode(selected, window.localStorage)
-    } catch {
-      toast.add({
-        title: m.settings_theme_failed(),
-        type: 'warning',
-      })
-    }
-    applyThemeMode(selected)
+    const selected = value[0]
+    if (isThemeMode(selected)) selectThemeMode(selected)
   }
   return (
     <div className="flex flex-col gap-6">
@@ -129,11 +123,9 @@ export default function GeneralSettingsPage() {
               onValueChange={selectTheme}
               variant="outline"
             >
-              {(
-                Object.entries(themeModeLabels) as Array<[ThemeMode, string]>
-              ).map(([value, label]) => (
+              {(['auto', 'light', 'dark'] as const).map((value) => (
                 <ToggleGroupItem key={value} value={value}>
-                  {label}
+                  {themeModeLabels[value]}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
