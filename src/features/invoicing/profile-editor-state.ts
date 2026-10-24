@@ -62,6 +62,30 @@ export function createProfileEditorHook(
     retryProfileRead: () => Promise<boolean>,
   ) {
     const [initialProfile] = useState(profile ?? emptyProfile)
+    const [importStatus, setImportStatus] = useState<
+      | 'idle'
+      | 'confirming'
+      | 'pending'
+      | 'applied'
+      | 'canceled'
+      | 'canceled-edits'
+      | 'failed'
+    >('idle')
+    // Import alone is latest-selection-wins. Object identity fences superseded
+    // reads; the values snapshot and reset generation fence newer working state.
+    type ImportRequest = {
+      file: File
+      values: BusinessProfileDraft
+      phase: 'confirming' | 'reading'
+    }
+    const importRequest = useRef<ImportRequest | null>(null)
+    const [pendingImport, setPendingImport] = useState<File | null>(null)
+    function cancelImport(edited = false) {
+      if (!importRequest.current) return
+      importRequest.current = null
+      setPendingImport(null)
+      setImportStatus(edited ? 'canceled-edits' : 'canceled')
+    }
     const savedBaseline = useRef(initialProfile)
     const [resetGeneration] = useState(getApplicationResetGeneration)
     const saveMutation = hooks.useSaveBusinessProfile(resetGeneration)
@@ -79,6 +103,7 @@ export function createProfileEditorHook(
     const form = useForm({
       defaultValues: initialProfile,
       onSubmit: async ({ value }) => {
+        cancelImport()
         try {
           const result = await saveMutation.mutateAsync(value)
           if (
@@ -104,12 +129,25 @@ export function createProfileEditorHook(
     }, [form])
     useEffect(() => {
       updateUnsavedChanges()
-      const subscription = form.store.subscribe(updateUnsavedChanges)
+      const subscription = form.store.subscribe(() => {
+        const request = importRequest.current
+        if (
+          request &&
+          profileFields.some(
+            (name) => form.state.values[name] !== request.values[name],
+          )
+        )
+          cancelImport(true)
+        updateUnsavedChanges()
+      })
       const unregisterDiscard = registerProfileDiscardHandler(() => {
+        cancelImport()
         form.reset(savedBaseline.current, { keepDefaultValues: true })
         setUnsavedProfileChanges(false)
       })
       return () => {
+        // A departed editor must not apply data or notify another screen.
+        importRequest.current = null
         subscription.unsubscribe()
         unregisterDiscard()
         setUnsavedProfileChanges(false)
@@ -135,12 +173,69 @@ export function createProfileEditorHook(
         toast.add({ title: m.profile_backup_export_failed(), type: 'error' })
       }
     }
-    async function importProfile(file: File) {
+    function needsImportConfirmation() {
+      return (
+        Boolean(profile) ||
+        Object.values(form.state.values).some((value) => value.trim())
+      )
+    }
+    function importProfile(file: File) {
+      const request: ImportRequest = {
+        file,
+        values: { ...form.state.values },
+        phase: 'confirming',
+      }
+      // Selection, not read completion or confirmation, establishes the latest request.
+      importRequest.current = request
+      if (needsImportConfirmation()) {
+        setPendingImport(file)
+        setImportStatus('confirming')
+      } else {
+        void readImport(request)
+      }
+    }
+    function confirmImport() {
+      const request = importRequest.current
+      if (!request) return
+      setPendingImport(null)
+      void readImport(request)
+    }
+    function cancelImportConfirmation() {
+      if (importRequest.current?.phase === 'confirming') cancelImport()
+    }
+    function eligibleImport(request: ImportRequest) {
+      if (importRequest.current !== request) return false
+      if (resetGeneration !== getApplicationResetGeneration()) {
+        importRequest.current = null
+        setPendingImport(null)
+        setImportStatus('idle')
+        return false
+      }
+      if (
+        profileFields.some(
+          (name) => form.state.values[name] !== request.values[name],
+        )
+      ) {
+        cancelImport(true)
+        return false
+      }
+      return true
+    }
+    async function readImport(request: ImportRequest) {
+      if (!eligibleImport(request)) return
+      request.phase = 'reading'
+      setImportStatus('pending')
       try {
-        const imported = await backup.read(file)
+        const imported = await backup.read(request.file)
+        if (!eligibleImport(request)) return
+        importRequest.current = null
         form.reset(imported, { keepDefaultValues: true })
+        setImportStatus('applied')
         toast.add({ title: m.profile_backup_loaded(), type: 'success' })
       } catch (error) {
+        if (!eligibleImport(request)) return
+        importRequest.current = null
+        setImportStatus('failed')
         toast.add({
           title: m.profile_backup_import_failed(),
           description: error instanceof Error ? error.message : undefined,
@@ -149,6 +244,7 @@ export function createProfileEditorHook(
       }
     }
     async function deleteProfile() {
+      cancelImport()
       try {
         await deleteMutation.mutateAsync()
         if (resetGeneration !== getApplicationResetGeneration()) return
@@ -175,6 +271,10 @@ export function createProfileEditorHook(
       recoverStorage,
       exportProfile,
       importProfile,
+      importStatus,
+      pendingImport,
+      confirmImport,
+      cancelImportConfirmation,
       deleteProfile,
       changeProfileField: (name: keyof BusinessProfileDraft, value: string) =>
         form.setFieldValue(name, value),
@@ -188,9 +288,7 @@ export function createProfileEditorHook(
           )
         )
       },
-      needsImportConfirmation: () =>
-        Boolean(profile) ||
-        Object.values(form.state.values).some((value) => value.trim()),
+      needsImportConfirmation,
       isValidProfile: (value: BusinessProfileDraft) =>
         operations.validate(value).valid,
       savedReady: operations.readiness(profile).ready,

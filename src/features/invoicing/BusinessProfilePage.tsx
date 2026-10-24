@@ -110,15 +110,17 @@ function ProfileEditor({
     recoverStorage,
     exportProfile,
     importProfile,
+    importStatus,
+    pendingImport,
+    confirmImport,
+    cancelImportConfirmation,
     deleteProfile,
     changeProfileField,
     getProfileErrors,
     taxIdentifiersMissing,
-    needsImportConfirmation,
     isValidProfile,
     savedReady,
   } = useProfileEditor(profile, retryProfileRead)
-  const [pendingImport, setPendingImport] = useState<File | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   return (
@@ -456,15 +458,17 @@ function ProfileEditor({
                 const file = event.currentTarget.files?.[0]
                 event.currentTarget.value = ''
                 if (!file) return
-                if (needsImportConfirmation()) {
-                  setPendingImport(file)
-                } else {
-                  void importProfile(file)
-                }
+                importProfile(file)
               }}
             />
           </Field>
         </CardContent>
+        <p role="status" aria-live="polite" className="px-6">
+          {importStatus === 'pending' && m.profile_backup_pending()}
+          {importStatus === 'canceled-edits' &&
+            m.profile_backup_canceled_edits()}
+          {importStatus === 'canceled' && m.profile_backup_canceled()}
+        </p>
       </Card>
 
       {profile && (
@@ -490,7 +494,7 @@ function ProfileEditor({
       <AlertDialog
         open={pendingImport !== null}
         onOpenChange={(open) => {
-          if (!open) setPendingImport(null)
+          if (!open) cancelImportConfirmation()
         }}
       >
         <AlertDialogContent>
@@ -507,10 +511,7 @@ function ProfileEditor({
             <AlertDialogAction
               type="button"
               disabled={Boolean(storageError)}
-              onClick={() => {
-                if (pendingImport) void importProfile(pendingImport)
-                setPendingImport(null)
-              }}
+              onClick={confirmImport}
             >
               <IconReplace data-icon="inline-start" />
               {m.profile_replace()}
