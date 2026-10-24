@@ -9,6 +9,10 @@ After any code-related changes, run these package scripts and require each to pa
 - `pnpm test:coverage`
 - `pnpm test:e2e`
 
+## Coding standards
+
+When designing, implementing, or reviewing changes, read [CODING_STANDARDS.md](CODING_STANDARDS.md) for judgment-based standards and links to detailed policies.
+
 ## Testing
 
 Test architecture, contribution workflow, setup policy, and support-module locations: [docs/testing.md](docs/testing.md).
