@@ -63,17 +63,13 @@ import {
   invoiceDraftStore,
   invoicePositionDraftStore,
 } from './invoice-draft-store'
-import type { InvoiceDraft, InvoiceLineDraft, VatRate } from './invoice'
+import type { InvoiceDraft, InvoiceLineDraft } from './validation-contract'
+import { invoiceEditorState } from './invoice-editor-composition'
 import * as m from '@/paraglide/messages'
 import { getLocale } from '@/paraglide/runtime'
 import type { Locale } from '@/paraglide/runtime'
 import { formatDate, formatEuro, formattingLocale } from '@/lib/i18n'
 import { getInvoiceLanguage } from '@/lib/invoice-language'
-import {
-  calculateInvoiceTotals,
-  invoiceFormSchema,
-  parseEuroAmount,
-} from './invoice'
 import { createInvoicePdf } from './pdf'
 import { useOptionalPwa } from '@/features/pwa/PwaProvider'
 import { runPwaCriticalOperation } from '@/features/pwa/pwa-critical-operations'
@@ -93,10 +89,6 @@ function localDate() {
   return local.toISOString().slice(0, 10)
 }
 
-function hasInvoicePositionData(position: InvoiceLineDraft) {
-  return Boolean(position.description.trim() || position.amount.trim())
-}
-
 function hasInvoiceData(invoice: InvoiceDraft) {
   return Boolean(
     invoice.number.trim() ||
@@ -106,16 +98,7 @@ function hasInvoiceData(invoice: InvoiceDraft) {
     invoice.street.trim() ||
     invoice.postalCode.trim() ||
     invoice.town.trim() ||
-    invoice.items.some(hasInvoicePositionData),
-  )
-}
-
-function getInvoiceErrors(invoice: InvoiceDraft): InvoiceErrors {
-  const result = invoiceFormSchema.safeParse(invoice)
-  if (result.success) return {}
-
-  return Object.fromEntries(
-    result.error.issues.map((issue) => [issue.path.join('.'), issue.message]),
+    invoice.items.some(invoiceEditorState.hasPositionData),
   )
 }
 
@@ -126,7 +109,7 @@ function suggestedPdfFilename(invoice: InvoiceDraft, locale: Locale) {
 
 function savePdf(bytes: Uint8Array, filename: string) {
   const url = URL.createObjectURL(
-    new Blob([bytes as BlobPart], { type: 'application/pdf' }),
+    new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }),
   )
   const link = document.createElement('a')
   link.href = url
@@ -152,7 +135,7 @@ function InvoiceAmountInput({
   const locale = getLocale()
   // Drafts without entry metadata were entered with the original German grammar.
   const sourceLocale = item.amountLocale ?? 'de'
-  const cents = parseEuroAmount(item.amount, sourceLocale)
+  const cents = invoiceEditorState.amountInCents(item)
   const reformat = sourceLocale !== locale && cents !== null
   const entryLocale = reformat || !item.amount.trim() ? locale : sourceLocale
   const sourceHint =
@@ -219,12 +202,12 @@ function DescriptionCell({
       id={`item-description-${index}`}
       label={m.invoice_position_description({ position: index + 1 })}
       hideLabel
-      required={hasInvoicePositionData(item)}
+      required={invoiceEditorState.hasPositionData(item)}
       value={item.description}
       onChange={(value) => updateItem(index, 'description', value)}
       onBlur={() => touch(`items.${index}.description`)}
       error={errors[`items.${index}.description`]}
-      maxLength={85}
+      maxLength={invoiceEditorState.descriptionLimit}
     />
   )
 }
@@ -242,7 +225,7 @@ function AmountCell({
       id={`item-amount-${index}`}
       label={m.invoice_position_amount({ position: index + 1 })}
       hideLabel
-      required={hasInvoicePositionData(item)}
+      required={invoiceEditorState.hasPositionData(item)}
       item={item}
       onChange={(value, amountLocale) =>
         updateItem(index, 'amount', value, amountLocale)
@@ -508,7 +491,7 @@ function InvoiceEditor({
     defaultValues: draft,
     onSubmit: async ({ value }) => {
       if (
-        Object.keys(getInvoiceErrors(value)).length ||
+        Object.keys(invoiceEditorState.errorsFor(value)).length ||
         !profile ||
         storageError ||
         profileChanged
@@ -563,7 +546,8 @@ function InvoiceEditor({
     value: InvoiceDraft[TName],
   ) {
     const next = { ...form.state.values, [name]: value }
-    form.setFieldValue(name, value as never)
+    // Temporary form-value adapter; working stores remain the editor input seam.
+    form.reset(next)
     invoiceDraftStore.setState(() => next)
   }
 
@@ -573,36 +557,23 @@ function InvoiceEditor({
     value: string,
     amountLocale?: Locale,
   ) {
-    const items = [...form.state.values.items]
-    items[index] = {
-      ...items[index],
+    invoiceEditorState.updatePosition(index, {
       [name]: value,
       ...(name === 'amount' ? { amountLocale } : {}),
-    }
-    form.setFieldValue('items', items)
-    invoiceDraftStore.setState((current) => ({ ...current, items }))
+    })
+    form.setFieldValue('items', invoiceDraftStore.state.items)
   }
 
   function addItem() {
     setNewItemSubmitted(true)
-    if (
-      form.state.values.items.length >= 16 ||
-      Boolean(newItemErrors.description || newItemErrors.amount)
-    )
-      return
-    const items = [...form.state.values.items, { ...newItem }]
-    form.setFieldValue('items', items)
-    invoiceDraftStore.setState((current) => ({ ...current, items }))
-    invoicePositionDraftStore.setState(() => ({ description: '', amount: '' }))
+    if (!invoiceEditorState.addPosition().valid) return
+    form.setFieldValue('items', invoiceDraftStore.state.items)
     setNewItemSubmitted(false)
   }
 
   function removeItem(index: number) {
-    const items = form.state.values.items.filter(
-      (_, itemIndex) => itemIndex !== index,
-    )
-    form.setFieldValue('items', items)
-    invoiceDraftStore.setState((current) => ({ ...current, items }))
+    invoiceEditorState.removePosition(index)
+    form.setFieldValue('items', invoiceDraftStore.state.items)
     setTouched(
       (current) =>
         new Set(
@@ -654,40 +625,27 @@ function InvoiceEditor({
   }
 
   const currentValues = draft
-  const validationErrors = getInvoiceErrors(currentValues)
+  const editor = invoiceEditorState.derive()
+  const validationErrors = editor.errors
   const errors = Object.fromEntries(
     Object.entries(validationErrors).filter(([name]) => touched.has(name)),
   )
-  const recipientMissing =
-    !currentValues.company.trim() && !currentValues.name.trim()
+  const recipientMissing = editor.recipientMissing
   const recipientError =
     recipientMissing && (touched.has('company') || touched.has('name'))
       ? validationErrors.company
       : undefined
-  const validInvoice = Object.keys(validationErrors).length === 0
-  const newAmount = parseEuroAmount(
-    newItem.amount,
-    newItem.amountLocale ?? 'de',
-  )
+  const validInvoice = editor.valid
   const newItemErrors = {
-    description: !newItem.description.trim()
-      ? m.invoice_description_required()
-      : '',
-    amount:
-      newAmount === null || newAmount <= 0 ? m.invoice_amount_invalid() : '',
+    description: editor.newPositionErrors['items.description'],
+    amount: editor.newPositionErrors['items.amount'],
   }
   const table = useTable({
     features: {},
     data: currentValues.items,
     columns: invoicePositionColumns,
   })
-  const amounts = currentValues.items
-    .filter(hasInvoicePositionData)
-    .map((item) => parseEuroAmount(item.amount, item.amountLocale ?? 'de'))
-  const totals =
-    amounts.length && amounts.every((amount) => amount !== null)
-      ? calculateInvoiceTotals(amounts, currentValues.rate)
-      : null
+  const totals = editor.totals
 
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:py-12">
@@ -963,7 +921,7 @@ function InvoiceEditor({
                     label={m.invoice_description()}
                     required
                     value={newItem.description}
-                    maxLength={85}
+                    maxLength={invoiceEditorState.descriptionLimit}
                     form="new-position-form"
                     onChange={(description) =>
                       invoicePositionDraftStore.setState((current) => ({
@@ -996,7 +954,7 @@ function InvoiceEditor({
                     form="new-position-form"
                     className="md:mt-9"
                     variant="outline"
-                    disabled={currentValues.items.length >= 16}
+                    disabled={!editor.canAddPosition}
                   >
                     <IconPlus data-icon="inline-start" />
                     {m.invoice_add_position()}
@@ -1023,7 +981,7 @@ function InvoiceEditor({
                   onValueChange={(selected) => {
                     const value = selected[0]
                     if (value === '7' || value === '19') {
-                      updateField('rate', Number(value) as VatRate)
+                      updateField('rate', value === '7' ? 7 : 19)
                     }
                   }}
                 >
