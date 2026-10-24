@@ -168,7 +168,11 @@ export class InvoiceRobot {
 
   async removePosition(index: number) {
     await this.page
-      .getByRole('button', { name: `Position ${index} entfernen` })
+      .getByRole('button', {
+        name: new RegExp(
+          `^(Position ${index} entfernen|Remove position ${index})$`,
+        ),
+      })
       .click()
   }
 

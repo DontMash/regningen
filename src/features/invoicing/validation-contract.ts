@@ -75,3 +75,27 @@ export type BusinessValidation = {
   ) => ValidationOutcome<ValidatedInvoice>
 }
 export type InvoiceTotals = { gross: number; net: number; tax: number }
+
+/** Decisions over editable inputs. Rejected additions never consume the unfinished row.
+ * Preview includes only explicitly added rows and is unavailable for invalid charges.
+ * Amount interpretation always uses captured entry language (legacy default: German).
+ */
+export type InvoiceEditing = {
+  hasPositionData: (position: InvoiceLineDraft) => boolean
+  validatePosition: (position: InvoiceLineDraft) => ValidationFailure[]
+  /** Capacity only: invalid unfinished input stays submit-able for field feedback.
+   * addPosition additionally enforces validatePosition before accepting a charge.
+   */
+  canAddPosition: (items: InvoiceLineDraft[]) => boolean
+  addPosition: (
+    items: InvoiceLineDraft[],
+    position: InvoiceLineDraft,
+  ) => ValidationOutcome<InvoiceLineDraft[]>
+  removePosition: (
+    items: InvoiceLineDraft[],
+    index: number,
+  ) => InvoiceLineDraft[]
+  previewTotals: (draft: InvoiceDraft) => InvoiceTotals | null
+  parseAmount: (position: InvoiceLineDraft) => number | null
+  descriptionLimit: number
+}

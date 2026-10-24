@@ -314,6 +314,58 @@ test('submits new positions with Enter without downloading or validating the inv
   )
 })
 
+for (const locale of ['de', 'en'] as const) {
+  test(`previews only explicitly added positive charges while retaining unfinished and invalid edits in ${locale}`, async ({
+    harness,
+    releaseNotes,
+    businessProfile,
+    invoice,
+  }) => {
+    await harness.setViewport(locale === 'en' ? 375 : 1024, 900)
+    await harness.open(
+      locale === 'en' ? '/en/settings/profile' : '/de/einstellungen/profil',
+    )
+    await releaseNotes.acknowledgeReleaseNotes()
+    await establishBusinessProfile(businessProfile)
+    await businessProfile.expectProfileSaved()
+    await harness.open(locale === 'en' ? '/en/invoice' : '/de/rechnung')
+    await invoice.expectReady(locale)
+    await invoice.addPosition({ description: 'Completed work', amount: '107' })
+    const totals =
+      locale === 'de'
+        ? { net: '100,00 €', tax: '7,00 €', gross: '107,00 €' }
+        : { net: '€100.00', tax: '€7.00', gross: '€107.00' }
+    await invoice.expectSummaryTotals(totals)
+    await invoice.enterNewPosition({
+      description: 'Unfinished work',
+      amount: '0',
+    })
+    await invoice.pressEnterInNewPosition('amount')
+    await invoice.expectNewPositionValues({
+      description: 'Unfinished work',
+      amount: '0',
+    })
+    await invoice.expectPositionCount(1)
+    await invoice.expectSummaryTotals(totals)
+    await invoice.expectValidationMessage(
+      locale === 'de'
+        ? 'Einen positiven Bruttopreis eingeben.'
+        : 'Enter a positive gross amount.',
+    )
+    await invoice.editPosition(1, 'amount', '0')
+    await invoice.expectSummaryTotals({ net: '—', tax: '—', gross: '—' })
+    await invoice.expectPositionValue(1, 'amount', '0')
+    await invoice.editPosition(1, 'amount', '107')
+    await invoice.expectSummaryTotals(totals)
+    await invoice.removePosition(1)
+    await invoice.expectSummaryTotals({ net: '—', tax: '—', gross: '—' })
+    await invoice.expectNewPositionValues({
+      description: 'Unfinished work',
+      amount: '0',
+    })
+  })
+}
+
 test('reports failed profile Save and retains edits for retry without reloading or retyping', async ({
   harness,
   releaseNotes,
