@@ -71,7 +71,10 @@ export class BusinessProfileRobot {
   }
 
   async importBackup(file: File) {
-    await this.user.upload(screen.getByLabelText('Sicherung importieren'), file)
+    await this.user.upload(
+      screen.getByLabelText(/^(Sicherung importieren|Import backup)$/),
+      file,
+    )
   }
 
   async cancelImport() {
@@ -283,6 +286,12 @@ export class BusinessProfileRobot {
         name: 'Profil konnte nicht gespeichert werden',
       }),
     ).toBeVisible()
+  }
+
+  async expectImportStatus(message: string) {
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(message),
+    )
   }
 
   expectNoNotice(message: string) {

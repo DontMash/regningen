@@ -25,6 +25,8 @@ import {
   setUnsavedProfileChanges,
 } from '../settings/unsaved-profile'
 
+import { deferredFileRead } from '../../../tests/support/vitest/deferred-file'
+
 const originalGetLocale = getLocale
 
 beforeEach(() => {
@@ -44,6 +46,263 @@ afterEach(() => {
 })
 
 describe('business profile settings', () => {
+  it('protects edits made while a backup is being read and explains the cancellation', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const read = deferredFileRead()
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+    await businessProfile.importBackup(read.file)
+    await businessProfile.expectImportStatus('Profilsicherung wird gelesen …')
+
+    await businessProfile.enterProfile({ businessName: 'Neuere Eingabe' })
+    await act(async () =>
+      read.resolve(
+        JSON.stringify({
+          format: 'regningen-business-profile',
+          version: 1,
+          profile: createBusinessProfileScenario({
+            businessName: 'Veralteter Import',
+          }),
+        }),
+      ),
+    )
+
+    businessProfile.expectFieldValue('businessName', 'Neuere Eingabe')
+    await businessProfile.expectImportStatus(
+      'Import abgebrochen. Neuere Eingaben bleiben erhalten.',
+    )
+    businessProfile.expectNoNotice(
+      'Profilsicherung geladen. Bitte Profil speichern.',
+    )
+    expect(
+      await createBusinessProfileRepository(window.localStorage).loadProfile(),
+    ).toBeNull()
+  })
+
+  it.each(
+    (['older-first', 'newer-first'] as const).flatMap((order) =>
+      (['success', 'failure'] as const).map((completion) => ({
+        order,
+        completion,
+      })),
+    ),
+  )(
+    'only applies the latest selected backup ($order, stale $completion)',
+    async ({ order, completion }) => {
+      const businessProfile = new BusinessProfileRobot(userEvent.setup())
+      const saved = createBusinessProfileScenario()
+      saveBusinessProfile(saved)
+      const older = deferredFileRead('older.json')
+      const newer = deferredFileRead('newer.json')
+      const envelope = (businessName: string) =>
+        JSON.stringify({
+          format: 'regningen-business-profile',
+          version: 1,
+          profile: createBusinessProfileScenario({ businessName }),
+        })
+      await renderAtRoute('/settings/profile', BusinessProfilePage)
+      await businessProfile.expectReady()
+      await businessProfile.importBackup(older.file)
+      await businessProfile.confirmImport()
+      await businessProfile.importBackup(newer.file)
+      // Selection supersedes the old request even while confirmation is open.
+      const completeOlder = async () => {
+        await act(async () => {
+          if (completion === 'success')
+            older.resolve(envelope('Obsolete business'))
+          else older.reject(new Error('obsolete read failure'))
+        })
+      }
+      if (order === 'older-first') {
+        await completeOlder()
+        businessProfile.expectNoNotice(
+          'Profilsicherung geladen. Bitte Profil speichern.',
+        )
+      }
+      await businessProfile.confirmImport()
+      businessProfile.expectFieldValue('businessName', saved.businessName)
+      await act(async () => newer.resolve(envelope('Latest business')))
+      if (order === 'newer-first') {
+        await completeOlder()
+      }
+      businessProfile.expectFieldValue('businessName', 'Latest business')
+      businessProfile.expectNoNotice(
+        'Die Profilsicherung konnte nicht importiert werden.',
+      )
+      expect(
+        await createBusinessProfileRepository(
+          window.localStorage,
+        ).loadProfile(),
+      ).toEqual(saved)
+    },
+  )
+
+  it.each(
+    (['discard', 'delete', 'save', 'reset', 'leave'] as const).flatMap(
+      (action) =>
+        (['success', 'failure'] as const).map((completion) => ({
+          action,
+          completion,
+        })),
+    ),
+  )(
+    'does not restore obsolete imports or publish stale $completion after $action',
+    async ({ action, completion }) => {
+      const businessProfile = new BusinessProfileRobot(userEvent.setup())
+      const profile = createBusinessProfileScenario()
+      saveBusinessProfile(profile)
+      const read = deferredFileRead()
+      await renderAtRoute('/settings/profile', BusinessProfilePage)
+      await businessProfile.expectReady()
+      await businessProfile.enterProfile({ businessName: 'Working business' })
+      await businessProfile.importBackup(read.file)
+      await businessProfile.confirmImport()
+      if (action === 'discard') act(() => discardUnsavedProfileChanges())
+      if (action === 'delete') {
+        await businessProfile.requestDeletion()
+        await businessProfile.confirmDeletion()
+        await businessProfile.expectNotice('Profil gelöscht.')
+      }
+      if (action === 'save') {
+        await businessProfile.save()
+        await businessProfile.expectNotice('Profil gespeichert.')
+      }
+      if (action === 'reset')
+        window.localStorage.setItem(
+          'regningen.application-reset.generation',
+          'reset-during-import',
+        )
+      if (action === 'leave') {
+        await businessProfile.openInvoiceEditor()
+        await businessProfile.expectInvoiceRouteSelected()
+      }
+      await act(async () => {
+        if (completion === 'failure')
+          read.reject(new Error('obsolete read failure'))
+        else
+          read.resolve(
+            JSON.stringify({
+              format: 'regningen-business-profile',
+              version: 1,
+              profile: createBusinessProfileScenario({
+                businessName: 'Obsolete import',
+              }),
+            }),
+          )
+      })
+      businessProfile.expectNoNotice(
+        'Profilsicherung geladen. Bitte Profil speichern.',
+      )
+      businessProfile.expectNoNotice(
+        'Die Profilsicherung konnte nicht importiert werden.',
+      )
+      if (action !== 'leave')
+        businessProfile.expectFieldValue(
+          'businessName',
+          action === 'delete'
+            ? ''
+            : action === 'discard'
+              ? profile.businessName
+              : 'Working business',
+        )
+      expect(
+        await createBusinessProfileRepository(
+          window.localStorage,
+        ).loadProfile(),
+      ).toEqual(
+        action === 'delete' || action === 'reset'
+          ? null
+          : action === 'save'
+            ? { ...profile, businessName: 'Working business' }
+            : profile,
+      )
+    },
+  )
+
+  it.each(['read-failure', 'malformed', 'unsupported'] as const)(
+    'reports a current %s in English without changing working or saved values',
+    async (failure) => {
+      overwriteGetLocale(() => 'en')
+      const businessProfile = new BusinessProfileRobot(userEvent.setup())
+      const read = deferredFileRead()
+      await renderAtRoute('/settings/profile', BusinessProfilePage)
+      await businessProfile.expectNotice('Business Profile')
+      await businessProfile.importBackup(read.file)
+      await businessProfile.expectImportStatus('Reading profile backup …')
+      await act(async () => {
+        if (failure === 'read-failure')
+          read.reject(new Error('file unavailable'))
+        else
+          read.resolve(failure === 'malformed' ? 'not-json' : '{"version":99}')
+      })
+      await businessProfile.expectNotice(
+        'The profile backup could not be imported.',
+      )
+      businessProfile.expectNoNotice('Reading profile backup …')
+      expect(
+        await createBusinessProfileRepository(
+          window.localStorage,
+        ).loadProfile(),
+      ).toBeNull()
+      overwriteGetLocale(() => 'de')
+      // A further upload causes a render in the current locale and remains editable.
+      await businessProfile.importBackup(
+        new File(['not-json'], 'retry.json', { type: 'application/json' }),
+      )
+      await businessProfile.expectNotice(
+        'Die Profilsicherung konnte nicht importiert werden.',
+      )
+      businessProfile.expectAllFieldsEmpty()
+    },
+  )
+
+  it('explains edit cancellation in English and suppresses the late read failure', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const read = deferredFileRead()
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+    await businessProfile.importBackup(read.file)
+    overwriteGetLocale(() => 'en')
+    await businessProfile.enterProfile({ businessName: 'Newer business' })
+    await businessProfile.expectImportStatus(
+      'Import canceled. Newer inputs have been kept.',
+    )
+    await act(async () => read.reject(new Error('obsolete failure')))
+    businessProfile.expectNoNotice('The profile backup could not be imported.')
+    businessProfile.expectNoNotice(
+      'Profile backup loaded. Please save the profile.',
+    )
+    expect(
+      await createBusinessProfileRepository(window.localStorage).loadProfile(),
+    ).toBeNull()
+  })
+
+  it('keeps the form when a newer replacement is canceled and suppresses an earlier pending read', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    const profile = createBusinessProfileScenario()
+    saveBusinessProfile(profile)
+    const older = deferredFileRead()
+    const newer = deferredFileRead('newer.json')
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+    await businessProfile.importBackup(older.file)
+    await businessProfile.confirmImport()
+    await businessProfile.importBackup(newer.file)
+    await businessProfile.cancelImport()
+    await businessProfile.expectImportStatus(
+      'Import abgebrochen. Das Profil wurde nicht importiert.',
+    )
+    await act(async () => older.reject(new Error('obsolete read failure')))
+    businessProfile.expectNoNotice(
+      'Die Profilsicherung konnte nicht importiert werden.',
+    )
+    businessProfile.expectProfileValues(profile)
+    expect(
+      await createBusinessProfileRepository(window.localStorage).loadProfile(),
+    ).toEqual(profile)
+    expect(hasUnsavedProfileChanges()).toBe(false)
+  })
+
   it('shows English Business Profile setup and backup guidance', async () => {
     overwriteGetLocale(() => 'en')
     const businessProfile = new BusinessProfileRobot(userEvent.setup())
