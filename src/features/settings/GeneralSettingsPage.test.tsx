@@ -9,11 +9,13 @@ import {
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { themeStore } from '@/lib/theme-store'
+import { selectThemeMode, themeStore } from '@/lib/theme-store'
 import { PwaProvider } from '@/features/pwa/PwaProvider'
 import { disposeInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft-store'
 import { resetPwaRegisterMock } from '../../../tests/support/vitest/pwa-register'
 import GeneralSettingsPage from './GeneralSettingsPage'
+import ThemeToggle from '@/components/ThemeToggle'
+import { Toaster } from '@/components/ui/toast'
 import { setLocale } from '@/paraglide/runtime'
 import { saveBusinessProfile } from '../../../tests/support/vitest/business-profile'
 import { createBusinessProfileScenario } from '../../../tests/scenarios/business-profile'
@@ -150,13 +152,111 @@ it('presents General Settings and both language choices in English', async () =>
   ).toHaveTextContent('Follow interface language')
 })
 
+for (const locale of ['de', 'en'] as const) {
+  for (const control of ['header', 'settings'] as const) {
+    it.each(['access', 'write'] as const)(
+      `keeps ${control} and mounted appearance controls coherent after %s failure (${locale})`,
+      async (fault) => {
+        setLocale(locale, { reload: false })
+        const user = userEvent.setup()
+        vi.stubGlobal(
+          'matchMedia',
+          vi.fn(() => ({
+            matches: true,
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+          })),
+        )
+        render(
+          <Toaster>
+            <PwaProvider>
+              <ThemeToggle />
+              <GeneralSettingsPage />
+            </PwaProvider>
+          </Toaster>,
+        )
+        const toggleName =
+          locale === 'de' ? 'Darstellung umschalten' : 'Toggle appearance'
+        const lightName = locale === 'de' ? 'Hell' : 'Light'
+        const title =
+          locale === 'de' ? 'Darstellung: Hell' : 'Appearance: Light'
+        const toggle = await screen.findByRole('button', { name: toggleName })
+        await waitFor(() => expect(toggle).toBeEnabled())
+        expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+        const failure = new DOMException(
+          `Injected ${fault} failure`,
+          fault === 'access' ? 'SecurityError' : 'QuotaExceededError',
+        )
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        if (fault === 'access') {
+          vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+            throw failure
+          })
+        } else {
+          vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw failure
+          })
+        }
+        await user.click(
+          control === 'header'
+            ? toggle
+            : screen.getByRole('button', { name: lightName }),
+        )
+        expect(toggle).toHaveAttribute('title', title)
+        expect(screen.getByRole('button', { name: lightName })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        )
+        expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+        expect(document.documentElement.style.colorScheme).toBe('light')
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          locale === 'de'
+            ? 'Darstellung konnte nicht gespeichert werden. Die Auswahl gilt für diese Sitzung.'
+            : 'Appearance could not be saved. Your choice applies for this session.',
+        )
+        expect(warn).toHaveBeenCalledWith(
+          'Appearance preference persistence failed',
+          { mode: 'light', cause: failure },
+        )
+        cleanup()
+        render(<ThemeToggle />)
+        expect(
+          await screen.findByRole('button', { name: toggleName }),
+        ).toHaveAttribute('title', title)
+        expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+      },
+    )
+  }
+}
+
+it('does not conceal a programming defect in preference persistence', () => {
+  const failure = new TypeError('Unexpected implementation defect')
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw failure
+  })
+  expect(() => selectThemeMode('dark')).toThrow(failure)
+})
+
 it('applies and persists explicit appearance choices and can return to System mode', async () => {
   const user = userEvent.setup()
   render(
     <PwaProvider>
+      <ThemeToggle />
       <GeneralSettingsPage />
     </PwaProvider>,
   )
+  const toggle = await screen.findByRole('button', {
+    name: 'Darstellung umschalten',
+  })
+  await waitFor(() => expect(toggle).toBeEnabled())
+  await user.click(toggle)
+  expect(toggle).toHaveAttribute('title', 'Darstellung: Hell')
+  expect(screen.getByRole('button', { name: 'Hell' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+  expect(window.localStorage.getItem('theme')).toBe('light')
   await user.click(await screen.findByRole('button', { name: 'Dunkel' }))
   expect(screen.getByRole('button', { name: 'Dunkel' })).toHaveAttribute(
     'aria-pressed',
@@ -164,6 +264,7 @@ it('applies and persists explicit appearance choices and can return to System mo
   )
   expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
   expect(window.localStorage.getItem('theme')).toBe('dark')
+  expect(toggle).toHaveAttribute('title', 'Darstellung: Dunkel')
   await user.click(screen.getByRole('button', { name: 'System' }))
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'System' })).toHaveAttribute(
