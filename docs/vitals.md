@@ -41,7 +41,7 @@ Playwright prepares the UI; Puppeteer connects through CDP to that **exact tab**
 
 All four categories—Performance, Accessibility, Best Practices, and SEO—are reported. Default runs gate **only LCP, CLS, and TBT medians**, calculated independently from all three measurements per state/device, against explicit committed budgets. Exceeding a budget fails; missing budgets never silently select report-only mode. Other findings/category scores are informational.
 
-Invoice/settings/profile intentionally remain noindex. Annotate their expected `is-crawlable` finding, but keep unrelated SEO findings and homepage crawlability visible. Raw Lighthouse reports and scores stay untouched.
+Each `vitals.audit()` caller declares `expectedNoindex`: `false` for public introductions (German and English), `true` for intentionally private Invoice and settings screens (including Business Profile and licenses). The summary/overview uses only this explicit expectation, never the URL shape, to annotate expected `is-crawlable` findings. Keep unrelated SEO findings and public introduction crawlability visible. Raw Lighthouse reports and scores stay untouched. Focused summary tests cover both public languages and private examples without adding measurement states.
 
 Open the Playwright HTML report, with raw Lighthouse **HTML and JSON attached for every measurement** and a **Suite overview** attachment across the selected page/device tests:
 

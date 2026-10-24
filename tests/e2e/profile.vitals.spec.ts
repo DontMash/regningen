@@ -8,6 +8,7 @@ test('Business Profile editing with a saved fictional profile', async ({
   const profile = createBusinessProfileScenario()
   await vitals.audit({
     path: '/de/einstellungen/profil',
+    expectedNoindex: true,
     budgets: budgets.profile,
     prepare: async ({ page, releaseNotes, settings, businessProfile }) => {
       await page.goto('/de')
