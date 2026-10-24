@@ -25,11 +25,11 @@ import appCss from '../styles.css?url'
 import { pwaAssetsHead } from 'virtual:pwa-assets/head'
 
 import type { QueryClient } from '@tanstack/react-query'
-import type { DeploymentPolicy } from '@/lib/visibility'
+import type { DeploymentContext } from '@/lib/deployment-policy'
+import { requireDeploymentPolicy } from '@/lib/deployment-policy'
 
-interface MyRouterContext {
+interface MyRouterContext extends DeploymentContext {
   queryClient: QueryClient
-  visibilityPolicy: DeploymentPolicy
 }
 
 // Keep this pre-hydration bootstrap aligned with the shared theme runtime.
@@ -42,8 +42,9 @@ const LANGUAGE_ENTRY_SCRIPT = `(function(){var path=location.pathname;while(path
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   beforeLoad: ({ serverContext, context }) => ({
-    visibilityPolicy:
-      serverContext?.visibilityPolicy ?? context.visibilityPolicy,
+    // SSR uses request middleware; hydrated and offline navigation use the
+    // serialized policy. Missing hydration/middleware is a contract error.
+    visibilityPolicy: requireDeploymentPolicy(serverContext ?? context),
   }),
   head: () => ({
     meta: [

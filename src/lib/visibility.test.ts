@@ -11,6 +11,7 @@ import {
 import { JSDOM } from 'jsdom'
 import { createVisibility, resolveDeployment } from './visibility'
 import type { PageVisibility } from './visibility'
+import { pageHead } from './page-head'
 import { pageVisibility, localizedCanonicalPath } from './page-visibility'
 import { landingVisibility } from '@/features/landing/visibility'
 
@@ -20,6 +21,19 @@ const production = resolveDeployment(
 )
 
 describe('website visibility', () => {
+  it('rejects a missing deployment context instead of inventing a visibility policy', async () => {
+    const router = createRouter({
+      routeTree: createRootRoute(),
+      history: createMemoryHistory(),
+      isServer: true,
+    })
+    await router.load()
+
+    expect(() => pageHead(landingVisibility, router.state.matches)).toThrow(
+      'Deployment visibility policy is unavailable',
+    )
+  })
+
   it('preserves a feature-owned social image override in both localized introductions', () => {
     const previous = landingVisibility.socialImage
     landingVisibility.socialImage = {

@@ -3,6 +3,18 @@ export type DeploymentPolicy = {
   publish: boolean
 }
 
+/** Absent only while a client router waits for its server hydration payload. */
+export type DeploymentContext = {
+  visibilityPolicy?: DeploymentPolicy
+}
+
+export function requireDeploymentPolicy(context: DeploymentContext) {
+  if (!context.visibilityPolicy) {
+    throw new Error('Deployment visibility policy is unavailable')
+  }
+  return context.visibilityPolicy
+}
+
 function httpUrl(value: string | undefined) {
   try {
     const url = new URL(value ?? '')

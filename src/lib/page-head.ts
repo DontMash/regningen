@@ -1,13 +1,19 @@
 import type { AnyRouteMatch } from '@tanstack/react-router'
-import type { DeploymentPolicy, PageVisibility } from './visibility'
+import type { PageVisibility } from './visibility'
+import type { DeploymentContext } from './deployment-policy'
+import { requireDeploymentPolicy } from './deployment-policy'
 import { pageVisibility, localizedCanonicalPath } from './page-visibility'
 import { getLocale } from '@/paraglide/runtime'
 
 export function pageHead(
   page: PageVisibility,
-  matches: ReadonlyArray<AnyRouteMatch>,
+  matches: ReadonlyArray<
+    Pick<AnyRouteMatch, 'status' | '_notFound'> & { context: DeploymentContext }
+  >,
 ) {
-  const policy = matches[0].context.visibilityPolicy as DeploymentPolicy
+  const rootMatch = matches.at(0)
+  if (!rootMatch) throw new Error('Page head requires a root route match')
+  const policy = requireDeploymentPolicy(rootMatch.context)
   // Installed Router uses _notFound even when the root status remains success.
   const successful = matches.every(
     (match) => match.status === 'success' && !match._notFound,
