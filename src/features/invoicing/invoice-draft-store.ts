@@ -1,5 +1,5 @@
 import { Store } from '@tanstack/store'
-import type { InvoiceDraft, InvoiceLineDraft } from './invoice'
+import type { InvoiceDraft, InvoiceLineDraft } from './validation-contract'
 import type {
   InvoiceDraftEnvelope,
   InvoiceDraftPersistence,
@@ -12,7 +12,7 @@ import {
   subscribeToApplicationResetInvalidation,
 } from '@/lib/application-reset-generation'
 
-export type { InvoiceDraft, InvoiceLineDraft } from './invoice'
+export type { InvoiceDraft, InvoiceLineDraft } from './validation-contract'
 
 export { INVOICE_DRAFT_STORAGE_KEY } from './invoice-draft-persistence'
 export type { InvoiceDraftEnvelope } from './invoice-draft-persistence'

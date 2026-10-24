@@ -11,12 +11,12 @@ import {
 import {
   beginApplicationReset,
   publishApplicationReset,
-} from './reset-generation'
+} from '@/lib/application-reset-generation'
 
 export {
   getApplicationResetGeneration,
   subscribeToApplicationReset,
-} from './reset-generation'
+} from '@/lib/application-reset-generation'
 
 const USER_DATA_KEYS = [
   INVOICE_LANGUAGE_KEY,

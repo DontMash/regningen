@@ -5,26 +5,15 @@ import {
   initializeInvoiceDraftPersistence as initialize,
   clearInvoiceDraftForApplicationReset as clearForReset,
 } from './invoice-draft-store'
-import {
-  createInvoiceDraftPersistence,
-  openBrowserInvoiceDraftPersistence,
-} from './invoice-draft-storage'
-import type { InvoiceDraftStorage } from './invoice-draft-storage'
+import { openBrowserInvoiceDraftPersistence } from './invoice-draft-storage'
 
 export {
   invoiceDraftPersistenceStore,
   waitForInvoiceDraftPersistence,
 } from './invoice-draft-store'
 
-/** The optional raw driver adapter supports existing alternate-storage callers. */
-export function initializeInvoiceDraftPersistence(
-  storage?: InvoiceDraftStorage,
-) {
-  return initialize(
-    storage
-      ? () => createInvoiceDraftPersistence(storage)
-      : openBrowserInvoiceDraftPersistence,
-  )
+export function initializeInvoiceDraftPersistence() {
+  return initialize(openBrowserInvoiceDraftPersistence)
 }
 
 export async function clearInvoiceDraftForApplicationReset(generation: string) {

@@ -7,7 +7,7 @@ import {
   markBusinessProfileStorageFailure,
 } from './business-profile-storage-status'
 import { runPwaCriticalOperation } from '@/features/pwa/pwa-critical-operations'
-import { getApplicationResetGeneration } from '@/features/settings/reset-generation'
+import { getApplicationResetGeneration } from '@/lib/application-reset-generation'
 
 export const BUSINESS_PROFILE_QUERY_KEY = ['business-profile'] as const
 const subscribeToHydration = () => () => {}

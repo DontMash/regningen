@@ -48,7 +48,11 @@ import {
   RequiredMark,
 } from './FormFields'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import type { BusinessProfileDraft } from './business-profile'
+import type {
+  BusinessProfileDraft,
+  InvoiceDraft,
+  InvoiceLineDraft,
+} from './validation-contract'
 import {
   useBusinessProfile,
   useProfileStorageSync,
@@ -61,7 +65,6 @@ import {
   invoiceDraftStore,
   invoicePositionDraftStore,
 } from './invoice-draft-store'
-import type { InvoiceDraft, InvoiceLineDraft } from './validation-contract'
 import { invoiceEditorState } from './invoice-editor-composition'
 import * as m from '@/paraglide/messages'
 import { getLocale } from '@/paraglide/runtime'

@@ -12,13 +12,22 @@ import {
   invoicePositionDraftStore,
   resetInvoiceDraft,
   waitForInvoiceDraftPersistence,
+  initializeInvoiceDraftPersistence as initializeWithPersistence,
 } from '../invoicing/invoice-draft-store'
-import { initializeInvoiceDraftPersistence } from '../invoicing/invoice-draft'
+import { createInvoiceDraftPersistence } from '../invoicing/invoice-draft-storage'
+import type { InvoiceDraftStorage } from '../invoicing/invoice-draft-storage'
+import { initializeInvoiceDraftPersistence as initializeBrowserPersistence } from '../invoicing/invoice-draft'
 import {
   getApplicationResetGeneration,
   resetApplication,
   subscribeToApplicationReset,
 } from './application-reset'
+
+function initializeInvoiceDraftPersistence(storage?: InvoiceDraftStorage) {
+  return storage
+    ? initializeWithPersistence(() => createInvoiceDraftPersistence(storage))
+    : initializeBrowserPersistence()
+}
 
 beforeEach(() => {
   localStorage.clear()
