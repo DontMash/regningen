@@ -7,7 +7,8 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Toaster } from '@/components/ui/toast'
-import { ReleaseNotesProvider, useReleaseNotes } from './ReleaseNotesProvider'
+import { useReleaseNotes } from './ReleaseNotesProvider'
+import { ReleaseNotesComposition as ReleaseNotesProvider } from './ReleaseNotesComposition'
 import { setLocale } from '@/paraglide/runtime'
 
 vi.mock('@/lib/application-release', () => ({
