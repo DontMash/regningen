@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { IconInfoCircle } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import * as m from '@/paraglide/messages'
@@ -19,6 +20,7 @@ export function FieldHint({
   id?: string
   children: React.ReactNode
 }) {
+  const trigger = useRef<HTMLButtonElement>(null)
   return (
     <Popover>
       {id && (
@@ -27,6 +29,7 @@ export function FieldHint({
         </span>
       )}
       <PopoverTrigger
+        ref={trigger}
         render={
           <Button
             type="button"
@@ -38,7 +41,10 @@ export function FieldHint({
       >
         <IconInfoCircle aria-hidden="true" data-icon="inline-start" />
       </PopoverTrigger>
-      <PopoverContent {...(id ? { 'aria-describedby': id } : {})}>
+      <PopoverContent
+        finalFocus={trigger}
+        {...(id ? { 'aria-describedby': id } : {})}
+      >
         <PopoverTitle className="sr-only">{label}</PopoverTitle>
         {/* The stable description supplies the announcement; this copy is visual only. */}
         {id ? (

@@ -25,6 +25,7 @@
   "profile_tax_number": "Tax number",
   "profile_tax_number_hint": "Optional if a VAT ID is provided.",
   "profile_save": "Save profile",
+  "profile_error_unexpected": "An unexpected error occurred. The action was not completed.",
   "profile_save_failed": "The profile could not be saved.",
   "profile_saved": "Profile saved.",
   "profile_invoice": "Invoice",

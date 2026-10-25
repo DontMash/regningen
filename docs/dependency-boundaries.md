@@ -36,7 +36,12 @@ concrete domain implementations either. Ordinary language
 facilities such as `Date`, `Math` and collections need no wrapper. State cannot
 import concrete business/service implementations or implementation-selecting
 composition. UI cannot import concrete business/service implementations; it can
-consume composed state operations. Composition can select implementations.
+consume composed state operations. Both state and UI also reject the known
+business/infrastructure packages `pdf-lib`, `ibantools`, `unstorage`, and `zod`,
+including subpaths and unclassified helper re-exports. Presentation/date tooling
+and state-management packages remain permitted. This bounded package list is not
+a semantic classifier for every future dependency; extend it when integrating
+another business capability. Composition can select implementations.
 
 The rule examines static imports/re-exports, literal dynamic imports and
 `require` calls, including helper chains and cycles. TypeScript resolves relative

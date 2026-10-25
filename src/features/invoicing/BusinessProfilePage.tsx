@@ -70,7 +70,9 @@ export default function BusinessProfilePage() {
           <AlertDialogHeader>
             <AlertDialogTitle>{m.profile_unavailable_title()}</AlertDialogTitle>
             <AlertDialogDescription>
-              {m.profile_unavailable_description()}
+              {profileQuery.failureKind === 'storage'
+                ? m.profile_unavailable_description()
+                : m.profile_error_unexpected()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

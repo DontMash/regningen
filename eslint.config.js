@@ -18,6 +18,8 @@ export default [
   },
   {
     ignores: [
+      // Instructional upstream showcase assets are not part of the application TS project.
+      '.agents/skills/shadcn/assets/showcase/**',
       'eslint.config.js',
       'prettier.config.js',
       '.output/**',

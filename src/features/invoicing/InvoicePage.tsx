@@ -59,8 +59,6 @@ import {
 } from './business-profile-query'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
 import {
-  clearStoredInvoiceDraft,
-  createEmptyInvoiceDraft,
   invoiceDraftPersistenceStore,
   invoiceDraftStore,
   invoicePositionDraftStore,
@@ -85,25 +83,6 @@ import {
 
 type InvoiceFieldName = keyof InvoiceDraft
 type InvoiceErrors = Record<string, string>
-
-function localDate() {
-  const now = new Date()
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 10)
-}
-
-function hasInvoiceData(invoice: InvoiceDraft) {
-  return Boolean(
-    invoice.number.trim() ||
-    invoice.subject.trim() ||
-    invoice.company.trim() ||
-    invoice.name.trim() ||
-    invoice.street.trim() ||
-    invoice.postalCode.trim() ||
-    invoice.town.trim() ||
-    invoice.items.some(invoiceEditorState.hasPositionData),
-  )
-}
 
 function InvoiceInput(props: ComponentProps<typeof FormInput>) {
   return <FormInput form="invoice-form" {...props} />
@@ -409,7 +388,7 @@ function InvoicePage({
     (state) => state,
   )
   const profileQuery = useBusinessProfile()
-  const invoice = useSelector(invoiceDraftStore, (state) => state)
+  useSelector(invoiceDraftStore, (state) => state)
   const storageError = useSelector(
     businessProfileStorageStatus,
     (state) => state.error,
@@ -442,7 +421,9 @@ function InvoicePage({
             <AlertDialogHeader>
               <AlertDialogTitle>{m.invoice_blocked()}</AlertDialogTitle>
               <AlertDialogDescription>
-                {m.invoice_profile_read_failed()}
+                {profileQuery.failureKind === 'storage'
+                  ? m.invoice_profile_read_failed()
+                  : m.profile_error_unexpected()}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -457,7 +438,7 @@ function InvoicePage({
     )
   }
 
-  if (!validProfile && !hasInvoiceData(invoice)) {
+  if (!validProfile && !invoiceEditorState.hasInvoiceData()) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-12">
         <h1 className="heading-1">{m.invoice_complete_profile()}</h1>
@@ -499,6 +480,7 @@ function InvoiceEditor({
   const { generate, isGenerating } = useInvoiceGeneration(
     generation,
     downloadPdf,
+    invoiceEditorState.getExportGeneration,
   )
   const [touched, setTouched] = useState<Set<string>>(() => new Set())
   const newItem = useSelector(invoicePositionDraftStore, (state) => state)
@@ -526,7 +508,7 @@ function InvoiceEditor({
       invoiceDraftStore.state.date
     )
       return
-    invoiceDraftStore.setState((current) => ({ ...current, date: localDate() }))
+    invoiceEditorState.applyFreshDate()
   }, [])
 
   const touch = (name: string) =>
@@ -574,13 +556,7 @@ function InvoiceEditor({
   }
 
   function startNewInvoice() {
-    if (
-      hasInvoiceData(invoiceDraftStore.state) ||
-      invoiceDraftStore.state.date !== localDate() ||
-      invoiceDraftStore.state.rate !== createEmptyInvoiceDraft().rate ||
-      newItem.description.trim() ||
-      newItem.amount.trim()
-    ) {
+    if (invoiceEditorState.requiresResetConfirmation()) {
       setConfirmReset(true)
       return
     }
@@ -589,7 +565,7 @@ function InvoiceEditor({
 
   async function resetInvoice() {
     try {
-      await clearStoredInvoiceDraft()
+      await invoiceEditorState.reset()
     } catch (error) {
       toast.add({
         title: m.invoice_reset_failed(),
@@ -600,10 +576,7 @@ function InvoiceEditor({
       return
     }
 
-    const freshInvoice = { ...createEmptyInvoiceDraft(), date: localDate() }
-    invoiceDraftStore.setState(() => freshInvoice)
     setTouched(new Set())
-    invoicePositionDraftStore.setState(() => ({ description: '', amount: '' }))
     setNewItemSubmitted(false)
     setConfirmReset(false)
   }

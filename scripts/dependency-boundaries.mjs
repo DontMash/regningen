@@ -31,6 +31,7 @@ export const applicationRoles = {
     'src/features/invoicing/invoice-draft-storage.ts',
     'src/features/invoicing/pdf.ts',
     'src/features/invoicing/pdf-download.ts',
+    'src/features/invoicing/profile-backup-download.ts',
     'src/features/release-notes/browser-acknowledgment-persistence.ts',
     'src/lib/validation.ts',
     'src/lib/zod.ts',
@@ -91,7 +92,17 @@ export function dependencyBoundaries(root, roles = applicationRoles) {
   function violation(origin, specifier, importer, seen = new Set()) {
     const path = localPath(specifier, importer)
     if (!path) {
-      return origin === 'domain' || origin === 'contract' ? [specifier] : null
+      const businessCapability = [
+        'pdf-lib',
+        'ibantools',
+        'unstorage',
+        'zod',
+      ].some((name) => specifier === name || specifier.startsWith(`${name}/`))
+      return origin === 'domain' ||
+        origin === 'contract' ||
+        (['state', 'ui'].includes(origin) && businessCapability)
+        ? [specifier]
+        : null
     }
     if (seen.has(path)) return null
     seen.add(path)

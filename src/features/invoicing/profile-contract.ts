@@ -4,6 +4,28 @@ import type {
   ValidationOutcome,
 } from './validation-contract'
 
+/** Expected operational failures only. Arbitrary defects must retain their identity. */
+export class ProfileFailure extends Error {
+  constructor(
+    public readonly reason:
+      'storage' | 'representation' | 'reset' | 'missing' | 'backup',
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options)
+    this.name = 'ProfileFailure'
+  }
+}
+
+export function isProfileStorageFailure(
+  error: unknown,
+): error is ProfileFailure {
+  return (
+    error instanceof ProfileFailure &&
+    (error.reason === 'storage' || error.reason === 'representation')
+  )
+}
+
 /** Persistence accepts structurally supported working data; it does not assert business validity. */
 export interface ProfilePersistence {
   loadProfile: () => Promise<BusinessProfileDraft | null>
@@ -19,7 +41,7 @@ export type ProfileReadiness =
   | { ready: true; profile: BusinessProfile }
   | { ready: false; reason: 'missing' | 'incomplete' | 'unavailable' }
 
-/** Save validates before any persistence effect. Operational failures reject with their original context. */
+/** Save validates before any persistence effect. Expected operational failures reject with ProfileFailure and preserved cause; defects are not storage failures. */
 export interface ProfileOperations {
   validate: (input: BusinessProfileDraft) => ValidationOutcome<BusinessProfile>
   readiness: (

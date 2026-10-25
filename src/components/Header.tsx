@@ -47,6 +47,7 @@ export default function Header() {
   const businessName = profile?.businessName.trim()
   const [menuOpen, setMenuOpen] = useState(false)
   const closeFocus = useRef<'trigger' | 'content' | 'none'>('trigger')
+  const drawerContent = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const desktop = window.matchMedia('(min-width: 1024px)')
@@ -106,9 +107,13 @@ export default function Header() {
               if (
                 !open &&
                 closeFocus.current === 'content' &&
-                !document.querySelector('[role="alertdialog"]')
+                !document.querySelector('[role="alertdialog"]') &&
+                (document.activeElement === document.body ||
+                  drawerContent.current?.contains(document.activeElement))
               ) {
-                // Focus the stable main region, not a child replaced by route loading.
+                // Navigation may already have allowed editing before the closing
+                // animation ends. Never steal focus back from that newer interaction.
+                // Otherwise focus the stable main region, not a replaced route child.
                 document
                   .getElementById('hauptinhalt')
                   ?.focus({ preventScroll: true })
@@ -125,6 +130,7 @@ export default function Header() {
               <IconMenu2 aria-hidden="true" />
             </DrawerTrigger>
             <DrawerContent
+              ref={drawerContent}
               finalFocus={() => closeFocus.current === 'trigger'}
               className="h-dvh data-[swipe-axis=x]:[--drawer-content-width:100%] data-[swipe-axis=x]:sm:[--drawer-content-width:24rem] max-sm:data-[swipe-direction=right]:rounded-none"
             >

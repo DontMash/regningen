@@ -1,4 +1,5 @@
 import { z } from '@/lib/validation'
+import { ProfileFailure } from './profile-contract'
 import * as m from '@/paraglide/messages'
 import type { BusinessProfileDraft } from './validation-contract'
 import {
@@ -10,7 +11,22 @@ export const BUSINESS_PROFILE_STORAGE_KEY = 'regningen.business-profile'
 const BACKUP_FORMAT = 'regningen-business-profile'
 const BACKUP_VERSION = 1
 
-export class InvalidBusinessProfileBackupError extends Error {}
+export class InvalidBusinessProfileBackupError extends ProfileFailure {
+  constructor(message: string, options?: ErrorOptions) {
+    super('representation', message, options)
+  }
+}
+
+function browserStorage<T>(operation: () => T): T {
+  try {
+    return operation()
+  } catch (cause) {
+    if (cause instanceof DOMException) {
+      throw new ProfileFailure('storage', cause.message, { cause })
+    }
+    throw cause
+  }
+}
 
 export type BusinessProfileStorage = Pick<
   Storage,
@@ -88,7 +104,9 @@ export function createBusinessProfileRepository(
   getGeneration: () => string = getApplicationResetGeneration,
 ) {
   function loadProfile(): BusinessProfileDraft | null {
-    const text = storage.getItem(BUSINESS_PROFILE_STORAGE_KEY)
+    const text = browserStorage(() =>
+      storage.getItem(BUSINESS_PROFILE_STORAGE_KEY),
+    )
     if (text === null) return null
     const envelope = readBackup(text, true)
     const generation =
@@ -108,38 +126,42 @@ export function createBusinessProfileRepository(
     ): Promise<void> {
       const normalized = businessProfileDraftSchema.parse(profile)
       if (generation !== getGeneration())
-        throw new Error(m.profile_reset_before_save())
-      storage.setItem(
-        BUSINESS_PROFILE_STORAGE_KEY,
-        JSON.stringify({
-          ...createBackup(normalized),
-          resetGeneration: generation,
-        }),
+        throw new ProfileFailure('reset', m.profile_reset_before_save())
+      browserStorage(() =>
+        storage.setItem(
+          BUSINESS_PROFILE_STORAGE_KEY,
+          JSON.stringify({
+            ...createBackup(normalized),
+            resetGeneration: generation,
+          }),
+        ),
       )
       if (generation !== getGeneration())
-        throw new Error(m.profile_reset_during_save())
+        throw new ProfileFailure('reset', m.profile_reset_during_save())
     },
 
     async exportProfile(): Promise<string> {
       const profile = loadProfile()
       if (profile === null) {
-        throw new Error(m.profile_backup_missing())
+        throw new ProfileFailure('missing', m.profile_backup_missing())
       }
       return JSON.stringify(createBackup(profile), null, 2)
     },
 
     async deleteProfile(generation = getGeneration()): Promise<void> {
       if (generation !== getGeneration())
-        throw new Error(m.profile_reset_before_delete())
-      storage.removeItem(BUSINESS_PROFILE_STORAGE_KEY)
+        throw new ProfileFailure('reset', m.profile_reset_before_delete())
+      browserStorage(() => storage.removeItem(BUSINESS_PROFILE_STORAGE_KEY))
     },
   }
 }
 
 export function createBrowserBusinessProfileRepository() {
   if (typeof window === 'undefined') {
-    throw new Error(m.profile_browser_only())
+    throw new ProfileFailure('storage', m.profile_browser_only())
   }
 
-  return createBusinessProfileRepository(window.localStorage)
+  return createBusinessProfileRepository(
+    browserStorage(() => window.localStorage),
+  )
 }

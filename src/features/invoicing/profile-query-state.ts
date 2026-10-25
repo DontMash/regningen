@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { BusinessProfileDraft } from './validation-contract'
 import type { ProfileOperations } from './profile-contract'
+import { isProfileStorageFailure } from './profile-contract'
 import {
   clearBusinessProfileStorageFailure,
   markBusinessProfileStorageFailure,
@@ -31,7 +32,8 @@ export function createProfileQueryHooks(
           clearBusinessProfileStorageFailure()
           return profile
         } catch (error) {
-          markBusinessProfileStorageFailure(error)
+          if (isProfileStorageFailure(error))
+            markBusinessProfileStorageFailure(error)
           throw error
         }
       },
@@ -41,6 +43,11 @@ export function createProfileQueryHooks(
     })
     return {
       ...query,
+      failureKind: query.isError
+        ? isProfileStorageFailure(query.error)
+          ? ('storage' as const)
+          : ('unexpected' as const)
+        : null,
       readiness: operations.readiness(query.data, query.isError),
       async entryDestination() {
         const result = await query.refetch()
@@ -66,7 +73,10 @@ export function createProfileQueryHooks(
         client.setQueryData(BUSINESS_PROFILE_QUERY_KEY, result.data)
       },
       onError: (error) => {
-        if (generation === getApplicationResetGeneration())
+        if (
+          generation === getApplicationResetGeneration() &&
+          isProfileStorageFailure(error)
+        )
           markBusinessProfileStorageFailure(error)
       },
     })
@@ -83,7 +93,10 @@ export function createProfileQueryHooks(
         client.setQueryData(BUSINESS_PROFILE_QUERY_KEY, null)
       },
       onError: (error) => {
-        if (generation === getApplicationResetGeneration())
+        if (
+          generation === getApplicationResetGeneration() &&
+          isProfileStorageFailure(error)
+        )
           markBusinessProfileStorageFailure(error)
       },
     })
