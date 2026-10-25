@@ -139,7 +139,8 @@ export class StorageFaults {
     await this.page.addInitScript((storageKey) => {
       const originalGetItem = Storage.prototype.getItem
       Storage.prototype.getItem = function (key) {
-        if (key === storageKey) throw new Error('storage unavailable')
+        if (key === storageKey)
+          throw new DOMException('storage unavailable', 'SecurityError')
         return originalGetItem.call(this, key)
       }
     }, businessProfileStorageKey)
@@ -149,7 +150,8 @@ export class StorageFaults {
     await this.page.addInitScript((storageKey) => {
       const originalSetItem = Storage.prototype.setItem
       Storage.prototype.setItem = function (key, value) {
-        if (key === storageKey) throw new Error('storage unavailable')
+        if (key === storageKey)
+          throw new DOMException('storage unavailable', 'QuotaExceededError')
         return originalSetItem.call(this, key, value)
       }
     }, businessProfileStorageKey)
@@ -160,7 +162,10 @@ export class StorageFaults {
       const setItem = Storage.prototype.setItem
       Storage.prototype.setItem = function (key, value) {
         if (this === window.localStorage && key === storageKey)
-          throw new Error('Injected profile write failure')
+          throw new DOMException(
+            'Injected profile write failure',
+            'QuotaExceededError',
+          )
         return setItem.call(this, key, value)
       }
       return () => {
@@ -181,7 +186,10 @@ export class StorageFaults {
         const removeItem = Storage.prototype.removeItem
         Storage.prototype.removeItem = function (key) {
           if (this === window.localStorage && key === storageKey)
-            throw new Error('Injected profile removal failure')
+            throw new DOMException(
+              'Injected profile removal failure',
+              'SecurityError',
+            )
           return removeItem.call(this, key)
         }
         return () => {

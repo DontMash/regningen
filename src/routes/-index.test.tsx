@@ -89,7 +89,7 @@ describe('home route', () => {
     const storageFault = vi
       .spyOn(Storage.prototype, 'getItem')
       .mockImplementation(() => {
-        throw new Error('storage unavailable')
+        throw new DOMException('storage unavailable', 'SecurityError')
       })
     await renderAtRoute('/', Home)
 
@@ -196,7 +196,7 @@ describe('home route', () => {
   it('keeps the introduction readable and explains entry retries while browser storage is unavailable', async () => {
     const user = userEvent.setup()
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('storage unavailable')
+      throw new DOMException('storage unavailable', 'SecurityError')
     })
     await renderAtRoute('/', Home)
 
@@ -239,7 +239,7 @@ describe('home route', () => {
     const storageFault = vi
       .spyOn(Storage.prototype, 'getItem')
       .mockImplementation(() => {
-        throw new Error('storage unavailable')
+        throw new DOMException('storage unavailable', 'SecurityError')
       })
     await renderAtRoute('/', Home)
 
