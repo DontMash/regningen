@@ -18,8 +18,6 @@
   "settings_theme_failed": "Appearance could not be saved. Your choice applies for this session.",
   "settings_notifications": "Notifications",
   "settings_notifications_description": "Local notifications inform you after a successful PDF export. There are no reminders or messages from a server.",
-  "settings_installation": "Installation",
-  "settings_installation_description": "Install regningen to open the application directly from your device. Installation does not enable notifications.",
   "settings_reset": "Reset application",
   "settings_reset_description": "Delete your locally saved data and preferences in this browser and start again.",
   "settings_reset_incomplete": "Application reset incomplete",

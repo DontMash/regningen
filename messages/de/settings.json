@@ -18,8 +18,6 @@
   "settings_theme_failed": "Darstellung konnte nicht gespeichert werden. Die Auswahl gilt für diese Sitzung.",
   "settings_notifications": "Benachrichtigungen",
   "settings_notifications_description": "Lokale Benachrichtigungen informieren Sie nach einem erfolgreichen PDF-Export. Es gibt keine Erinnerungen oder Nachrichten von einem Server.",
-  "settings_installation": "Installation",
-  "settings_installation_description": "Installieren Sie regningen, um die Anwendung direkt von Ihrem Gerät zu öffnen. Benachrichtigungen werden dadurch nicht aktiviert.",
   "settings_reset": "Anwendung zurücksetzen",
   "settings_reset_description": "Löschen Sie Ihre lokal gespeicherten Daten und Einstellungen in diesem Browser und beginnen Sie neu.",
   "settings_reset_incomplete": "Anwendung nicht vollständig zurückgesetzt",

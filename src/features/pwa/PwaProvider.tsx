@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useRegisterSW } from 'virtual:pwa-register/react'
+import { registerSW } from 'virtual:pwa-register'
 import AdaptiveDialog from '@/components/AdaptiveDialog'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -15,19 +15,10 @@ import { confirmDiscardProfileChanges } from '@/features/settings/unsaved-profil
 import { getCompletedApplicationResetGeneration } from '@/lib/application-reset-generation'
 import * as m from '@/paraglide/messages'
 
-interface InstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
-}
-
 type NotificationStatus =
   'unavailable' | 'install-required' | 'denied' | 'enabled' | 'disabled'
 
 interface PwaContextValue {
-  installed: boolean
-  requestInstallation: () => Promise<void>
-  installationHelp: string | null
-  closeInstallationHelp: () => void
   notificationStatus: NotificationStatus
   enableNotifications: () => Promise<void>
   disableNotifications: () => void
@@ -37,15 +28,6 @@ interface PwaContextValue {
   openUpdatePrompt: () => void
   updateError: string | null
   applyUpdate: () => void
-}
-
-interface RegistrationState {
-  needRefresh: (value: boolean) => void
-  offlineReady: (value: boolean) => void
-  setUpdateServiceWorker: (update: (() => Promise<void>) | null) => void
-  setRegistration: (registration: ServiceWorkerRegistration | null) => void
-  onNeedReload: () => void
-  onRegisterError: (error: unknown) => void
 }
 
 const PwaContext = React.createContext<PwaContextValue | null>(null)
@@ -63,63 +45,7 @@ function detectStandaloneMode() {
   }
 }
 
-function manualInstallationInstructions() {
-  const userAgent = navigator.userAgent.toLowerCase()
-  const ipadDesktopMode =
-    navigator.platform.toLowerCase() === 'macintel' &&
-    navigator.maxTouchPoints > 1
-  if (/iphone|ipad|ipod/.test(userAgent) || ipadDesktopMode) {
-    return m.pwa_install_ios()
-  }
-  if (/android/.test(userAgent)) {
-    return m.pwa_install_android()
-  }
-  return m.pwa_install_browser()
-}
-
-function PluginRegistration({
-  needRefresh,
-  offlineReady,
-  setUpdateServiceWorker,
-  setRegistration,
-  onNeedReload,
-  onRegisterError,
-}: RegistrationState) {
-  const {
-    needRefresh: [pluginNeedsRefresh],
-    offlineReady: [pluginOfflineReady],
-    updateServiceWorker,
-  } = useRegisterSW({
-    immediate: true,
-    onNeedReload,
-    onRegisteredSW: (_scriptUrl, registration) => {
-      setRegistration(registration ?? null)
-    },
-    onRegisterError,
-  })
-
-  React.useEffect(() => {
-    needRefresh(pluginNeedsRefresh)
-  }, [needRefresh, pluginNeedsRefresh])
-
-  React.useEffect(() => {
-    offlineReady(pluginOfflineReady)
-  }, [offlineReady, pluginOfflineReady])
-
-  React.useEffect(() => {
-    setUpdateServiceWorker(() => updateServiceWorker())
-    return () => setUpdateServiceWorker(null)
-  }, [setUpdateServiceWorker, updateServiceWorker])
-
-  return null
-}
-
 export function PwaProvider({ children }: { children: React.ReactNode }) {
-  const [hydrated, setHydrated] = React.useState(false)
-  const [installed, setInstalled] = React.useState(false)
-  const [installationHelp, setInstallationHelp] = React.useState<string | null>(
-    null,
-  )
   const [notificationSupported, setNotificationSupported] =
     React.useState(false)
   const [notificationPermission, setNotificationPermission] = React.useState<
@@ -136,10 +62,9 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   const [reloadDeferred, setReloadDeferred] = React.useState(false)
   const [updateError, setUpdateError] = React.useState<string | null>(null)
   const registrationRef = React.useRef<ServiceWorkerRegistration | null>(null)
-  const updateServiceWorkerRef = React.useRef<(() => Promise<void>) | null>(
-    null,
-  )
-  const installPrompt = React.useRef<InstallPromptEvent | null>(null)
+  const updateServiceWorkerRef = React.useRef<ReturnType<
+    typeof registerSW
+  > | null>(null)
   const reloadStartedRef = React.useRef(false)
   const promptShownRef = React.useRef(false)
   const lastUpdateErrorRef = React.useRef<string | null>(null)
@@ -153,18 +78,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   )
   const hasHandledDraftError = React.useRef(false)
 
-  const setUpdateServiceWorker = React.useCallback(
-    (update: (() => Promise<void>) | null) => {
-      updateServiceWorkerRef.current = update
-    },
-    [],
-  )
-  const setRegistration = React.useCallback(
-    (registration: ServiceWorkerRegistration | null) => {
-      registrationRef.current = registration
-    },
-    [],
-  )
   const onNeedReload = React.useCallback(() => {
     if (reloadStartedRef.current) return
     reloadStartedRef.current = true
@@ -196,15 +109,27 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
         : m.pwa_registration_error(),
     )
   }, [])
+  React.useEffect(() => {
+    // The React plugin hook registers during render. Use the same public plugin
+    // interface after hydration instead, without remounting children or mirroring
+    // hook state. The ref also prevents duplicate registration in Strict Mode.
+    if (updateServiceWorkerRef.current) return
+    updateServiceWorkerRef.current = registerSW({
+      immediate: true,
+      onNeedRefresh: () => setUpdateAvailable(true),
+      onOfflineReady: () => setOfflineReady(true),
+      onNeedReload,
+      onRegisteredSW: (_scriptUrl, registration) => {
+        registrationRef.current = registration ?? null
+      },
+      onRegisterError,
+    })
+  }, [onNeedReload, onRegisterError])
 
   React.useEffect(() => {
-    setHydrated(true)
-  }, [])
-
-  React.useEffect(() => {
-    if (!hydrated || draftPersistence.initialized) return
+    if (draftPersistence.initialized) return
     void initializeInvoiceDraftPersistence()
-  }, [draftPersistence.initialized, hydrated])
+  }, [draftPersistence.initialized])
 
   React.useEffect(() => {
     if (!updateError) {
@@ -235,33 +160,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   }, [draftPersistence.error])
 
   React.useEffect(() => {
-    const updateInstalledState = () => setInstalled(detectStandaloneMode())
-    const mediaQuery =
-      typeof window.matchMedia === 'function'
-        ? window.matchMedia('(display-mode: standalone)')
-        : null
-    const captureInstallPrompt = (event: Event) => {
-      event.preventDefault()
-      installPrompt.current = event as InstallPromptEvent
-    }
-    const markInstalled = () => {
-      installPrompt.current = null
-      setInstalled(true)
-    }
-
-    updateInstalledState()
-    mediaQuery?.addEventListener('change', updateInstalledState)
-    window.addEventListener('beforeinstallprompt', captureInstallPrompt)
-    window.addEventListener('appinstalled', markInstalled)
-
-    return () => {
-      mediaQuery?.removeEventListener('change', updateInstalledState)
-      window.removeEventListener('beforeinstallprompt', captureInstallPrompt)
-      window.removeEventListener('appinstalled', markInstalled)
-    }
-  }, [])
-
-  React.useEffect(() => {
     const syncNotificationCapabilities = () => {
       const supported =
         typeof Notification !== 'undefined' && 'serviceWorker' in navigator
@@ -269,7 +167,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       setNotificationPermission(
         supported ? Notification.permission : 'unavailable',
       )
-
       const userAgent = navigator.userAgent.toLowerCase()
       const appleMobile =
         /iphone|ipad|ipod/.test(userAgent) ||
@@ -286,10 +183,17 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       // Notification preferences are optional and never block the application.
     }
     syncNotificationCapabilities()
+    const mediaQuery =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(display-mode: standalone)')
+        : null
     window.addEventListener('focus', syncNotificationCapabilities)
-    return () =>
+    mediaQuery?.addEventListener('change', syncNotificationCapabilities)
+    return () => {
       window.removeEventListener('focus', syncNotificationCapabilities)
-  }, [installed])
+      mediaQuery?.removeEventListener('change', syncNotificationCapabilities)
+    }
+  }, [])
 
   React.useEffect(() => {
     if (!updateAvailable) {
@@ -319,7 +223,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   const enableNotifications = React.useCallback(async () => {
     if (!notificationSupported || notificationRequiresInstall) return
     if (typeof Notification === 'undefined') return
-
     try {
       const permission =
         Notification.permission === 'granted'
@@ -327,7 +230,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
           : await Notification.requestPermission()
       setNotificationPermission(permission)
       if (permission !== 'granted') return
-
       window.localStorage.setItem(NOTIFICATION_PREFERENCE_KEY, 'enabled')
       setNotificationPreference(true)
     } catch {
@@ -355,7 +257,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
         Notification.permission !== 'granted'
       )
         return
-
       try {
         const registration = registrationRef.current
         if (!registration) return
@@ -377,12 +278,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   )
 
   const applyUpdate = React.useCallback(() => {
-    const updateServiceWorker = updateServiceWorkerRef.current
-    if (
-      updateRequested ||
-      (!reloadDeferred && (!updateAvailable || !updateServiceWorker))
-    )
-      return
+    if (updateRequested || (!reloadDeferred && !updateAvailable)) return
     setUpdateRequested(true)
     setUpdateError(null)
     void (async () => {
@@ -395,7 +291,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
         return
       }
       try {
-        await updateServiceWorker?.()
+        await updateServiceWorkerRef.current?.()
       } catch (error) {
         setUpdateRequested(false)
         setUpdateError(
@@ -406,23 +302,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       }
     })()
   }, [updateAvailable, updateRequested, reloadDeferred, onNeedReload])
-
-  const requestInstallation = React.useCallback(async () => {
-    const promptEvent = installPrompt.current
-    if (!promptEvent) {
-      setInstallationHelp(manualInstallationInstructions())
-      return
-    }
-
-    // The browser's install event is single-use, including when the user cancels.
-    installPrompt.current = null
-    try {
-      await promptEvent.prompt()
-      await promptEvent.userChoice
-    } catch {
-      setInstallationHelp(manualInstallationInstructions())
-    }
-  }, [])
 
   const notificationStatus: NotificationStatus = !notificationSupported
     ? 'unavailable'
@@ -439,10 +318,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   }, [updateAvailable, reloadDeferred])
   const value = React.useMemo(
     () => ({
-      installed,
-      requestInstallation,
-      installationHelp,
-      closeInstallationHelp: () => setInstallationHelp(null),
       notificationStatus,
       enableNotifications,
       disableNotifications,
@@ -454,9 +329,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
       applyUpdate,
     }),
     [
-      installed,
-      requestInstallation,
-      installationHelp,
       notificationStatus,
       enableNotifications,
       disableNotifications,
@@ -473,31 +345,6 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   return (
     <PwaContext.Provider value={value}>
       {children}
-      {hydrated ? (
-        <PluginRegistration
-          needRefresh={setUpdateAvailable}
-          offlineReady={setOfflineReady}
-          setUpdateServiceWorker={setUpdateServiceWorker}
-          setRegistration={setRegistration}
-          onNeedReload={onNeedReload}
-          onRegisterError={onRegisterError}
-        />
-      ) : null}
-      <AdaptiveDialog
-        open={installationHelp !== null}
-        onOpenChange={(open) => {
-          if (!open) setInstallationHelp(null)
-        }}
-        title={m.pwa_install_title()}
-        description={m.pwa_install_description()}
-        footer={
-          <Button onClick={() => setInstallationHelp(null)}>
-            {m.pwa_close()}
-          </Button>
-        }
-      >
-        <p className="paragraph">{installationHelp}</p>
-      </AdaptiveDialog>
       <AdaptiveDialog
         open={updateDialogOpen}
         onOpenChange={setUpdateDialogOpen}

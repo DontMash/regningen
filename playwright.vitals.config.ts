@@ -12,7 +12,6 @@ export default defineConfig({
   timeout: 300_000,
   reporter: [
     ['list'],
-    ['./tests/support/playwright/vitals-reporter.ts'],
     ['html', { outputFolder: '.vitals/playwright-report', open: 'never' }],
   ],
   projects: [{ name: 'mobile' }, { name: 'desktop' }],

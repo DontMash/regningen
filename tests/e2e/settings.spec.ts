@@ -549,7 +549,7 @@ test('invalidates dirty profile edits and a suspended tab’s independent Invoic
   })
 })
 
-test('requests installation and PDF notification permission only after explicit settings interaction', async ({
+test('requests PDF notification permission only after explicit settings interaction', async ({
   page,
   context,
   harness,
@@ -568,16 +568,9 @@ test('requests installation and PDF notification permission only after explicit 
     createBusinessProfileScenario(),
   )
   await appShell.navigateToInvoice()
-  await invoice.enterInvoiceNumber('keep-after-install-cancel')
+  await invoice.enterInvoiceNumber('keep-after-notification-opt-in')
   await appShell.navigateToSettings()
   await settings.expectCentralizedControls()
-  await capabilities.offerDismissedInstallation(page)
-  expect(await capabilities.installationPromptCount(page)).toBe(0)
-  expect(
-    (await capabilities.notificationObservation(page)).permissionRequests,
-  ).toBe(0)
-  await settings.requestInstallation()
-  expect(await capabilities.installationPromptCount(page)).toBe(1)
   expect(
     (await capabilities.notificationObservation(page)).permissionRequests,
   ).toBe(0)
@@ -599,5 +592,5 @@ test('requests installation and PDF notification permission only after explicit 
   await settings.openProfile()
   await businessProfile.expectFieldValue('businessName', 'Nordlicht Catering')
   await appShell.navigateToInvoice()
-  await invoice.expectInvoiceNumber('keep-after-install-cancel')
+  await invoice.expectInvoiceNumber('keep-after-notification-opt-in')
 })

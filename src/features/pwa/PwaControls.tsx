@@ -1,26 +1,8 @@
 'use client'
 
-import { IconShare3 } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { usePwa } from './PwaProvider'
 import * as m from '@/paraglide/messages'
-
-export function InstallButton() {
-  const { installed, requestInstallation } = usePwa()
-  if (installed) return null
-
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      aria-label={m.pwa_install()}
-      onClick={() => void requestInstallation()}
-    >
-      <IconShare3 aria-hidden="true" data-icon="inline-start" />
-      <span>{m.pwa_install()}</span>
-    </Button>
-  )
-}
 
 export function NotificationControl() {
   const { notificationStatus, enableNotifications, disableNotifications } =

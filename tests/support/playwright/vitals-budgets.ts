@@ -5,10 +5,6 @@ import type { Metrics } from './vitals-metrics'
 // Rounded UP to integer ms / 0.0001 CLS. See docs/vitals.md for context.
 // These are fixed regression limits, never rewritten by an ordinary audit run.
 export const budgets = {
-  homeFirst: {
-    mobile: { lcp: 9290, cls: 0.0217, tbt: 98 },
-    desktop: { lcp: 1731, cls: 0.0268, tbt: 50 },
-  },
   home: {
     mobile: { lcp: 9288, cls: 0.0217, tbt: 68 },
     desktop: { lcp: 1732, cls: 0.0268, tbt: 50 },
@@ -20,6 +16,12 @@ export const budgets = {
   settings: {
     mobile: { lcp: 9106, cls: 0.0229, tbt: 83 },
     desktop: { lcp: 1708, cls: 0.0234, tbt: 50 },
+  },
+  // Reviewed from three complete runs (nine samples/device) on 2026-10-25.
+  // Existing page budgets above/below are deliberately unchanged.
+  licenses: {
+    mobile: { lcp: 10011, cls: 0.0338, tbt: 77 },
+    desktop: { lcp: 1876, cls: 0.0201, tbt: 50 },
   },
   profile: {
     mobile: { lcp: 9904, cls: 0.0204, tbt: 62 },

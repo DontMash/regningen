@@ -1,40 +1,5 @@
 export type Metrics = { lcp: number; cls: number; tbt: number }
 
-export type VitalsSummary = {
-  page: string
-  path: string
-  device: 'mobile' | 'desktop'
-  calibration: boolean
-  measurements: Metrics[]
-  metrics: Metrics | null
-  scores: Record<string, number> | null
-  completedRepetitions: number[]
-  missingRepetitions: number[]
-  budget: Metrics | null
-  /** Test-owned visibility policy; never inferred from the route or Lighthouse scores. */
-  expectedNoindex: boolean
-}
-
-/** Aggregate verified measurements for the overview without altering raw reports. */
-export function summarizeVitals({
-  scores,
-  ...input
-}: Omit<
-  VitalsSummary,
-  'metrics' | 'scores' | 'completedRepetitions' | 'missingRepetitions'
-> & { scores: Record<string, number[]> }): VitalsSummary {
-  const progress = measurementProgress(input.measurements)
-  return {
-    ...input,
-    ...progress,
-    scores: progress.metrics
-      ? Object.fromEntries(
-          Object.entries(scores).map(([key, values]) => [key, median(values)]),
-        )
-      : null,
-  }
-}
-
 export function metricsFromReport(report: {
   audits: Partial<
     Record<
@@ -87,17 +52,6 @@ export function budgetViolations(actual: Metrics, budget: Metrics | undefined) {
   return violations
 }
 
-export function measurementProgress(measurements: Metrics[]) {
-  if (measurements.length > 3)
-    throw new Error('Expected at most three measurements.')
-  return {
-    measurements,
-    metrics: measurements.length === 3 ? medianMetrics(measurements) : null,
-    completedRepetitions: [1, 2, 3].slice(0, measurements.length),
-    missingRepetitions: [1, 2, 3].slice(measurements.length),
-  }
-}
-
 export function budgetFromBaseline(measurements: Metrics[]): Metrics {
   const baseline = medianMetrics(measurements, 9)
   return {
@@ -111,7 +65,7 @@ export function budgetFromBaseline(measurements: Metrics[]): Metrics {
   }
 }
 
-export function median(values: number[]) {
+function median(values: number[]) {
   const sorted = [...values].sort((left, right) => left - right)
   return sorted[Math.floor(sorted.length / 2)]
 }

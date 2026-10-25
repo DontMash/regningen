@@ -162,9 +162,6 @@ export class SettingsRobot {
       ),
     ).toBeVisible()
     await expect(
-      this.page.getByText('Installation', { exact: true }),
-    ).toBeVisible()
-    await expect(
       this.page.getByText(
         locale === 'de'
           ? /nach einem erfolgreichen PDF-Export/
@@ -214,7 +211,7 @@ export class SettingsRobot {
     await expect(
       this.page
         .getByRole('main')
-        .getByRole('button', { name: 'Installieren', exact: true }),
+        .getByRole('button', { name: /Benachrichtigungen/ }),
     ).toBeVisible()
     await expect(
       this.page
@@ -226,13 +223,6 @@ export class SettingsRobot {
         .getByRole('contentinfo')
         .getByRole('button', { name: /Benachrichtigungen/ }),
     ).toHaveCount(0)
-  }
-
-  async requestInstallation() {
-    await this.page
-      .getByRole('main')
-      .getByRole('button', { name: 'Installieren', exact: true })
-      .click()
   }
 
   async expectNotificationsDenied() {

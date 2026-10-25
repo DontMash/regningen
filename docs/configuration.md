@@ -101,6 +101,48 @@ Changes require a rebuild and a server restart with the intended configuration. 
 
 Matching is an operational requirement, **not an artifact lock**: startup does not compare otherwise valid runtime settings to a build manifest. This configuration contract does not redesign PWA caching, update postponement/acceptance, or browser-local working data. See [offline visibility updates](visibility.md#offline-content-and-artwork) and [security policy updates](security.md#deployment-inputs-and-cached-updates).
 
+## Production build and PWA integration
+
+`vite.config.ts` keeps the generated Workbox worker and prompted registration.
+With installed Nitro `3.0.260610-beta` and vite-plugin-pwa `2.0.0`, PWA's shared-config
+`closeBundle` generates workers for multiple environments, after Nitro has already
+indexed public-asset metadata. A small compatibility shim suppresses only that
+hook and calls the public PWA asset-generator/worker APIs once from Vite's
+Nitro-environment `buildStart`, after client/SSR assets and public copying but
+before server compilation. Manifest emission remains plugin-owned. There is no
+generated-server JavaScript parser or metadata rewriting.
+
+The [upstream integration issue](https://github.com/vite-pwa/vite-plugin-pwa/issues/940)
+and [Nitro module documentation](https://nitro.build/docs/modules) are leads, not
+proof of released compatibility. The investigated published Nitro
+`3.0.260903-beta` also lacks the documented `vite:compile:before` hook; it does not
+justify an upgrade. Remove the shim when a released first-class integration
+supports this ordering and the production PWA journeys pass without it.
+
+SSR stylesheet publication is independent. Copying emitted SSR CSS into public
+assets remains necessary: removing it failed the isolated production tests with
+an unavailable stylesheet referenced by SSR HTML, even though an ordinary local
+build appeared to contain its CSS. Remove that copy only after exact stylesheet
+responses and offline production journeys pass without it.
+
+Offline preparation still eagerly precaches core localized SSR documents and
+necessary assets. Runtime navigation caching alone misses unvisited screens; no
+static application shell has been established for this SSR application. The
+small document inventory (including slash aliases) and content/configuration/
+policy-sensitive revision are retained rather than replacing them with a weaker
+SemVer key or a larger prerendering adapter. Production tests cover same-version
+content, configuration, notices, and policy updates, both-language startup, and
+real offline PDFs rather than inspecting the generated revision syntax.
+
+The build wrapper remains for argument forwarding, failure propagation, and
+shipping `.output/LICENSE`. The localization wrapper remains a direct compile
+call using shared options; replacing it with a CLI plus another config re-export
+would not remove meaningful responsibility. Preview retains environment loading,
+empty-shell precedence, mode/listener selection, and production-entry validation.
+Application artwork generation and the stable-origin multi-build test harness
+remain application-specific capabilities, not candidates for a larger framework.
+No dependency or distributed-license changes accompany this integration change.
+
 ## Framework and tooling controls
 
 Listener configuration belongs to Nitro, not the application t3-env schema. For direct Node startup, `NITRO_HOST` and `NITRO_PORT` set the bind host and port; `HOST` and `PORT` are framework aliases. For example:

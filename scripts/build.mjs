@@ -15,6 +15,5 @@ if (result.error) throw result.error
 if (result.status !== 0) {
   process.exitCode = result.status ?? 1
 } else {
-  await import('./finalize-pwa-output.mjs')
   copyFileSync('LICENSE', '.output/LICENSE')
 }

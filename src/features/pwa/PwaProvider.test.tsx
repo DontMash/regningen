@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { InstallButton, NotificationControl } from './PwaControls'
+import { NotificationControl } from './PwaControls'
 import { PwaProvider, usePwa } from './PwaProvider'
 import { setLocale } from '@/paraglide/runtime'
 import { disposeInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft-store'
@@ -90,7 +90,6 @@ function stubNotificationSupport({
 function renderPwa() {
   return render(
     <PwaProvider>
-      <InstallButton />
       <NotificationControl />
       <PwaStatus />
     </PwaProvider>,
@@ -113,19 +112,20 @@ afterEach(async () => {
 })
 
 describe('application PWA controls', () => {
-  it('offers English installation guidance and update controls without automatically updating', async () => {
+  it('leaves native installation prompts to the browser', async () => {
+    renderPwa()
+    await screen.findByText('offline:false')
+    const event = new Event('beforeinstallprompt', { cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(
+      screen.queryByRole('button', { name: 'Installieren' }),
+    ).not.toBeInTheDocument()
+  })
+  it('offers English update controls without automatically updating', async () => {
     setLocale('en', { reload: false })
     const user = userEvent.setup()
     renderPwa()
-
-    await user.click(await screen.findByRole('button', { name: 'Install' }))
-    expect(
-      await screen.findByRole('dialog', { name: 'Install regningen' }),
-    ).toBeVisible()
-    expect(screen.getByText(/does not offer native installation/)).toBeVisible()
-    await user.click(
-      screen.getByText('Close', { selector: 'button', exact: true }),
-    )
 
     triggerPwaUpdateAvailable()
     expect(
@@ -168,7 +168,7 @@ describe('application PWA controls', () => {
     setLocale('en', { reload: false })
     const user = userEvent.setup()
     renderPwa()
-    await screen.findByRole('button', { name: 'Install' })
+    await screen.findByText('offline:false')
 
     triggerPwaRegisterError(new Error('registration unavailable'))
     expect(
@@ -191,7 +191,7 @@ describe('application PWA controls', () => {
   it('keeps a deferred local reload discoverable after unsaved profile discard is cancelled', async () => {
     const user = userEvent.setup()
     renderPwa()
-    await screen.findByRole('button', { name: 'Installieren' })
+    await screen.findByText('offline:false')
     setUnsavedProfileChanges(true)
     await act(async () => triggerPwaNeedReload())
     await act(async () => resolveProfileDiscardConfirmation(false))
@@ -206,7 +206,7 @@ describe('application PWA controls', () => {
   it('does not request an update when abandoning unsaved Business Profile changes is cancelled', async () => {
     const user = userEvent.setup()
     renderPwa()
-    await screen.findByRole('button', { name: 'Installieren' })
+    await screen.findByText('offline:false')
     triggerPwaUpdateAvailable()
     await screen.findByRole('dialog', { name: 'Aktualisierung verfügbar' })
     setUnsavedProfileChanges(true)
@@ -217,74 +217,10 @@ describe('application PWA controls', () => {
     expect(getPwaUpdateServiceWorkerCalls()).toBe(0)
   })
 
-  it('keeps installation explicit and offers manual browser guidance when no native event is available', async () => {
-    const user = userEvent.setup()
-    renderPwa()
-
-    await user.click(
-      await screen.findByRole('button', { name: 'Installieren' }),
-    )
-
-    expect(
-      await screen.findByRole('dialog', { name: 'regningen installieren' }),
-    ).toBeVisible()
-    expect(screen.getByText(/keine native Installation bereit/)).toBeVisible()
-  })
-
-  it('uses a single native installation prompt and does not prompt again after dismissal', async () => {
-    const user = userEvent.setup()
-    const prompt = vi.fn(async () => {})
-    const installEvent = Object.assign(
-      new Event('beforeinstallprompt', { cancelable: true }),
-      {
-        prompt,
-        userChoice: Promise.resolve({ outcome: 'dismissed', platform: '' }),
-      },
-    )
-    renderPwa()
-
-    const install = await screen.findByRole('button', { name: 'Installieren' })
-    window.dispatchEvent(installEvent)
-    await user.click(install)
-    expect(prompt).toHaveBeenCalledOnce()
-    expect(
-      screen.queryByRole('dialog', { name: 'regningen installieren' }),
-    ).not.toBeInTheDocument()
-    expect(window.localStorage.length).toBe(0)
-
-    await user.click(install)
-    expect(prompt).toHaveBeenCalledOnce()
-    expect(
-      await screen.findByRole('dialog', { name: 'regningen installieren' }),
-    ).toBeVisible()
-  })
-
-  it('shows platform guidance and hides installation after the appinstalled event', async () => {
-    const user = userEvent.setup()
-    vi.stubGlobal('navigator', {
-      userAgent: 'Mozilla/5.0 (Linux; Android 14)',
-      platform: 'Linux armv8l',
-      maxTouchPoints: 0,
-    })
-    renderPwa()
-    const install = await screen.findByRole('button', { name: 'Installieren' })
-    await user.click(install)
-    expect(
-      await screen.findByText(/Browsermenü.*App installieren/),
-    ).toBeVisible()
-
-    window.dispatchEvent(new Event('appinstalled'))
-    await waitFor(() =>
-      expect(
-        screen.queryByRole('button', { name: 'Installieren' }),
-      ).not.toBeInTheDocument(),
-    )
-  })
-
   it('shows generic update availability, allows later, keeps it discoverable, and applies only on explicit intent', async () => {
     const user = userEvent.setup()
     renderPwa()
-    await screen.findByRole('button', { name: 'Installieren' })
+    await screen.findByText('offline:false')
 
     triggerPwaOfflineReady()
     triggerPwaUpdateAvailable()
@@ -312,7 +248,7 @@ describe('application PWA controls', () => {
   it('surfaces registration and update errors without losing the explicit retry path', async () => {
     const user = userEvent.setup()
     renderPwa()
-    await screen.findByRole('button', { name: 'Installieren' })
+    await screen.findByText('offline:false')
     triggerPwaRegisterError(new Error('registration unavailable'))
     expect(
       await screen.findByText(/Offline-Funktionen konnten nicht eingerichtet/),
@@ -370,6 +306,38 @@ describe('application PWA controls', () => {
     )
     expect(window.localStorage.getItem('regningen.pwa.pdf-notifications')).toBe(
       'disabled',
+    )
+  })
+
+  it('allows notifications in standalone iOS mode without opting in automatically and honors revoked permission', async () => {
+    const user = userEvent.setup()
+    const requestPermission = stubNotificationSupport({
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+    })
+    stubMatchMedia(true)
+    renderPwa()
+
+    const enable = await screen.findByRole('button', {
+      name: 'Benachrichtigungen aktivieren',
+    })
+    expect(enable).toBeEnabled()
+    expect(requestPermission).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'PDF export' }))
+    expect(getPwaRegistration().showNotification).not.toHaveBeenCalled()
+
+    await user.click(enable)
+    await screen.findByRole('button', {
+      name: 'Benachrichtigungen deaktivieren',
+    })
+    stubNotificationSupport({ permission: 'denied' })
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(
+      screen.getByRole('button', { name: 'Benachrichtigungen blockiert' }),
+    ).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'PDF export' }))
+    expect(getPwaRegistration().showNotification).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem('regningen.pwa.pdf-notifications')).toBe(
+      'enabled',
     )
   })
 

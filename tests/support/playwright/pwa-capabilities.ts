@@ -10,7 +10,6 @@ type NotificationObservation = {
 type CapabilityWindow = Window &
   typeof globalThis & {
     pwaNotificationObservation: NotificationObservation
-    pwaInstallationPrompts: number
   }
 
 // Observes local notification dispatch, not actual OS presentation or delivery.
@@ -65,31 +64,6 @@ export class PwaBrowserCapabilities {
         value
       window.dispatchEvent(new Event('focus'))
     }, permission)
-  }
-
-  async offerDismissedInstallation(page: Page) {
-    await page.evaluate(() => {
-      ;(window as CapabilityWindow).pwaInstallationPrompts = 0
-      const event = Object.assign(
-        new Event('beforeinstallprompt', { cancelable: true }),
-        {
-          prompt: async () => {
-            ;(window as CapabilityWindow).pwaInstallationPrompts += 1
-          },
-          userChoice: Promise.resolve({
-            outcome: 'dismissed',
-            platform: 'web',
-          }),
-        },
-      )
-      window.dispatchEvent(event)
-    })
-  }
-
-  async installationPromptCount(page: Page) {
-    return page.evaluate(
-      () => (window as CapabilityWindow).pwaInstallationPrompts,
-    )
   }
 
   async failNotificationDelivery(page: Page) {

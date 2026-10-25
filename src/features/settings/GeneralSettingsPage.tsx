@@ -39,7 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { InstallButton, NotificationControl } from '@/features/pwa/PwaControls'
+import { NotificationControl } from '@/features/pwa/PwaControls'
 import { resetApplication } from './application-reset'
 
 export default function GeneralSettingsPage() {
@@ -141,17 +141,6 @@ export default function GeneralSettingsPage() {
         </CardHeader>
         <CardContent>
           <NotificationControl />
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.settings_installation()}</CardTitle>
-          <CardDescription>
-            {m.settings_installation_description()}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <InstallButton />
         </CardContent>
       </Card>
       <Separator />

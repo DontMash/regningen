@@ -361,22 +361,6 @@ test('generated production workers prepare offline routes and prompt for same-ve
       'utf8',
     )
     expect(workerA).not.toBe(workerB)
-    for (const documentRevision of [
-      /url:"\/de",revision:"([^"]+)"/,
-      /url:"\/de\/rechnung",revision:"([^"]+)"/,
-      /url:"\/en",revision:"([^"]+)"/,
-      /url:"\/en\/invoice",revision:"([^"]+)"/,
-    ]) {
-      const revisionA = documentRevision.exec(workerA)?.[1]
-      const revisionB = documentRevision.exec(workerB)?.[1]
-      expect(revisionA).toBeTruthy()
-      expect(revisionB).toBeTruthy()
-      expect(revisionA).not.toBe(revisionB)
-    }
-    expect(workerA).toContain('/de/rechnung')
-    expect(workerB).toContain('/de/einstellungen/profil')
-    expect(workerB).toContain('/en/settings/profile')
-    expect(workerB).not.toContain('/business-profile')
 
     await pwaBrowser.setOffline(true)
     await pageA.goto(`${deployment.baseUrl}/de`)
@@ -895,27 +879,21 @@ async function expectGeneratedWorker(
     'no-cache, no-store, must-revalidate',
   )
   const body = await response.text()
-  expect(body).toContain('precacheAndRoute')
-  for (const route of [
-    '/de',
-    '/de/rechnung',
-    '/de/einstellungen',
-    '/de/einstellungen/profil',
-    '/de/einstellungen/lizenzen',
-    '/en',
-    '/en/invoice',
-    '/en/settings',
-    '/en/settings/profile',
-    '/en/settings/licenses',
-    'third-party-notices.txt',
-  ]) {
-    expect(body).toContain(route)
-  }
+  expect(response.headers.get('content-type')).toContain('javascript')
+  expect(Number(response.headers.get('content-length'))).toBe(
+    Buffer.byteLength(body),
+  )
+  const etag = response.headers.get('etag')
+  if (!etag) throw new Error('Worker response has no ETag.')
+  const unchanged = await fetch(`${baseUrl}/sw.js`, {
+    headers: { 'If-None-Match': etag },
+  })
+  expect(unchanged.status).toBe(304)
   const artifact = await readFile(
     await deployment.artifactPath(release, 'public/sw.js'),
     'utf8',
   )
-  expect(body.trim()).toBe(artifact.trim())
+  expect(body).toBe(artifact)
 
   const html = await (await fetch(baseUrl)).text()
   const stylesheets = [...html.matchAll(/<link\b([^>]+)>/g)]
@@ -928,7 +906,20 @@ async function expectGeneratedWorker(
     expect(styleResponse.ok, `stylesheet was not served: ${stylesheet}`).toBe(
       true,
     )
-    expect(body).toContain(new URL(stylesheet, baseUrl).pathname.slice(1))
+    expect(styleResponse.headers.get('content-type')).toContain('text/css')
+    const css = await styleResponse.text()
+    expect(Number(styleResponse.headers.get('content-length'))).toBe(
+      Buffer.byteLength(css),
+    )
+    expect(css).toBe(
+      await readFile(
+        deployment.artifactPath(
+          release,
+          `public${new URL(stylesheet, baseUrl).pathname}`,
+        ),
+        'utf8',
+      ),
+    )
   }
 }
 

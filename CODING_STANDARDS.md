@@ -8,7 +8,7 @@ This document records judgment calls for design, implementation, and review. It 
 
 Executable configuration is authoritative for mechanical conventions. Consult the formatter, linter, type checker, package scripts, and runner configuration rather than restating their settings here. Do not introduce stylistic restrictions solely for uniformity.
 
-A check can fail; a sentence in Markdown cannot. Reliably machine-checkable rules belong in executable guardrails. This document explains the judgment those checks cannot establish; it does not replace enforcement. Within a review's agreed scope, missing guardrails are findings of their own, separate from violations in application code. Passing checks is not proof that the design satisfies these standards.
+A check can fail; a sentence in Markdown cannot. Prefer executable guardrails for reliably machine-checkable conventions. Architectural responsibilities and dependency boundaries are an explicit exception: they are documentation and human review guidance, not an import-graph enforcement policy. Do not add a replacement architecture engine or source-scanning enforcement adapter. Ordinary lint, type checking, formatting, and behavioral tests remain required. Within a review's agreed scope, missing guardrails for other mechanically enforceable rules are separate findings from application-code violations. Passing checks is not proof that the design satisfies these standards.
 
 ## Responsibilities and dependency direction
 

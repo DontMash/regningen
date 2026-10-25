@@ -1,14 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
 import { vi } from 'vitest'
 import type { RegisterSWOptions } from 'vite-plugin-pwa/types'
 
-interface RegistrationControls {
-  needRefresh: (value: boolean) => void
-  offlineReady: (value: boolean) => void
-  options: RegisterSWOptions
-}
-
-let controls: RegistrationControls | null = null
+let controls: RegisterSWOptions | null = null
 let updateServiceWorkerCalls = 0
 let updateServiceWorkerError: unknown = null
 const registration = {
@@ -16,49 +9,29 @@ const registration = {
   showNotification: vi.fn(async () => {}),
 } as unknown as ServiceWorkerRegistration
 
-export function useRegisterSW(options: RegisterSWOptions = {}) {
-  const latestOptions = useRef(options)
-  latestOptions.current = options
-  const [needRefresh, setNeedRefresh] = useState(false)
-  const [offlineReady, setOfflineReady] = useState(false)
-  const [updateServiceWorker] = useState(() => async () => {
+export function registerSW(options: RegisterSWOptions = {}) {
+  controls = options
+  options.onRegisteredSW?.('/sw.js', registration)
+  return async () => {
     updateServiceWorkerCalls += 1
     if (updateServiceWorkerError) throw updateServiceWorkerError
-  })
-
-  useEffect(() => {
-    controls = {
-      needRefresh: setNeedRefresh,
-      offlineReady: setOfflineReady,
-      options: latestOptions.current,
-    }
-    latestOptions.current.onRegisteredSW?.('/sw.js', registration)
-    return () => {
-      controls = null
-    }
-  }, [])
-
-  return {
-    needRefresh: [needRefresh, setNeedRefresh] as const,
-    offlineReady: [offlineReady, setOfflineReady] as const,
-    updateServiceWorker,
   }
 }
 
 export function triggerPwaUpdateAvailable() {
-  controls?.needRefresh(true)
+  controls?.onNeedRefresh?.()
 }
 
 export function triggerPwaOfflineReady() {
-  controls?.offlineReady(true)
+  controls?.onOfflineReady?.()
 }
 
 export function triggerPwaNeedReload() {
-  controls?.options.onNeedReload?.()
+  controls?.onNeedReload?.()
 }
 
 export function triggerPwaRegisterError(error: unknown) {
-  controls?.options.onRegisterError?.(error)
+  controls?.onRegisterError?.(error)
 }
 
 export function setPwaUpdateServiceWorkerError(error: unknown) {

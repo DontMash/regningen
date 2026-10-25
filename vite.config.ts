@@ -14,7 +14,7 @@ import { validateReleaseData } from './src/lib/release-data-validation.ts'
 import { readEnvironment } from './src/env.ts'
 import { devtools } from '@tanstack/devtools-vite'
 import { VitePWA } from 'vite-plugin-pwa'
-import type { ResolvedVitePWAOptions } from 'vite-plugin-pwa'
+import type { ResolvedVitePWAOptions, VitePluginPWAAPI } from 'vite-plugin-pwa'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
@@ -44,6 +44,39 @@ function releaseDataValidation(): Plugin {
       }
     },
   }
+}
+
+// Nitro's released beta lacks vite:compile:before. Generate once at the start
+// of its final environment, before public-asset metadata is compiled. PWA's
+// shared-config closeBundle otherwise runs for every environment (upstream #940).
+// Remove this compatibility shim when a released first-class integration exists.
+function nitroPwa(options: Parameters<typeof VitePWA>[0]): Plugin[] {
+  const plugins = VitePWA(options)
+  const buildPlugin = plugins.find(
+    (plugin) => plugin.name === 'vite-plugin-pwa:build',
+  )
+  const api: VitePluginPWAAPI | undefined = plugins.find(
+    (plugin) => plugin.name === 'vite-plugin-pwa',
+  )?.api
+  if (!buildPlugin?.closeBundle || !api) {
+    throw new Error(
+      'PWA build integration changed; review Nitro worker generation.',
+    )
+  }
+  delete buildPlugin.closeBundle
+  return [
+    ...plugins,
+    {
+      name: 'nitro-pwa-generation',
+      apply: 'build',
+      applyToEnvironment: (environment) => environment.name === 'nitro',
+      async buildStart() {
+        const generator = await api.pwaAssetsGenerator()
+        await generator?.generate()
+        await api.generateSW()
+      },
+    },
+  ]
 }
 
 function outputFiles(directory: string): string[] {
@@ -172,6 +205,9 @@ function preparePwaWorker(
   ]
 }
 
+// Independent of worker ordering: Nitro does not reliably publish the stylesheet
+// referenced by SSR HTML. Removing this copy breaks production stylesheet delivery
+// in the isolated PWA journeys. Remove only when those responses pass without it.
 function copyServerRenderedStyles() {
   const serverAssetsDirectory = resolve(
     process.cwd(),
@@ -203,7 +239,7 @@ const config = defineConfig(({ command, mode }) => {
       paraglideVitePlugin(paraglideOptions),
       developmentManifests(),
       releaseDataValidation(),
-      VitePWA({
+      nitroPwa({
         strategies: 'generateSW',
         outDir: '.output/public',
         registerType: 'prompt',

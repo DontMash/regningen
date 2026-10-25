@@ -19,19 +19,21 @@ There is no Docker or preparation command, separate tools installation, custom l
 
 The command runs Playwright with `playwright.vitals.config.ts`; page-oriented specs live in `tests/e2e/<page>.vitals.spec.ts` and are excluded from ordinary `pnpm test:e2e`. Shared technical fixtures/support live under `tests/support/playwright/`.
 
-Playwright's `webServer` must make a fresh full `pnpm build` (including PWA finalization), then serve the generated production server. Build and runtime both use `ORIGIN=http://127.0.0.1:4173` and `TRUST_PROXY=false`; no existing server or stale build is reused. This builds the current working application **in place**, replacing normal generated build files including `.output`. There are no repository snapshots. Avoid concurrent builds/servers using those outputs or port.
+Playwright's `webServer` must make a fresh full `pnpm build` (including worker generation), then serve the generated production server. Build and runtime both use `ORIGIN=http://127.0.0.1:4173` and `TRUST_PROXY=false`; no existing server or stale build is reused. This builds the current working application **in place**, replacing normal generated build files including `.output`. There are no repository snapshots. Avoid concurrent builds/servers using those outputs or port.
 
 ## What is measured
 
-Five independent states each use Lighthouse's actual **mobile and desktop presets**, including their device/throttling assumptions. Three sequential, independent measurements per state/device produce **30 audits**; no parallel audits or retries that mask a failed measurement.
+Five page-owned scenarios each use Lighthouse's actual **mobile and desktop presets**, including their device/throttling assumptions. Three sequential, independent measurements per state/device produce **30 audits**; no parallel audits or retries that mask a failed measurement.
 
-1. `home-first`: `/`, genuine first-visit state with automatic release notes present.
-2. `home`: `/`, release notes acknowledged through their UI.
-3. `invoice`: `/invoice`, saved fictional Business Profile and populated fictional Invoice Draft.
-4. `settings`: `/settings`, normal Allgemein screen, notes acknowledged.
-5. `profile`: `/settings/profile`, saved fictional Business Profile open for editing, notes acknowledged.
+1. Home: `/de`, release notes acknowledged through their UI.
+2. Invoice: `/de/rechnung`, saved fictional Business Profile and populated fictional Invoice Draft.
+3. General settings: `/de/einstellungen`, normal Allgemein screen, notes acknowledged.
+4. Business Profile: `/de/einstellungen/profil`, saved fictional Business Profile open for editing, notes acknowledged.
+5. Licenses: `/de/einstellungen/lizenzen`, normal readable screen, notes acknowledged.
 
-Use existing feature robots and deterministic fictional data from `tests/scenarios/`. Profile saving, draft entry, and acknowledgment cross the UI, never storage seeding. All states use German UI, `de-DE` browser locale, Europe/Berlin timezone, and light presentation; first visit keeps the automatic notes and uses a light system preference. Check prerequisites through the UI and verify the intended screen/data after measurement; a missing-profile prompt is not the populated Invoice editor.
+The five `*.vitals.spec.ts` files own coverage; Playwright's selected specs and mobile/desktop projects establish completeness, without a second scenario registry. First-visit release notes remain covered by ordinary functional browser tests, not a duplicate performance scenario.
+
+Use existing feature robots and deterministic fictional data from `tests/scenarios/`. Profile saving, draft entry, and acknowledgment cross the UI, never storage seeding. All scenarios use German UI, `de-DE` browser locale, Europe/Berlin timezone, and light presentation. Check prerequisites through the UI and verify the intended screen/data after measurement; a missing-profile prompt is not the populated Invoice editor.
 
 Every repetition starts with fresh test-owned browser state. Before measured navigation, technical support clears HTTP/browser caches, service workers/controllers, and Cache Storage while retaining UI-created local storage and the **same tab's session storage**. Normal production PWA startup remains enabled. This is cold navigation, not offline or warm-cache performance.
 
@@ -41,9 +43,9 @@ Playwright prepares the UI; Puppeteer connects through CDP to that **exact tab**
 
 All four categories—Performance, Accessibility, Best Practices, and SEO—are reported. Default runs gate **only LCP, CLS, and TBT medians**, calculated independently from all three measurements per state/device, against explicit committed budgets. Exceeding a budget fails; missing budgets never silently select report-only mode. Other findings/category scores are informational.
 
-Each `vitals.audit()` caller declares `expectedNoindex`: `false` for public introductions (German and English), `true` for intentionally private Invoice and settings screens (including Business Profile and licenses). The summary/overview uses only this explicit expectation, never the URL shape, to annotate expected `is-crawlable` findings. Keep unrelated SEO findings and public introduction crawlability visible. Raw Lighthouse reports and scores stay untouched. Focused summary tests cover both public languages and private examples without adding measurement states.
+Each `vitals.audit()` caller declares `expectedNoindex`: `false` for public introductions (German and English), `true` for intentionally private Invoice and settings screens (including Business Profile and licenses). A Playwright visibility annotation identifies intentionally private pages using only this explicit expectation, never the URL shape. Keep unrelated SEO findings and public introduction crawlability visible in the standard reports. Raw Lighthouse reports and scores stay untouched; no SEO finding is suppressed or rewritten.
 
-Open the Playwright HTML report, with raw Lighthouse **HTML and JSON attached for every measurement** and a **Suite overview** attachment across the selected page/device tests:
+Open the standard Playwright HTML report, with untouched Lighthouse **HTML and JSON attached for every measurement**:
 
 ```sh
 pnpm exec playwright show-report .vitals/playwright-report
@@ -52,9 +54,9 @@ pnpm exec playwright show-report .vitals/playwright-report
 pnpm test:vitals invoice.vitals.spec.ts --project mobile
 ```
 
-The overview is also available at `.vitals/overview.md` and `.vitals/overview.json`; test artifacts live in `.vitals/test-results/`. Everything under `.vitals/` is ignored by Git. Raw Lighthouse reports retain actual browser/Lighthouse versions, measurement settings, and diagnostics. No source snapshot or hardware-comparison manifest is generated.
+Test artifacts live in `.vitals/test-results/`. Everything under `.vitals/` is ignored by Git. Raw Lighthouse reports retain actual browser/Lighthouse versions, measurement settings, category scores, and diagnostics. No custom cross-page reporter, summary attachment, source snapshot, or hardware-comparison manifest is maintained.
 
-Reports follow Playwright's **latest-run** lifecycle, not a historical archive. Each overview identifies the selected tests, their status, and any missing measurements; filtered runs do not claim full coverage. Copy the complete HTML report and attachments privately before another run replaces them if you need history. There is no automatic archive/comparison service or upload.
+Reports follow Playwright's **latest-run** lifecycle, not a historical archive. Playwright shows selected tests, steps, status, and failures; filtered runs do not claim full coverage. Each test requires all three valid measurements before median budget validation. Copy the complete HTML report and attachments privately before another run replaces them if you need history. There is no automatic archive/comparison service or upload.
 
 Build, readiness, setup/state, browser/Lighthouse execution, and invalid or missing measurements/reports return nonzero in both modes. Every selected page/device test requires all three measurements; a failed repetition cannot be dropped. An unfiltered run selects all ten page/device tests (30 audits). Budget failures also return nonzero in default mode.
 
@@ -94,6 +96,27 @@ All three suite medians for every metric fit the formula-derived budgets in `tes
 
 These limits protect the measured baseline, not a claim of good mobile performance: the high mobile LCP values remain visible. Other platforms/hardware have not been calibrated. Recalibration is an explicit review, not a way to automatically make regressions pass.
 
+### Five-page consolidation calibration: 2026-10-25
+
+After the final PWA registration change, three fresh complete sequential calibration runs passed in **294, 292, and 296 seconds** (including production builds): **90 audits**, nine samples per page/device. These runs had an exclusive build/browser window; earlier contended/pre-fix attempts were discarded. Hardware remains the AMD Ryzen AI 9 HX 370/Linux x86-64 baseline machine, now kernel `7.2.8-9-omarchy`, Node `26.8.1`. Each run retained normal PWA startup and exact-tab UI prerequisites.
+
+| Page / device      | LCP median ms (sample range) | CLS median | TBT median ms (sample range) |
+| ------------------ | ---------------------------- | ---------- | ---------------------------- |
+| home / mobile      | 8568.1 (8341.6–8569.3)       | 0.0016034  | 36.5 (8–75)                  |
+| Invoice / mobile   | 11676.9 (11643.3–11739.4)    | 0.0002632  | 36.1 (29–140.3)              |
+| settings / mobile  | 8492.0 (8488.9–8494.1)       | 0.0007530  | 43 (23–58)                   |
+| profile / mobile   | 8735.2 (8715.3–8747.1)       | 0.0006680  | 41.5 (14.5–74.5)             |
+| licenses / mobile  | 8342.2 (8337.8–8344.5)       | 0.0137945  | 26.5 (4–68)                  |
+| home / desktop     | 1602.6 (1553.9–1603.8)       | 0.0067466  | 0 (0–0)                      |
+| Invoice / desktop  | 2070.2 (2064.1–2080.9)       | 0.0000975  | 0 (0–0)                      |
+| settings / desktop | 1582.8 (1582.4–1583.6)       | 0.0000366  | 0 (0–0)                      |
+| profile / desktop  | 1625.2 (1618.2–1633.5)       | 0          | 0 (0–0)                      |
+| licenses / desktop | 1562.8 (1562.0–1563.1)       | 0.0000533  | 0 (0–0)                      |
+
+Only the new licenses scenario receives new budgets: mobile **LCP 10011 ms / CLS 0.0338 / TBT 77 ms**, desktop **1876 ms / 0.0201 / 50 ms**. These are the policy formula applied to all nine samples with upward rounding. Licenses LCP variation was under 7 ms on mobile and 2 ms on desktop; CLS was constant on mobile and between 0 and 0.0000534 on desktop. Mobile licenses TBT varied from 4 to 68 ms; no samples were dropped. The larger retained Invoice TBT sample (140.3 ms) is not a reason to widen its median gate. All existing home, Invoice, settings, and profile budgets remain unchanged despite changed baseline medians; removed first-visit budgets are deleted.
+
+The subsequent **default regression run passed all ten tests / 30 audits in 291 seconds** with those fixed budgets. Focused metric contract tests passed (9), and typecheck passed. Calibration logs and raw-result copies were retained locally under `/tmp/vitals-final-calibration/`; default-run output is `/tmp/vitals-final-default.log`. These temporary paths are evidence for this session, not an archive policy. The default report contained all 30 standard HTML and 30 JSON report files; there is no custom overview.
+
 ## Privacy and comparable results
 
 Lighthouse runs locally with `enableErrorReporting: false`. No PageSpeed Insights, report uploads, remote Lighthouse service, or hosted history is configured. Reports may contain screenshots, URLs, page content, and diagnostics; use fictional data and keep any manually copied reports private.
@@ -109,3 +132,5 @@ The real `*.vitals.spec.ts` specs are the acceptance seam, not a separate Docker
 For audit-tooling changes, require `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test:coverage`, `pnpm test:e2e`, and default `pnpm test:vitals`. Ordinary E2E and report-only calibration do not substitute for the regression run. See the [testing guide](testing.md) for setup policy and test roles.
 
 Initial verification on the baseline machine passed all six repository checks: 177 Vitest tests across 23 files (including nine measurement-helper tests), 95 ordinary E2E tests, and a subsequent default-budget vitals run with all ten page/device tests / 30 audits passing in 4.6 minutes. The generated Playwright report was checked for all 60 raw HTML/JSON files and suite overview attachments. Standards and specification reviews were completed; their findings were resolved.
+
+Final consolidation verification on 2026-10-25 passed formatting, lint, typecheck, build, coverage (437 tests across 37 files), and ordinary E2E (151 tests), alongside the default 30-audit run above. Lint retains one pre-existing `no-shadow` warning. The first full E2E attempt had three development-server dynamic-import failures; a fresh complete rerun passed all 151 tests without code changes or retries. Standards and spec reviews, including the new budgets, found no unresolved issues. The retained Nitro lifecycle shim, SSR CSS copy, and eager document preparation are explained in [production build integration](configuration.md#production-build-and-pwa-integration).

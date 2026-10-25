@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
     alias: {
-      'virtual:pwa-register/react': fileURLToPath(
+      'virtual:pwa-register': fileURLToPath(
         new URL('./tests/support/vitest/pwa-register.ts', import.meta.url),
       ),
     },
