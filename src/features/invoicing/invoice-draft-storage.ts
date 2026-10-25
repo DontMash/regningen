@@ -7,6 +7,7 @@ import {
   INVOICE_DRAFT_STORAGE_KEY,
 } from './invoice-draft-persistence'
 import type { InvoiceDraftPersistence } from './invoice-draft-persistence'
+import { SUPPORTED_VAT_RATES } from './validation-contract'
 
 const lineSchema = z
   .object({
@@ -28,7 +29,7 @@ const envelopeSchema = z
         street: z.string(),
         postalCode: z.string(),
         town: z.string(),
-        rate: z.union([z.literal(7), z.literal(19)]),
+        rate: z.literal(SUPPORTED_VAT_RATES),
         items: z.array(lineSchema),
       })
       .strict(),

@@ -15,6 +15,13 @@ import {
   initializeInvoiceDraftPersistence as initializeWithPersistence,
 } from '../invoicing/invoice-draft-store'
 import { createInvoiceDraftPersistence } from '../invoicing/invoice-draft-storage'
+import { createThemeStore } from '@/lib/theme-store'
+import {
+  invoiceLanguageStore,
+  setInvoiceLanguage,
+} from '@/lib/invoice-language'
+import { PDF_NOTIFICATION_PREFERENCE_KEY } from '../pwa/notification-preference'
+import { openBrowserAcknowledgmentPersistence } from '../release-notes/browser-acknowledgment-persistence'
 import type { InvoiceDraftStorage } from '../invoicing/invoice-draft-storage'
 import { initializeInvoiceDraftPersistence as initializeBrowserPersistence } from '../invoicing/invoice-draft'
 import {
@@ -44,6 +51,28 @@ afterEach(async () => {
 })
 
 describe('browser-local application reset', () => {
+  it('clears preferences written through their feature-owned persistence interfaces', async () => {
+    const acknowledgments = openBrowserAcknowledgmentPersistence()
+    try {
+      createThemeStore().setMode('dark', localStorage)
+      setInvoiceLanguage('en')
+      await acknowledgments.acknowledge(['1.0.0'])
+      localStorage.setItem(PDF_NOTIFICATION_PREFERENCE_KEY, 'enabled')
+      localStorage.setItem('other.preference', 'keep')
+
+      await resetApplication()
+
+      expect(createThemeStore().restore(localStorage)).toBe('auto')
+      expect(invoiceLanguageStore.state.preference).toBe('auto')
+      expect(localStorage.getItem('regningen.invoice-language')).toBeNull()
+      expect(await acknowledgments.load()).toEqual([])
+      expect(localStorage.getItem(PDF_NOTIFICATION_PREFERENCE_KEY)).toBeNull()
+      expect(localStorage.getItem('other.preference')).toBe('keep')
+    } finally {
+      await acknowledgments.dispose()
+    }
+  })
+
   it('keeps a local page-reload safeguard waiting until application-reset deletion finishes', async () => {
     let releaseDeletion = () => {}
     let signalDeletion = () => {}

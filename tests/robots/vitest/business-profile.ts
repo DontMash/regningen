@@ -147,6 +147,19 @@ export class BusinessProfileRobot {
     expect(this.field(name)).toHaveValue(value)
   }
 
+  expectCharacterLimits(
+    limits: Partial<Record<keyof BusinessProfileScenarioInput, number>>,
+  ) {
+    for (const name of Object.keys(limits) as Array<
+      keyof BusinessProfileScenarioInput
+    >) {
+      expect(this.field(name)).toHaveAttribute(
+        'maxlength',
+        String(limits[name]),
+      )
+    }
+  }
+
   expectFieldDisabled(name: keyof BusinessProfileScenarioInput) {
     expect(this.field(name)).toBeDisabled()
   }

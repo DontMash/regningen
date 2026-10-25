@@ -35,6 +35,15 @@ export function createInvoiceEditorState({
 }) {
   let exportGeneration = 0
   return {
+    fieldLimits: validation.invoiceFieldLimits,
+    vatRates: validation.vatRates,
+    selectVatRate(value: string | undefined) {
+      const rate = validation.vatRates.find(
+        (option) => String(option) === value,
+      )
+      if (rate !== undefined)
+        invoice.setState((current) => ({ ...current, rate }))
+    },
     getExportGeneration: () => exportGeneration,
     applyFreshDate() {
       invoice.setState((current) => ({ ...current, date: freshInvoice().date }))

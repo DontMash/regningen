@@ -2,7 +2,16 @@ import { Store } from '@tanstack/store'
 import * as m from '@/paraglide/messages'
 import { toast } from '@/components/ui/toast'
 
-export type ThemeMode = 'auto' | 'light' | 'dark'
+import {
+  THEME_STORAGE_KEY,
+  applyThemeModeToRoot,
+  defaultThemeMode,
+  normalizeThemeMode,
+} from './theme-policy'
+import type { ThemeMode } from './theme-policy'
+
+export { isThemeMode } from './theme-policy'
+export type { ThemeMode } from './theme-policy'
 
 export const themeModeLabels: Record<ThemeMode, string> = {
   get auto() {
@@ -23,28 +32,19 @@ type ThemeState = {
 
 export type ThemeStorage = Pick<Storage, 'getItem' | 'setItem'>
 
-const STORAGE_KEY = 'theme'
-
-export function isThemeMode(
-  value: string | null | undefined,
-): value is ThemeMode {
-  return value === 'auto' || value === 'light' || value === 'dark'
-}
-
 export function createThemeStore() {
-  const store = new Store<ThemeState>({ mode: 'auto' })
+  const store = new Store<ThemeState>({ mode: defaultThemeMode })
 
   function setMode(mode: ThemeMode, storage?: ThemeStorage) {
     store.setState(() => ({ mode, selectedInSession: true }))
-    storage?.setItem(STORAGE_KEY, mode)
+    storage?.setItem(THEME_STORAGE_KEY, mode)
   }
 
   function restore(storage: ThemeStorage): ThemeMode {
     // Opening the mobile menu mounts another shortcut. A session choice must
     // not be replaced by an older preference after a failed write.
     if (store.state.selectedInSession) return store.state.mode
-    const savedMode = storage.getItem(STORAGE_KEY)
-    const mode = isThemeMode(savedMode) ? savedMode : 'auto'
+    const mode = normalizeThemeMode(storage.getItem(THEME_STORAGE_KEY))
 
     store.setState(() => ({ mode }))
 
@@ -84,7 +84,7 @@ export function selectThemeMode(
   applyThemeMode(mode)
   themeStore.setMode(mode)
   try {
-    window.localStorage.setItem(STORAGE_KEY, mode)
+    window.localStorage.setItem(THEME_STORAGE_KEY, mode)
   } catch (error) {
     if (!isStorageUnavailable(error)) throw error
     console.warn('Appearance preference persistence failed', {
@@ -113,8 +113,5 @@ export function restoreBrowserTheme() {
 }
 
 export function applyThemeMode(mode: ThemeMode) {
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const resolved = mode === 'auto' ? (prefersDark ? 'dark' : 'light') : mode
-  document.documentElement.setAttribute('data-theme', resolved)
-  document.documentElement.style.colorScheme = resolved
+  applyThemeModeToRoot(mode, window, document.documentElement)
 }

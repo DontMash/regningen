@@ -1,4 +1,8 @@
 import { cookieName } from '@/paraglide/runtime'
+import { THEME_STORAGE_KEY } from '@/lib/theme-policy'
+import { BUSINESS_PROFILE_STORAGE_KEY } from '../invoicing/business-profile-repository'
+import { PDF_NOTIFICATION_PREFERENCE_KEY } from '../pwa/notification-preference'
+import { ACKNOWLEDGMENT_STORAGE_KEY } from '../release-notes/browser-acknowledgment-persistence'
 import {
   INVOICE_LANGUAGE_KEY,
   resetInvoiceLanguage,
@@ -20,10 +24,10 @@ export {
 
 const USER_DATA_KEYS = [
   INVOICE_LANGUAGE_KEY,
-  'regningen.business-profile',
-  'theme',
-  'regningen.pwa.pdf-notifications',
-  'regningen.release-notes.acknowledged-versions',
+  BUSINESS_PROFILE_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  PDF_NOTIFICATION_PREFERENCE_KEY,
+  ACKNOWLEDGMENT_STORAGE_KEY,
 ]
 
 /** Browser-local, app-scoped deletion; a rejected attempt may have partly deleted data. */

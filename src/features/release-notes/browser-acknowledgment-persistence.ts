@@ -3,7 +3,8 @@ import localStorageDriver from 'unstorage/drivers/localstorage'
 import type { AcknowledgmentPersistence } from './acknowledgment-persistence'
 import { AcknowledgmentPersistenceError } from './acknowledgment-persistence'
 
-const storageKey = 'regningen.release-notes.acknowledged-versions'
+export const ACKNOWLEDGMENT_STORAGE_KEY =
+  'regningen.release-notes.acknowledged-versions'
 
 async function storageOperation<T>(
   operation: string,
@@ -32,7 +33,9 @@ export function openBrowserAcknowledgmentPersistence(): AcknowledgmentPersistenc
   let subscription: Promise<void> = Promise.resolve()
   const load = () =>
     storageOperation('read', async () => {
-      const value = await getStorage().getItem<unknown>(storageKey)
+      const value = await getStorage().getItem<unknown>(
+        ACKNOWLEDGMENT_STORAGE_KEY,
+      )
       return Array.isArray(value)
         ? value.filter(
             (version): version is string => typeof version === 'string',
@@ -45,12 +48,12 @@ export function openBrowserAcknowledgmentPersistence(): AcknowledgmentPersistenc
       storageOperation('write', async () => {
         const save = async () => {
           const saved = await load()
-          await getStorage().setItem(storageKey, [
+          await getStorage().setItem(ACKNOWLEDGMENT_STORAGE_KEY, [
             ...new Set([...saved, ...versions]),
           ])
         }
         if ('locks' in window.navigator) {
-          await window.navigator.locks.request(storageKey, save)
+          await window.navigator.locks.request(ACKNOWLEDGMENT_STORAGE_KEY, save)
         } else {
           await save()
         }
@@ -58,7 +61,7 @@ export function openBrowserAcknowledgmentPersistence(): AcknowledgmentPersistenc
     subscribe: (listener) => {
       subscription = storageOperation('subscribe', async () => {
         await getStorage().watch(async (_event, key) => {
-          if (isDisposed() || key !== storageKey) return
+          if (isDisposed() || key !== ACKNOWLEDGMENT_STORAGE_KEY) return
           try {
             const versions = await load()
             if (!isDisposed()) listener(versions)

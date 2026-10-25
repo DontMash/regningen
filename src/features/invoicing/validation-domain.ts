@@ -10,11 +10,36 @@ import type {
   ValidationFailure,
   VatRate,
 } from './validation-contract'
+import { SUPPORTED_VAT_RATES } from './validation-contract'
+
+const profileFieldLimits: BusinessValidation['profileFieldLimits'] = {
+  businessName: 70,
+  serviceDescription: 70,
+  ownerName: 70,
+  street: 85,
+  postalCode: 20,
+  town: 50,
+  phone: 40,
+  mobile: 40,
+  taxNumber: 30,
+}
+const invoiceFieldLimits: BusinessValidation['invoiceFieldLimits'] = {
+  number: 40,
+  subject: 100,
+  company: 70,
+  name: 70,
+  street: 85,
+  postalCode: 85,
+  town: 85,
+}
 
 export function createBusinessValidation(
   iban: IbanVerification,
 ): BusinessValidation {
   return {
+    profileFieldLimits,
+    invoiceFieldLimits,
+    vatRates: SUPPORTED_VAT_RATES,
     validateBusinessProfile(input) {
       const data: BusinessProfileDraft = {
         businessName: input.businessName.trim(),
@@ -31,26 +56,26 @@ export function createBusinessValidation(
       }
       const failures: ValidationFailure[] = []
       const text = (
-        field: keyof BusinessProfileDraft,
-        limit: number,
+        field: keyof typeof profileFieldLimits,
         required = false,
       ) => {
+        const limit = profileFieldLimits[field]
         if (required && !data[field])
           failures.push({ path: [field], reason: 'required' })
         if (data[field].length > limit)
           failures.push({ path: [field], reason: 'too-long', limit })
       }
-      text('businessName', 70, true)
-      text('serviceDescription', 70)
-      text('ownerName', 70, true)
-      text('street', 85, true)
-      text('postalCode', 20, true)
-      text('town', 50, true)
-      text('phone', 40)
-      text('mobile', 40)
+      text('businessName', true)
+      text('serviceDescription')
+      text('ownerName', true)
+      text('street', true)
+      text('postalCode', true)
+      text('town', true)
+      text('phone')
+      text('mobile')
       if (!iban.isValid(data.iban))
         failures.push({ path: ['iban'], reason: 'invalid-iban' })
-      text('taxNumber', 30)
+      text('taxNumber')
       if (!data.vatId && !data.taxNumber)
         failures.push({ path: ['vatId'], reason: 'tax-identifier-required' })
       if (data.vatId && !/^DE\d{9}$/.test(data.vatId))
@@ -60,8 +85,8 @@ export function createBusinessValidation(
         : { valid: true, data }
     },
     validateInvoice(input) {
-      const rate = input.rate
-      if (rate !== 7 && rate !== 19)
+      const rate = SUPPORTED_VAT_RATES.find((value) => value === input.rate)
+      if (rate === undefined)
         return {
           valid: false,
           failures: [{ path: ['rate'], reason: 'invalid-rate' }],
@@ -78,31 +103,24 @@ export function createBusinessValidation(
       }
       const failures: ValidationFailure[] = []
       const text = (
-        field:
-          | 'number'
-          | 'subject'
-          | 'company'
-          | 'name'
-          | 'street'
-          | 'postalCode'
-          | 'town',
-        limit: number,
+        field: keyof typeof invoiceFieldLimits,
         required = false,
       ) => {
+        const limit = invoiceFieldLimits[field]
         if (required && !draft[field])
           failures.push({ path: [field], reason: 'required' })
         if (draft[field].length > limit)
           failures.push({ path: [field], reason: 'too-long', limit })
       }
-      text('number', 40, true)
+      text('number', true)
       if (!isCalendarDate(draft.date))
         failures.push({ path: ['date'], reason: 'invalid-date' })
-      text('subject', 100)
-      text('company', 70)
-      text('name', 70)
-      text('street', 85, true)
-      text('postalCode', 85, true)
-      text('town', 85, true)
+      text('subject')
+      text('company')
+      text('name')
+      text('street', true)
+      text('postalCode', true)
+      text('town', true)
       if (draft.items.length > positionLimit)
         failures.push({
           path: ['items'],

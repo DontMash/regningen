@@ -13,6 +13,35 @@ const position = {
 }
 
 describe('Invoice Position editing decisions', () => {
+  it('uses injected constraints and VAT choices without inventing its own policy', () => {
+    const invoice = new Store(createEmptyInvoiceDraft())
+    const validation = {
+      ...businessValidation,
+      invoiceFieldLimits: {
+        ...businessValidation.invoiceFieldLimits,
+        number: 12,
+      },
+      vatRates: [19] as const,
+    }
+    const editor = createInvoiceEditorState({
+      invoice,
+      unfinished: new Store<InvoiceLineDraft>({ description: '', amount: '' }),
+      editing: invoiceEditingDomain,
+      validation,
+      freshInvoice: createEmptyInvoiceDraft,
+      clearPersisted: async () => {},
+    })
+
+    expect(editor.fieldLimits.number).toBe(12)
+    expect(editor.vatRates).toEqual([19])
+    editor.selectVatRate('19')
+    expect(invoice.state.rate).toBe(19)
+    for (const invalid of ['7', '20', 'not a rate', undefined]) {
+      editor.selectVatRate(invalid)
+      expect(invoice.state.rate).toBe(19)
+    }
+  })
+
   it('protects subject-only work and compares working inputs to current defaults', () => {
     const defaults = { ...createEmptyInvoiceDraft(), date: '2026-06-15' }
     const unfinished = { description: '', amount: '' }

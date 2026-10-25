@@ -1,6 +1,26 @@
 import { createBusinessProfileScenario } from '../scenarios/business-profile'
 import { expect, test } from '../support/playwright/playwright'
 
+test('hydrates the application shell without bootstrap mismatches on entry and reload', async ({
+  appShell,
+  harness,
+  releaseNotes,
+  theme,
+}) => {
+  const errors = await harness.observePageErrors()
+  await harness.useSystemTheme('dark')
+  await harness.open('/de')
+  await releaseNotes.dismissReleaseNotes()
+  await appShell.expectApplicationShell()
+  await theme.expectResolvedTheme('dark')
+  expect(errors).toEqual([])
+
+  await harness.reload()
+  await appShell.expectApplicationShell()
+  await theme.expectResolvedTheme('dark')
+  expect(errors).toEqual([])
+})
+
 test('fits compact navigation into a 320px fullscreen menu', async ({
   appShell,
   harness,

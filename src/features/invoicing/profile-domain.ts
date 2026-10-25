@@ -6,6 +6,7 @@ export function createProfileOperations(
   persistence: ProfilePersistence,
 ): ProfileOperations {
   return {
+    fieldLimits: validation.profileFieldLimits,
     validate: validation.validateBusinessProfile,
     readiness(input, unavailable = false) {
       if (unavailable) return { ready: false, reason: 'unavailable' }

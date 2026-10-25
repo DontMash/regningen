@@ -14,7 +14,9 @@ export type BusinessProfileDraft = {
 }
 
 export type EntryLanguage = 'de' | 'en'
-export type VatRate = 7 | 19
+/** Supported business rates, shared with editable persistence and UI choices. */
+export const SUPPORTED_VAT_RATES = [7, 19] as const
+export type VatRate = (typeof SUPPORTED_VAT_RATES)[number]
 export type InvoiceLineDraft = {
   description: string
   amount: string
@@ -67,6 +69,13 @@ export type ValidationOutcome<T> =
 /** Receives an upper-case IBAN without whitespace. */
 export type IbanVerification = { isValid: (iban: string) => boolean }
 export type BusinessValidation = {
+  readonly profileFieldLimits: Readonly<
+    Record<Exclude<keyof BusinessProfileDraft, 'iban' | 'vatId'>, number>
+  >
+  readonly invoiceFieldLimits: Readonly<
+    Record<Exclude<keyof InvoiceDraft, 'date' | 'rate' | 'items'>, number>
+  >
+  readonly vatRates: ReadonlyArray<VatRate>
   validateBusinessProfile: (
     input: BusinessProfileDraft,
   ) => ValidationOutcome<BusinessProfile>

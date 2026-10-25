@@ -281,6 +281,7 @@ export function createProfileEditorHook(
       }
     }
     return {
+      fieldLimits: operations.fieldLimits,
       form,
       saveMutation,
       deleteMutation,

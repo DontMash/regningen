@@ -698,7 +698,7 @@ function InvoiceEditor({
                   error={errors.number}
                   onBlur={() => touch('number')}
                   required
-                  maxLength={40}
+                  maxLength={invoiceEditorState.fieldLimits.number}
                 />
                 <InvoiceDateField
                   value={currentValues.date}
@@ -714,7 +714,7 @@ function InvoiceEditor({
                     onChange={(value) => updateField('subject', value)}
                     error={errors.subject}
                     onBlur={() => touch('subject')}
-                    maxLength={100}
+                    maxLength={invoiceEditorState.fieldLimits.subject}
                   />
                 </div>
               </FieldGroup>
@@ -742,7 +742,7 @@ function InvoiceEditor({
                     onChange={(value) => updateField('company', value)}
                     error={recipientMissing ? undefined : errors.company}
                     onBlur={() => touch('company')}
-                    maxLength={70}
+                    maxLength={invoiceEditorState.fieldLimits.company}
                     autoComplete="organization"
                   />
                   <InvoiceInput
@@ -752,7 +752,7 @@ function InvoiceEditor({
                     onChange={(value) => updateField('name', value)}
                     error={errors.name}
                     onBlur={() => touch('name')}
-                    maxLength={70}
+                    maxLength={invoiceEditorState.fieldLimits.name}
                     autoComplete="name"
                   />
                 </RequiredAlternativeFields>
@@ -764,7 +764,7 @@ function InvoiceEditor({
                   error={errors.street}
                   onBlur={() => touch('street')}
                   required
-                  maxLength={85}
+                  maxLength={invoiceEditorState.fieldLimits.street}
                   autoComplete="street-address"
                 />
                 <InvoiceInput
@@ -775,7 +775,7 @@ function InvoiceEditor({
                   error={errors.postalCode}
                   onBlur={() => touch('postalCode')}
                   required
-                  maxLength={85}
+                  maxLength={invoiceEditorState.fieldLimits.postalCode}
                   autoComplete="postal-code"
                 />
                 <InvoiceInput
@@ -786,7 +786,7 @@ function InvoiceEditor({
                   error={errors.town}
                   onBlur={() => touch('town')}
                   required
-                  maxLength={85}
+                  maxLength={invoiceEditorState.fieldLimits.town}
                   autoComplete="address-level2"
                 />
               </FieldGroup>
@@ -935,19 +935,15 @@ function InvoiceEditor({
                       : 'vat-rate-required'
                   }
                   aria-invalid={Boolean(errors.rate)}
-                  onValueChange={(selected) => {
-                    const value = selected[0]
-                    if (value === '7' || value === '19') {
-                      updateField('rate', value === '7' ? 7 : 19)
-                    }
-                  }}
+                  onValueChange={(selected) =>
+                    invoiceEditorState.selectVatRate(selected[0])
+                  }
                 >
-                  <ToggleGroupItem value="7">
-                    {m.invoice_vat_choice({ rate: 7 })}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="19">
-                    {m.invoice_vat_choice({ rate: 19 })}
-                  </ToggleGroupItem>
+                  {invoiceEditorState.vatRates.map((rate) => (
+                    <ToggleGroupItem key={rate} value={String(rate)}>
+                      {m.invoice_vat_choice({ rate })}
+                    </ToggleGroupItem>
+                  ))}
                 </ToggleGroup>
                 <FormErrorSlot id="vat-rate-error" error={errors.rate} />
               </Field>

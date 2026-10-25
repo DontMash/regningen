@@ -102,6 +102,7 @@ function ProfileEditor({
   retryProfileRead: () => Promise<boolean>
 }) {
   const {
+    fieldLimits,
     form,
     saveMutation,
     deleteMutation,
@@ -168,7 +169,7 @@ function ProfileEditor({
                           label={m.profile_business_name()}
                           value={field.state.value}
                           required
-                          maxLength={70}
+                          maxLength={fieldLimits.businessName}
                           autoComplete="organization"
                           error={
                             field.state.meta.isTouched
@@ -188,7 +189,7 @@ function ProfileEditor({
                           id="serviceDescription"
                           label={m.profile_service_description()}
                           value={field.state.value}
-                          maxLength={70}
+                          maxLength={fieldLimits.serviceDescription}
                           autoComplete="off"
                           error={
                             field.state.meta.isTouched
@@ -209,7 +210,7 @@ function ProfileEditor({
                           label={m.profile_owner_name()}
                           value={field.state.value}
                           required
-                          maxLength={70}
+                          maxLength={fieldLimits.ownerName}
                           autoComplete="name"
                           error={
                             field.state.meta.isTouched
@@ -230,7 +231,7 @@ function ProfileEditor({
                           label={m.profile_street()}
                           value={field.state.value}
                           required
-                          maxLength={85}
+                          maxLength={fieldLimits.street}
                           autoComplete="street-address"
                           error={
                             field.state.meta.isTouched
@@ -251,7 +252,7 @@ function ProfileEditor({
                           label={m.profile_postal_code()}
                           value={field.state.value}
                           required
-                          maxLength={20}
+                          maxLength={fieldLimits.postalCode}
                           autoComplete="postal-code"
                           error={
                             field.state.meta.isTouched
@@ -272,7 +273,7 @@ function ProfileEditor({
                           label={m.profile_town()}
                           value={field.state.value}
                           required
-                          maxLength={50}
+                          maxLength={fieldLimits.town}
                           autoComplete="address-level2"
                           error={
                             field.state.meta.isTouched ? errors.town : undefined
@@ -291,7 +292,7 @@ function ProfileEditor({
                           label={m.profile_phone()}
                           value={field.state.value}
                           type="tel"
-                          maxLength={40}
+                          maxLength={fieldLimits.phone}
                           autoComplete="tel"
                           error={
                             field.state.meta.isTouched
@@ -312,7 +313,7 @@ function ProfileEditor({
                           label={m.profile_mobile()}
                           value={field.state.value}
                           type="tel"
-                          maxLength={40}
+                          maxLength={fieldLimits.mobile}
                           autoComplete="tel-national"
                           error={
                             field.state.meta.isTouched
@@ -385,7 +386,7 @@ function ProfileEditor({
                             value={field.state.value}
                             autoComplete="off"
                             hint={m.profile_tax_number_hint()}
-                            maxLength={30}
+                            maxLength={fieldLimits.taxNumber}
                             error={
                               field.state.meta.isTouched
                                 ? errors.taxNumber

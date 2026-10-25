@@ -46,6 +46,77 @@ const invoice = (): InvoiceDraft => ({
 
 // Existing domain/module seam: outcomes are business data, not localized issues.
 describe('package-independent business validation', () => {
+  it.each([
+    ['businessName', 70],
+    ['serviceDescription', 70],
+    ['ownerName', 70],
+    ['street', 85],
+    ['postalCode', 20],
+    ['town', 50],
+    ['phone', 40],
+    ['mobile', 40],
+    ['taxNumber', 30],
+  ] as const)(
+    'exposes and enforces the %s profile ceiling of %i',
+    (field, limit) => {
+      expect(businessValidation.profileFieldLimits[field]).toBe(limit)
+      expect(
+        businessValidation.validateBusinessProfile({
+          ...profile,
+          [field]: 'x'.repeat(limit),
+        }).valid,
+      ).toBe(true)
+      expect(
+        businessValidation.validateBusinessProfile({
+          ...profile,
+          [field]: 'x'.repeat(limit + 1),
+        }),
+      ).toEqual({
+        valid: false,
+        failures: [{ path: [field], reason: 'too-long', limit }],
+      })
+    },
+  )
+
+  it.each([
+    ['number', 40],
+    ['subject', 100],
+    ['company', 70],
+    ['name', 70],
+    ['street', 85],
+    ['postalCode', 85],
+    ['town', 85],
+  ] as const)(
+    'exposes and enforces the %s invoice ceiling of %i',
+    (field, limit) => {
+      expect(businessValidation.invoiceFieldLimits[field]).toBe(limit)
+      expect(
+        businessValidation.validateInvoice({
+          ...invoice(),
+          [field]: 'x'.repeat(limit),
+        }).valid,
+      ).toBe(true)
+      expect(
+        businessValidation.validateInvoice({
+          ...invoice(),
+          [field]: 'x'.repeat(limit + 1),
+        }),
+      ).toEqual({
+        valid: false,
+        failures: [{ path: [field], reason: 'too-long', limit }],
+      })
+    },
+  )
+
+  it('advertises the supported VAT choices and validates every advertised rate', () => {
+    expect(businessValidation.vatRates).toEqual([7, 19])
+    for (const rate of businessValidation.vatRates) {
+      expect(
+        businessValidation.validateInvoice({ ...invoice(), rate }).valid,
+      ).toBe(true)
+    }
+  })
+
   it('returns normalized profile data using the supplied international IBAN capability', () => {
     expect(businessValidation.validateBusinessProfile(profile)).toEqual({
       valid: true,

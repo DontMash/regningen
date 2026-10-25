@@ -11,6 +11,7 @@ import {
   waitForInvoiceDraftPersistence,
 } from '@/features/invoicing/invoice-draft'
 import { waitForPwaCriticalOperations } from './pwa-critical-operations'
+import { PDF_NOTIFICATION_PREFERENCE_KEY } from './notification-preference'
 import { confirmDiscardProfileChanges } from '@/features/settings/unsaved-profile'
 import { getCompletedApplicationResetGeneration } from '@/lib/application-reset-generation'
 import * as m from '@/paraglide/messages'
@@ -31,7 +32,6 @@ interface PwaContextValue {
 }
 
 const PwaContext = React.createContext<PwaContextValue | null>(null)
-const NOTIFICATION_PREFERENCE_KEY = 'regningen.pwa.pdf-notifications'
 
 function detectStandaloneMode() {
   try {
@@ -177,7 +177,8 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setNotificationPreference(
-        window.localStorage.getItem(NOTIFICATION_PREFERENCE_KEY) === 'enabled',
+        window.localStorage.getItem(PDF_NOTIFICATION_PREFERENCE_KEY) ===
+          'enabled',
       )
     } catch {
       // Notification preferences are optional and never block the application.
@@ -230,7 +231,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
           : await Notification.requestPermission()
       setNotificationPermission(permission)
       if (permission !== 'granted') return
-      window.localStorage.setItem(NOTIFICATION_PREFERENCE_KEY, 'enabled')
+      window.localStorage.setItem(PDF_NOTIFICATION_PREFERENCE_KEY, 'enabled')
       setNotificationPreference(true)
     } catch {
       setNotificationPreference(false)
@@ -240,7 +241,7 @@ export function PwaProvider({ children }: { children: React.ReactNode }) {
   const disableNotifications = React.useCallback(() => {
     setNotificationPreference(false)
     try {
-      window.localStorage.setItem(NOTIFICATION_PREFERENCE_KEY, 'disabled')
+      window.localStorage.setItem(PDF_NOTIFICATION_PREFERENCE_KEY, 'disabled')
     } catch {
       // The in-memory opt-out still applies for this application session.
     }

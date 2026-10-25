@@ -17,6 +17,7 @@ import {
 
 import { createInvoiceDraftPersistence } from './invoice-draft-storage'
 import type { InvoiceDraftStorage } from './invoice-draft-storage'
+import { SUPPORTED_VAT_RATES } from './validation-contract'
 
 // Tests explicitly supply their persistence capability; production composition
 // selects browser storage and no longer accepts a test-only raw driver override.
@@ -99,6 +100,33 @@ describe('empty invoice drafts', () => {
 })
 
 describe('session-autosaved Invoice Drafts', () => {
+  it.each(SUPPORTED_VAT_RATES)(
+    'restores an ordinary saved draft with %i%% VAT',
+    async (rate) => {
+      const storage = createSessionStorage()
+      await initializeInvoiceDraftPersistence(storage)
+      invoiceDraftStore.setState((draft) => ({
+        ...draft,
+        number: 'VAT draft',
+        rate,
+      }))
+      await waitForInvoiceDraftPersistence()
+      await disposeInvoiceDraftPersistence()
+      resetInvoiceDraft()
+
+      await initializeInvoiceDraftPersistence(storage)
+
+      expect(invoiceDraftStore.state).toMatchObject({
+        number: 'VAT draft',
+        rate,
+      })
+      expect(invoiceDraftPersistenceStore.state).toMatchObject({
+        restored: true,
+        error: null,
+      })
+    },
+  )
+
   it('finishes pending hydration before disposal and cannot restart autosaving afterward', async () => {
     const storage = createSessionStorage({
       'regningen.invoice-draft': storedDraft,
@@ -507,6 +535,8 @@ describe('session-autosaved Invoice Drafts', () => {
 
   it.each([
     { ...storedDraft, invoice: { ...storedDraft.invoice, town: 42 } },
+    { ...storedDraft, invoice: { ...storedDraft.invoice, rate: 20 } },
+    { ...storedDraft, invoice: { ...storedDraft.invoice, rate: '7' } },
     { ...storedDraft, schemaVersion: 2 },
     { ...storedDraft, newPosition: { description: '', amount: 42 } },
     {

@@ -145,6 +145,36 @@ export class InvoiceRobot {
     )
   }
 
+  expectCharacterLimits(limits: {
+    number: number
+    subject: number
+    recipient: Record<keyof InvoiceRecipientInput, number>
+  }) {
+    expect(
+      screen.getByRole('textbox', { name: /^Rechnungsnummer/ }),
+    ).toHaveAttribute('maxlength', String(limits.number))
+    expect(screen.getByRole('textbox', { name: /^Betreff/ })).toHaveAttribute(
+      'maxlength',
+      String(limits.subject),
+    )
+    for (const name of Object.keys(limits.recipient) as Array<
+      keyof InvoiceRecipientInput
+    >) {
+      expect(this.recipientField(name)).toHaveAttribute(
+        'maxlength',
+        String(limits.recipient[name]),
+      )
+    }
+  }
+
+  expectVatChoices(rates: readonly number[]) {
+    const choices = within(screen.getByRole('group', { name: 'MwSt.-Satz' }))
+    expect(choices.getAllByRole('button')).toHaveLength(rates.length)
+    for (const rate of rates) {
+      expect(choices.getByRole('button', { name: `${rate} %` })).toBeVisible()
+    }
+  }
+
   async chooseVatRate(rate: 7 | 19) {
     await this.user.click(screen.getByRole('button', { name: `${rate} %` }))
   }

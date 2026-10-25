@@ -54,6 +54,40 @@ afterEach(async () => {
 })
 
 describe('invoice editor', () => {
+  it('constrains Invoice details and Recipient input to the domain character ceilings', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    saveBusinessProfile(createBusinessProfileScenario())
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+
+    invoice.expectCharacterLimits({
+      number: 40,
+      subject: 100,
+      recipient: {
+        company: 70,
+        name: 70,
+        street: 85,
+        postalCode: 85,
+        town: 85,
+      },
+    })
+  })
+
+  it('offers every supported VAT rate and retains the choice when pressed again', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    saveBusinessProfile(createBusinessProfileScenario())
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+
+    invoice.expectVatChoices([7, 19])
+    await invoice.chooseVatRate(19)
+    expect(invoiceDraftStore.state.rate).toBe(19)
+    await invoice.chooseVatRate(19)
+    expect(invoiceDraftStore.state.rate).toBe(19)
+    await invoice.chooseVatRate(7)
+    expect(invoiceDraftStore.state.rate).toBe(7)
+  })
+
   it('preserves subject-only work on cancellation and clears it only on confirmation', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())
     saveBusinessProfile(createBusinessProfileScenario())

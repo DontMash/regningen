@@ -46,6 +46,24 @@ afterEach(() => {
 })
 
 describe('business profile settings', () => {
+  it('advertises the field-specific character ceilings when editing a Business Profile', async () => {
+    const businessProfile = new BusinessProfileRobot(userEvent.setup())
+    await renderAtRoute('/settings/profile', BusinessProfilePage)
+    await businessProfile.expectReady()
+
+    businessProfile.expectCharacterLimits({
+      businessName: 70,
+      serviceDescription: 70,
+      ownerName: 70,
+      street: 85,
+      postalCode: 20,
+      town: 50,
+      phone: 40,
+      mobile: 40,
+      taxNumber: 30,
+    })
+  })
+
   it('protects edits made while a backup is being read and explains the cancellation', async () => {
     const businessProfile = new BusinessProfileRobot(userEvent.setup())
     const read = deferredFileRead()

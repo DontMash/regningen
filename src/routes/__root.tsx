@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { baseLocale, cookieName, getLocale, locales } from '@/paraglide/runtime'
 import * as m from '@/paraglide/messages'
 import { initializeInvoiceLanguagePreference } from '@/lib/invoice-language'
+import { THEME_INIT_SCRIPT } from '@/lib/theme-policy'
 import {
   HeadContent,
   Link,
@@ -31,9 +32,6 @@ import { requireDeploymentPolicy } from '@/lib/deployment-policy'
 interface MyRouterContext extends DeploymentContext {
   queryClient: QueryClient
 }
-
-// Keep this pre-hydration bootstrap aligned with the shared theme runtime.
-const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.setAttribute('data-theme',resolved);root.style.colorScheme=resolved;}catch(e){}})();`
 
 // The worker's cached unprefixed entry cannot negotiate a cookie on the server.
 // Canonicalize cached slash variants before parsing content; only '/' needs
@@ -125,8 +123,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           nonce={nonce}
           dangerouslySetInnerHTML={{ __html: LANGUAGE_ENTRY_SCRIPT }}
         />
+        {/* This executes from SSR HTML only. Function serialization can differ
+            between Vite's server/client transforms (for example, an inserted
+            semicolon); hydration must retain the already-executed server text. */}
         <script
           nonce={nonce}
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
         />
         <HeadContent />

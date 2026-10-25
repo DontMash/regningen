@@ -1,6 +1,7 @@
 import type {
   BusinessProfile,
   BusinessProfileDraft,
+  BusinessValidation,
   ValidationOutcome,
 } from './validation-contract'
 
@@ -43,6 +44,7 @@ export type ProfileReadiness =
 
 /** Save validates before any persistence effect. Expected operational failures reject with ProfileFailure and preserved cause; defects are not storage failures. */
 export interface ProfileOperations {
+  fieldLimits: BusinessValidation['profileFieldLimits']
   validate: (input: BusinessProfileDraft) => ValidationOutcome<BusinessProfile>
   readiness: (
     input: BusinessProfileDraft | null | undefined,
