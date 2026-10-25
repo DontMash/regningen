@@ -4,6 +4,8 @@ import {
   parseBusinessProfileBackup,
   BUSINESS_PROFILE_STORAGE_KEY,
 } from './business-profile-repository'
+import { downloadProfileBackup } from './profile-backup-download'
+import { ProfileFailure } from './profile-contract'
 import { createProfileOperations } from './profile-domain'
 import { businessValidation } from './validation-composition'
 import { createProfileQueryHooks } from './profile-query-state'
@@ -21,18 +23,21 @@ const persistence: ProfilePersistence = {
   exportProfile: () => createBrowserBusinessProfileRepository().exportProfile(),
 }
 const backup: ProfileBackup = {
-  read: async (file) => parseBusinessProfileBackup(await file.text()),
+  read: async (file) => {
+    let contents: string
+    try {
+      contents = await file.text()
+    } catch (cause) {
+      if (cause instanceof DOMException)
+        throw new ProfileFailure('backup', m.profile_backup_import_failed(), {
+          cause,
+        })
+      throw cause
+    }
+    return parseBusinessProfileBackup(contents)
+  },
   download(contents) {
-    const url = URL.createObjectURL(
-      new Blob([contents], { type: 'application/json' }),
-    )
-    const link = document.createElement('a')
-    link.href = url
-    link.download = m.profile_backup_filename()
-    document.body.append(link)
-    link.click()
-    link.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    downloadProfileBackup(contents, m.profile_backup_filename())
   },
 }
 const operations = createProfileOperations(businessValidation, persistence)

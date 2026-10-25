@@ -143,7 +143,8 @@ class PageVitals {
               categoryScores[category] = score * 100
             }
             await expect(page).toHaveURL(url)
-            await screen.language.expectGermanLanguage()
+            // State verification owns overlays; a modal intentionally hides the header.
+            await screen.language.expectDocumentLanguage('de')
             await screen.theme.expectResolvedTheme('light')
             await verify(screen)
             await expect

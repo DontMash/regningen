@@ -3,6 +3,7 @@ import { useForm } from '@tanstack/react-form'
 import { useSelector } from '@tanstack/react-store'
 import type { BusinessProfileDraft } from './validation-contract'
 import type { ProfileBackup, ProfileOperations } from './profile-contract'
+import { ProfileFailure } from './profile-contract'
 import type { createProfileQueryHooks } from './profile-query-state'
 import { validationMessage } from './validation-feedback'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
@@ -94,6 +95,13 @@ export function createProfileEditorHook(
       businessProfileStorageStatus,
       (state) => state.error,
     )
+    const [operationFailure, setOperationFailure] = useState<unknown>(null)
+    function failureDescription(error: unknown) {
+      setOperationFailure(error)
+      return error instanceof ProfileFailure
+        ? error.message
+        : m.profile_error_unexpected()
+    }
     const [storageDialogOpen, setStorageDialogOpen] = useState(false)
     const [retryingStorage, setRetryingStorage] = useState(false)
     hooks.useProfileStorageSync()
@@ -115,8 +123,12 @@ export function createProfileEditorHook(
           savedBaseline.current = { ...value }
           updateUnsavedChanges()
           toast.add({ title: m.profile_saved(), type: 'success' })
-        } catch {
-          toast.add({ title: m.profile_save_failed(), type: 'error' })
+        } catch (error) {
+          toast.add({
+            title: m.profile_save_failed(),
+            description: failureDescription(error),
+            type: 'error',
+          })
         }
       },
     })
@@ -169,8 +181,12 @@ export function createProfileEditorHook(
           description: m.profile_backup_sensitive(),
           type: 'success',
         })
-      } catch {
-        toast.add({ title: m.profile_backup_export_failed(), type: 'error' })
+      } catch (error) {
+        toast.add({
+          title: m.profile_backup_export_failed(),
+          description: failureDescription(error),
+          type: 'error',
+        })
       }
     }
     function needsImportConfirmation() {
@@ -238,7 +254,7 @@ export function createProfileEditorHook(
         setImportStatus('failed')
         toast.add({
           title: m.profile_backup_import_failed(),
-          description: error instanceof Error ? error.message : undefined,
+          description: failureDescription(error),
           type: 'error',
         })
       }
@@ -256,14 +272,19 @@ export function createProfileEditorHook(
           description: m.profile_deleted_draft_retained(),
           type: 'success',
         })
-      } catch {
-        toast.add({ title: m.profile_delete_failed(), type: 'error' })
+      } catch (error) {
+        toast.add({
+          title: m.profile_delete_failed(),
+          description: failureDescription(error),
+          type: 'error',
+        })
       }
     }
     return {
       form,
       saveMutation,
       deleteMutation,
+      operationFailure,
       storageError,
       storageDialogOpen,
       setStorageDialogOpen,

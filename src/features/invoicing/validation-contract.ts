@@ -82,7 +82,11 @@ export type InvoiceTotals = { gross: number; net: number; tax: number }
  */
 export type InvoiceEditing = {
   /** Protect every editable field, including unfinished input, relative to fresh defaults. */
-  hasWorkingData: (draft: InvoiceDraft, unfinished: InvoiceLineDraft, defaults: InvoiceDraft) => boolean
+  hasWorkingData: (
+    draft: InvoiceDraft,
+    unfinished: InvoiceLineDraft,
+    defaults: InvoiceDraft,
+  ) => boolean
   hasPositionData: (position: InvoiceLineDraft) => boolean
   validatePosition: (position: InvoiceLineDraft) => ValidationFailure[]
   /** Capacity only: invalid unfinished input stays submit-able for field feedback.

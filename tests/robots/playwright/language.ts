@@ -8,8 +8,13 @@ export class LanguageRobot {
     await this.expectInterfaceLanguage('de')
   }
 
-  async expectInterfaceLanguage(locale: 'de' | 'en') {
+  /** Document evidence remains available while a modal hides background controls. */
+  async expectDocumentLanguage(locale: 'de' | 'en') {
     await expect(this.page.locator('html')).toHaveAttribute('lang', locale)
+  }
+
+  async expectInterfaceLanguage(locale: 'de' | 'en') {
+    await this.expectDocumentLanguage(locale)
     await expect(
       this.page.getByRole('combobox', {
         name: locale === 'de' ? 'Sprache ändern' : 'Change language',

@@ -39,8 +39,19 @@ export function createInvoiceEditorState({
     applyFreshDate() {
       invoice.setState((current) => ({ ...current, date: freshInvoice().date }))
     },
+    hasInvoiceData() {
+      return editing.hasWorkingData(
+        invoice.state,
+        { description: '', amount: '' },
+        invoice.state,
+      )
+    },
     requiresResetConfirmation() {
-      return editing.hasWorkingData(invoice.state, unfinished.state, freshInvoice())
+      return editing.hasWorkingData(
+        invoice.state,
+        unfinished.state,
+        freshInvoice(),
+      )
     },
     async reset() {
       // A confirmed new Invoice abandons snapshot exports, even if clearing fails.

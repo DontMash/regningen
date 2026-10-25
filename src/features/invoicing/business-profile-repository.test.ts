@@ -34,6 +34,28 @@ const partialProfile = {
 }
 
 describe('local business profile repository', () => {
+  it('classifies expected browser denial but preserves programming defects unchanged', async () => {
+    const cause = new DOMException('denied', 'SecurityError')
+    const repository = createBusinessProfileRepository({
+      ...createStorage(),
+      getItem: () => {
+        throw cause
+      },
+    })
+    await expect(repository.loadProfile()).rejects.toMatchObject({
+      reason: 'storage',
+      cause,
+    })
+    const defect = new TypeError('broken adapter')
+    const broken = createBusinessProfileRepository({
+      ...createStorage(),
+      getItem: () => {
+        throw defect
+      },
+    })
+    await expect(broken.loadProfile()).rejects.toBe(defect)
+  })
+
   it('explains malformed backups in the active language without changing saved values', async () => {
     const repository = createBusinessProfileRepository(createStorage())
     await repository.saveProfile(partialProfile)

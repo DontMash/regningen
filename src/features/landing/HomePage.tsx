@@ -179,7 +179,11 @@ export default function HomePage() {
                 {m.landing_entry_error_title()}
               </AlertTitle>
               <AlertDescription>
-                <p>{m.landing_entry_error_description()}</p>
+                <p>
+                  {profileQuery.failureKind === 'storage'
+                    ? m.landing_entry_error_description()
+                    : m.profile_error_unexpected()}
+                </p>
                 <Button
                   variant="outline"
                   disabled={isEntering}

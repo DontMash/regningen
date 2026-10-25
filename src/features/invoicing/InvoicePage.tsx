@@ -388,7 +388,7 @@ function InvoicePage({
     (state) => state,
   )
   const profileQuery = useBusinessProfile()
-  const invoice = useSelector(invoiceDraftStore, (state) => state)
+  useSelector(invoiceDraftStore, (state) => state)
   const storageError = useSelector(
     businessProfileStorageStatus,
     (state) => state.error,
@@ -421,7 +421,9 @@ function InvoicePage({
             <AlertDialogHeader>
               <AlertDialogTitle>{m.invoice_blocked()}</AlertDialogTitle>
               <AlertDialogDescription>
-                {m.invoice_profile_read_failed()}
+                {profileQuery.failureKind === 'storage'
+                  ? m.invoice_profile_read_failed()
+                  : m.profile_error_unexpected()}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -436,7 +438,7 @@ function InvoicePage({
     )
   }
 
-  if (!validProfile && !hasInvoiceData(invoice)) {
+  if (!validProfile && !invoiceEditorState.hasInvoiceData()) {
     return (
       <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-12">
         <h1 className="heading-1">{m.invoice_complete_profile()}</h1>
@@ -478,6 +480,7 @@ function InvoiceEditor({
   const { generate, isGenerating } = useInvoiceGeneration(
     generation,
     downloadPdf,
+    invoiceEditorState.getExportGeneration,
   )
   const [touched, setTouched] = useState<Set<string>>(() => new Set())
   const newItem = useSelector(invoicePositionDraftStore, (state) => state)

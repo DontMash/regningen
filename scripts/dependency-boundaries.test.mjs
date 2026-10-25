@@ -99,11 +99,32 @@ for (const role of ['state', 'ui']) {
       }
     }
   })
+  test(`${role} rejects direct and indirect business capability packages including subpaths`, async () => {
+    for (const dependency of [
+      'pdf-lib',
+      'pdf-lib/cjs',
+      'ibantools',
+      'unstorage',
+      'unstorage/drivers/localstorage',
+      'zod',
+      'zod/v4',
+    ]) {
+      for (const source of [
+        `import '${dependency}'`,
+        "export * from './shared.js'",
+      ]) {
+        const messages = await lint(role, source, {
+          'src/shared.js': `export * from '${dependency}'`,
+        })
+        assert.equal(messages.length, 1, `${role}: ${source}`)
+      }
+    }
+  })
   test(`${role} permits service contracts and presentation/state-management tools`, async () => {
     assert.deepEqual(
       await lint(
         role,
-        "import './contract.js'; import 'react'; import '@tanstack/store'; import '@base-ui/react/button'",
+        "import './contract.js'; import 'react'; import '@tanstack/store'; import '@base-ui/react/button'; import 'date-fns'; import '@tanstack/react-query'",
       ),
       [],
     )

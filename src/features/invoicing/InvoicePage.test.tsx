@@ -67,7 +67,9 @@ describe('invoice editor', () => {
     await invoice.confirmNewInvoice()
     invoice.expectSubject('')
     await waitForInvoiceDraftPersistence()
-    expect(JSON.parse(sessionStorage.getItem(INVOICE_DRAFT_STORAGE_KEY) ?? 'null')).toMatchObject({ invoice: { subject: '' } })
+    expect(
+      JSON.parse(sessionStorage.getItem(INVOICE_DRAFT_STORAGE_KEY) ?? 'null'),
+    ).toMatchObject({ invoice: { subject: '' } })
   })
 
   it('keeps programmatic working changes visible, validated and persisted through the next ordinary edit', async () => {

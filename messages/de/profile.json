@@ -25,6 +25,7 @@
   "profile_tax_number": "Steuernummer",
   "profile_tax_number_hint": "Optional, wenn eine USt-IdNr. angegeben wird.",
   "profile_save": "Profil speichern",
+  "profile_error_unexpected": "Ein unerwarteter Fehler ist aufgetreten. Die Aktion wurde nicht abgeschlossen.",
   "profile_save_failed": "Profil konnte nicht gespeichert werden.",
   "profile_saved": "Profil gespeichert.",
   "profile_invoice": "Rechnung",

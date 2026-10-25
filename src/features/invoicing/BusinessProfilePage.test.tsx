@@ -360,7 +360,7 @@ describe('business profile settings', () => {
     overwriteGetLocale(() => 'en')
     const businessProfile = new BusinessProfileRobot(userEvent.setup())
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('storage unavailable')
+      throw new DOMException('storage unavailable', 'SecurityError')
     })
     await renderAtRoute('/settings/profile', BusinessProfilePage)
 
@@ -501,7 +501,7 @@ describe('business profile settings', () => {
       value: string,
     ) {
       if (key === BUSINESS_PROFILE_STORAGE_KEY)
-        throw new Error('storage unavailable')
+        throw new DOMException('storage unavailable', 'QuotaExceededError')
       return originalSetItem.call(this, key, value)
     })
     overwriteGetLocale(() => 'en')
@@ -961,7 +961,7 @@ describe('business profile settings', () => {
       key: string,
     ) {
       if (key === BUSINESS_PROFILE_STORAGE_KEY)
-        throw new Error('storage unavailable')
+        throw new DOMException('storage unavailable', 'SecurityError')
       return originalGetItem.call(this, key)
     })
     await businessProfile.exportBackup()
@@ -978,7 +978,7 @@ describe('business profile settings', () => {
       key: string,
     ) {
       if (key === BUSINESS_PROFILE_STORAGE_KEY)
-        throw new Error('storage unavailable')
+        throw new DOMException('storage unavailable', 'SecurityError')
       return originalRemoveItem.call(this, key)
     })
     await businessProfile.requestDeletion()
@@ -1012,7 +1012,7 @@ describe('business profile settings', () => {
       .spyOn(Storage.prototype, 'removeItem')
       .mockImplementation(function (this: Storage, key: string) {
         if (key === BUSINESS_PROFILE_STORAGE_KEY)
-          throw new Error('removal unavailable')
+          throw new DOMException('removal unavailable', 'SecurityError')
         return originalRemoveItem.call(this, key)
       })
     await businessProfile.requestDeletion()
@@ -1102,7 +1102,8 @@ describe('business profile settings', () => {
       this: Storage,
       key: string,
     ) {
-      if (key === BUSINESS_PROFILE_STORAGE_KEY) throw new Error('read failed')
+      if (key === BUSINESS_PROFILE_STORAGE_KEY)
+        throw new DOMException('read failed', 'SecurityError')
       return originalGetItem.call(this, key)
     })
     window.dispatchEvent(
@@ -1119,7 +1120,7 @@ describe('business profile settings', () => {
   it('reports local storage read failures instead of offering an empty editable profile', async () => {
     const businessProfile = new BusinessProfileRobot(userEvent.setup())
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('storage unavailable')
+      throw new DOMException('storage unavailable', 'SecurityError')
     })
     await renderAtRoute('/settings/profile', BusinessProfilePage)
     await businessProfile.expectStorageUnavailable()
@@ -1139,7 +1140,7 @@ describe('business profile settings', () => {
       .spyOn(Storage.prototype, 'setItem')
       .mockImplementation(function (this: Storage, key: string, value: string) {
         if (key === BUSINESS_PROFILE_STORAGE_KEY)
-          throw new Error('storage unavailable')
+          throw new DOMException('storage unavailable', 'QuotaExceededError')
         return originalSetItem.call(this, key, value)
       })
     await businessProfile.save()
