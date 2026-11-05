@@ -247,6 +247,43 @@ describe('application shell', () => {
   })
 
   it.each([
+    ['de', 'Verstanden'],
+    ['en', 'Understood'],
+  ] as const)(
+    'offers the project source in a safe new tab from the %s footer',
+    async (locale, acknowledgment) => {
+      setLocale(locale, { reload: false })
+      const user = userEvent.setup()
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => mediaQuery(false)),
+      )
+      await renderAtRoute('/', function FooterWithReleaseNotes() {
+        return (
+          <ReleaseNotesProvider>
+            <Footer />
+          </ReleaseNotesProvider>
+        )
+      })
+      await user.click(
+        await screen.findByRole('button', { name: acknowledgment }),
+      )
+
+      const repository = within(screen.getByRole('contentinfo')).getByRole(
+        'link',
+        { name: 'GitHub' },
+      )
+      expect(repository).toBeVisible()
+      expect(repository).toHaveAttribute(
+        'href',
+        'https://github.com/DontMash/regningen',
+      )
+      expect(repository).toHaveAttribute('target', '_blank')
+      expect(repository).toHaveAttribute('rel', 'noopener noreferrer')
+    },
+  )
+
+  it.each([
     ['de', 'Meine Arbeit unterstützen', 'Verstanden'],
     ['en', 'Support my work', 'Understood'],
   ] as const)(

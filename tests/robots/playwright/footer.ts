@@ -49,6 +49,19 @@ export class FooterRobot {
     }
   }
 
+  async expectProjectSourceLink() {
+    const source = this.page
+      .getByRole('contentinfo')
+      .getByRole('link', { name: 'GitHub', exact: true })
+    await expect(source).toBeVisible()
+    await expect(source).toHaveAttribute(
+      'href',
+      'https://github.com/DontMash/regningen',
+    )
+    await expect(source).toHaveAttribute('target', '_blank')
+    await expect(source).toHaveAttribute('rel', 'noopener noreferrer')
+  }
+
   async expectAuthorAttribution(locale: 'de' | 'en' = 'de') {
     const footer = this.page.getByRole('contentinfo')
     await expect(

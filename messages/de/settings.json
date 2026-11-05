@@ -8,6 +8,7 @@
   "licenses_project": "Projektlizenz",
   "licenses_project_scope": "Der ursprüngliche Code und die Dokumentation von regningen stehen unter AGPL-3.0-only. Drittanbieter-Software, Schriften und übernommener Quellcode behalten ihre eigenen Lizenzbedingungen.",
   "licenses_data_scope": "Ihre erzeugten Rechnungen und eingegebenen Unternehmensdaten werden nicht allein durch die Nutzung dieser Anwendung AGPL-lizenziert. Unabhängig enthaltenes Drittanbietermaterial behält seine eigenen Bedingungen.",
+  "licenses_source": "Quellcode auf GitHub",
   "licenses_project_text": "Vollständiger Projektlizenztext",
   "settings_languages": "Sprache",
   "settings_languages_description": "Wählen Sie die Sprache der Oberfläche und der erzeugten Rechnungen.",

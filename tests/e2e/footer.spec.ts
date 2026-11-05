@@ -10,6 +10,20 @@ test('shows footer branding and feature destinations', async ({
   await footer.expectFooterDestinations()
 })
 
+for (const locale of ['de', 'en'] as const) {
+  test(`offers the project source in a safe new tab from the ${locale} footer`, async ({
+    footer,
+    harness,
+    releaseNotes,
+  }) => {
+    await harness.open(
+      locale === 'de' ? '/de/einstellungen/profil' : '/en/settings/profile',
+    )
+    await releaseNotes.dismissReleaseNotes()
+    await footer.expectProjectSourceLink()
+  })
+}
+
 test('links the footer attribution to soren in a new tab', async ({
   footer,
   harness,

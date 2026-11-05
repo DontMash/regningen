@@ -36,6 +36,16 @@ export default function LicensesSettingsPage() {
         </h3>
         <p className="paragraph">{m.licenses_project_scope()}</p>
         <p className="paragraph">{m.licenses_data_scope()}</p>
+        <p className="paragraph">
+          <a
+            href="https://github.com/DontMash/regningen"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {m.licenses_source()}
+          </a>
+        </p>
         <Card>
           <CardHeader>
             <CardTitle>AGPL-3.0-only</CardTitle>

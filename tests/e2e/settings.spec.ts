@@ -68,6 +68,21 @@ test('opens all Settings destinations with one active link, normal history and l
   await settings.expectActivePage('License', 'en')
 })
 
+for (const locale of ['de', 'en'] as const) {
+  test(`offers the project source before opening the license in ${locale}`, async ({
+    harness,
+    releaseNotes,
+    settings,
+  }) => {
+    await harness.open(
+      locale === 'de' ? '/de/einstellungen/lizenzen' : '/en/settings/licenses',
+    )
+    await releaseNotes.acknowledgeReleaseNotes()
+    await settings.expectLicensesPage(locale)
+    await settings.expectProjectSourceLink(locale)
+  })
+}
+
 test('shows the complete unchanged project license in both interface languages', async ({
   harness,
   releaseNotes,

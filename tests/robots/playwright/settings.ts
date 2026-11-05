@@ -109,6 +109,20 @@ export class SettingsRobot {
     })
   }
 
+  async expectProjectSourceLink(locale: 'de' | 'en' = 'de') {
+    const source = this.projectLicense().getByRole('link', {
+      name: locale === 'de' ? 'Quellcode auf GitHub' : 'Source code on GitHub',
+      exact: true,
+    })
+    await expect(source).toBeVisible()
+    await expect(source).toHaveAttribute(
+      'href',
+      'https://github.com/DontMash/regningen',
+    )
+    await expect(source).toHaveAttribute('target', '_blank')
+    await expect(source).toHaveAttribute('rel', 'noopener noreferrer')
+  }
+
   async openProjectLicense(keyboard = false) {
     const summary = this.projectLicense().locator('summary')
     if (keyboard) {

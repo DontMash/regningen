@@ -112,6 +112,14 @@ export default function Footer() {
               <IconCup aria-hidden="true" className="size-4 shrink-0" />
               {m.shell_support()}
             </a>
+            <a
+              href="https://github.com/DontMash/regningen"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="paragraph-small text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              {m.shell_github()}
+            </a>
             {pwa?.offlineReady ? (
               <span
                 className="paragraph-small text-muted-foreground"

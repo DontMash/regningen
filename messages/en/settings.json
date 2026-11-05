@@ -8,6 +8,7 @@
   "licenses_project": "Project license",
   "licenses_project_scope": "The original code and documentation of regningen are licensed under AGPL-3.0-only. Third-party software, fonts and copied source retain their own license terms.",
   "licenses_data_scope": "Your generated invoices and business data do not become AGPL-licensed merely through using this application. Independently included third-party material retains its own terms.",
+  "licenses_source": "Source code on GitHub",
   "licenses_project_text": "Full project license text",
   "settings_languages": "Language",
   "settings_languages_description": "Choose the language of the interface and generated invoices.",
