@@ -14,7 +14,7 @@ import {
 import { toast } from '@/components/ui/toast'
 import { getLocale, isLocale } from '@/paraglide/runtime'
 import * as m from '@/paraglide/messages'
-import { changeInterfaceLanguage } from '@/lib/change-language'
+import { changeInterfaceLanguage } from '@/features/settings/change-interface-language'
 import {
   initializeInvoiceLanguagePreference,
   invoiceLanguageStore,

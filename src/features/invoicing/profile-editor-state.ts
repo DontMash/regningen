@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { useSelector } from '@tanstack/react-store'
 import type { BusinessProfileDraft } from './validation-contract'
@@ -8,10 +8,7 @@ import type { createProfileQueryHooks } from './profile-query-state'
 import { validationMessage } from './validation-feedback'
 import { businessProfileStorageStatus } from './business-profile-storage-status'
 import { getApplicationResetGeneration } from '@/lib/application-reset-generation'
-import {
-  registerProfileDiscardHandler,
-  setUnsavedProfileChanges,
-} from '@/features/settings/unsaved-profile'
+import { attachProfileEditor } from './profile-editing'
 import { toast } from '@/components/ui/toast'
 import * as m from '@/paraglide/messages'
 
@@ -87,7 +84,7 @@ export function createProfileEditorHook(
       setPendingImport(null)
       setImportStatus(edited ? 'canceled-edits' : 'canceled')
     }
-    const savedBaseline = useRef(initialProfile)
+    const editing = useRef<ReturnType<typeof attachProfileEditor> | null>(null)
     const [resetGeneration] = useState(getApplicationResetGeneration)
     const saveMutation = hooks.useSaveBusinessProfile(resetGeneration)
     const deleteMutation = hooks.useDeleteBusinessProfile(resetGeneration)
@@ -120,8 +117,7 @@ export function createProfileEditorHook(
           )
             return
           // Keep the raw saved baseline: normalization must not turn an unchanged form into unsaved work.
-          savedBaseline.current = { ...value }
-          updateUnsavedChanges()
+          editing.current?.saved(value)
           toast.add({ title: m.profile_saved(), type: 'success' })
         } catch (error) {
           toast.add({
@@ -132,39 +128,33 @@ export function createProfileEditorHook(
         }
       },
     })
-    const updateUnsavedChanges = useCallback(() => {
-      setUnsavedProfileChanges(
-        profileFields.some(
-          (name) => form.state.values[name] !== savedBaseline.current[name],
-        ),
-      )
-    }, [form])
     useEffect(() => {
-      updateUnsavedChanges()
-      const subscription = form.store.subscribe(() => {
-        const request = importRequest.current
-        if (
-          request &&
-          profileFields.some(
-            (name) => form.state.values[name] !== request.values[name],
-          )
-        )
-          cancelImport(true)
-        updateUnsavedChanges()
+      const lifetime = attachProfileEditor(initialProfile, {
+        getValues: () => form.state.values,
+        subscribe: (changed) => {
+          const subscription = form.store.subscribe(() => {
+            const request = importRequest.current
+            if (
+              request &&
+              profileFields.some(
+                (name) => form.state.values[name] !== request.values[name],
+              )
+            )
+              cancelImport(true)
+            changed()
+          })
+          return () => subscription.unsubscribe()
+        },
+        restore: (baseline) =>
+          form.reset(baseline, { keepDefaultValues: true }),
+        invalidateImport: () => cancelImport(),
       })
-      const unregisterDiscard = registerProfileDiscardHandler(() => {
-        cancelImport()
-        form.reset(savedBaseline.current, { keepDefaultValues: true })
-        setUnsavedProfileChanges(false)
-      })
+      editing.current = lifetime
       return () => {
-        // A departed editor must not apply data or notify another screen.
-        importRequest.current = null
-        subscription.unsubscribe()
-        unregisterDiscard()
-        setUnsavedProfileChanges(false)
+        lifetime.dispose()
+        editing.current = null
       }
-    }, [form, updateUnsavedChanges])
+    }, [form, initialProfile])
     async function recoverStorage() {
       setRetryingStorage(true)
       try {
@@ -264,9 +254,8 @@ export function createProfileEditorHook(
       try {
         await deleteMutation.mutateAsync()
         if (resetGeneration !== getApplicationResetGeneration()) return
-        savedBaseline.current = emptyProfile
+        editing.current?.saved(emptyProfile)
         form.reset(emptyProfile, { keepDefaultValues: true })
-        updateUnsavedChanges()
         toast.add({
           title: m.profile_deleted(),
           description: m.profile_deleted_draft_retained(),

@@ -2,7 +2,7 @@ import { getLocale, setLocale } from '@/paraglide/runtime'
 import type { Locale } from '@/paraglide/runtime'
 import { waitForInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft'
 import { waitForPwaCriticalOperations } from '@/features/pwa/pwa-critical-operations'
-import { confirmDiscardProfileChanges } from '@/features/settings/unsaved-profile'
+import { confirmDiscardProfileChanges } from '@/features/invoicing/profile-editing'
 import * as m from '@/paraglide/messages'
 
 export async function changeInterfaceLanguage(locale: Locale) {

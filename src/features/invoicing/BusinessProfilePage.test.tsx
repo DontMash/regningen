@@ -20,10 +20,10 @@ import {
 
 import { saveBusinessProfile } from '../../../tests/support/vitest/business-profile'
 import {
-  discardUnsavedProfileChanges,
+  confirmDiscardProfileChanges,
   hasUnsavedProfileChanges,
-  setUnsavedProfileChanges,
-} from '../settings/unsaved-profile'
+  profileEditingStore,
+} from './profile-editing'
 
 import { deferredFileRead } from '../../../tests/support/vitest/deferred-file'
 
@@ -34,7 +34,6 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   window.localStorage.clear()
   businessProfileStorageStatus.setState(() => ({ error: null }))
-  setUnsavedProfileChanges(false)
 })
 
 afterEach(() => {
@@ -175,7 +174,13 @@ describe('business profile settings', () => {
       await businessProfile.enterProfile({ businessName: 'Working business' })
       await businessProfile.importBackup(read.file)
       await businessProfile.confirmImport()
-      if (action === 'discard') act(() => discardUnsavedProfileChanges())
+      if (action === 'discard') {
+        await act(async () => {
+          const permission = confirmDiscardProfileChanges()
+          profileEditingStore.state.confirmation?.answer(true)
+          expect(await permission).toBe(true)
+        })
+      }
       if (action === 'delete') {
         await businessProfile.requestDeletion()
         await businessProfile.confirmDeletion()
@@ -635,7 +640,11 @@ describe('business profile settings', () => {
     await businessProfile.expectNotice('Profil gespeichert.')
     await businessProfile.enterProfile({ businessName: 'Verwerfen' })
 
-    act(() => discardUnsavedProfileChanges())
+    await act(async () => {
+      const permission = confirmDiscardProfileChanges()
+      profileEditingStore.state.confirmation?.answer(true)
+      expect(await permission).toBe(true)
+    })
 
     businessProfile.expectFieldValue('businessName', 'Neue gespeicherte Firma')
     expect(hasUnsavedProfileChanges()).toBe(false)

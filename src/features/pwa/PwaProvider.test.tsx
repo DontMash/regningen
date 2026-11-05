@@ -8,11 +8,8 @@ import { NotificationControl } from './PwaControls'
 import { PwaProvider, usePwa } from './PwaProvider'
 import { setLocale } from '@/paraglide/runtime'
 import { disposeInvoiceDraftPersistence } from '@/features/invoicing/invoice-draft-store'
-import {
-  discardUnsavedProfileChanges,
-  resolveProfileDiscardConfirmation,
-  setUnsavedProfileChanges,
-} from '@/features/settings/unsaved-profile'
+import { profileEditingStore } from '@/features/invoicing/profile-editing'
+import { createProfileEditor } from '../../../tests/support/vitest/profile-editor'
 import {
   getPwaRegistration,
   getPwaUpdateServiceWorkerCalls,
@@ -23,6 +20,8 @@ import {
   triggerPwaRegisterError,
   triggerPwaUpdateAvailable,
 } from '../../../tests/support/vitest/pwa-register'
+
+let profileEditor: ReturnType<typeof createProfileEditor> | undefined
 
 function PwaStatus() {
   const pwa = usePwa()
@@ -105,7 +104,8 @@ afterEach(async () => {
   cleanup()
   await disposeInvoiceDraftPersistence()
   resetPwaRegisterMock()
-  discardUnsavedProfileChanges()
+  profileEditor?.dispose()
+  profileEditor = undefined
   window.localStorage.clear()
   window.sessionStorage.clear()
   vi.unstubAllGlobals()
@@ -192,9 +192,10 @@ describe('application PWA controls', () => {
     const user = userEvent.setup()
     renderPwa()
     await screen.findByText('offline:false')
-    setUnsavedProfileChanges(true)
+    profileEditor = createProfileEditor()
+    profileEditor.edit('Unsaved business')
     await act(async () => triggerPwaNeedReload())
-    await act(async () => resolveProfileDiscardConfirmation(false))
+    await act(async () => profileEditingStore.state.confirmation?.answer(false))
     expect(await screen.findByText('update:true')).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Update verfügbar' }))
     expect(
@@ -209,10 +210,11 @@ describe('application PWA controls', () => {
     await screen.findByText('offline:false')
     triggerPwaUpdateAvailable()
     await screen.findByRole('dialog', { name: 'Aktualisierung verfügbar' })
-    setUnsavedProfileChanges(true)
+    profileEditor = createProfileEditor()
+    profileEditor.edit('Unsaved business')
     await user.click(screen.getByRole('button', { name: 'Update jetzt' }))
     expect(getPwaUpdateServiceWorkerCalls()).toBe(0)
-    await act(async () => resolveProfileDiscardConfirmation(false))
+    await act(async () => profileEditingStore.state.confirmation?.answer(false))
     expect(screen.getByRole('button', { name: 'Update jetzt' })).toBeEnabled()
     expect(getPwaUpdateServiceWorkerCalls()).toBe(0)
   })

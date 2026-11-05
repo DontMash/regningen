@@ -15,15 +15,14 @@ import {
 import {
   confirmDiscardProfileChanges,
   hasUnsavedProfileChanges,
-  resolveProfileDiscardConfirmation,
-  unsavedProfileStore,
-} from './unsaved-profile'
+  profileEditingStore,
+} from '@/features/invoicing/profile-editing'
 
 export default function SettingsGuards() {
   const confirmationOpener = useRef<HTMLElement | null>(null)
-  const confirming = useSelector(
-    unsavedProfileStore,
-    (state) => state.confirming,
+  const confirmation = useSelector(
+    profileEditingStore,
+    (state) => state.confirmation,
   )
   useBlocker({
     shouldBlockFn: async ({ current, next }) =>
@@ -34,9 +33,9 @@ export default function SettingsGuards() {
 
   return (
     <AlertDialog
-      open={confirming}
+      open={confirmation !== null}
       onOpenChange={(open) => {
-        if (!open) resolveProfileDiscardConfirmation(false)
+        if (!open) confirmation?.answer(false)
       }}
       onOpenChangeComplete={(open) => {
         // Compact navigation removes its opener before this confirmation closes.
@@ -69,7 +68,7 @@ export default function SettingsGuards() {
           <AlertDialogCancel>{m.settings_stay()}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            onClick={() => resolveProfileDiscardConfirmation(true)}
+            onClick={() => confirmation?.answer(true)}
           >
             {m.settings_discard()}
           </AlertDialogAction>

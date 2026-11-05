@@ -12,7 +12,7 @@ import {
 } from '@/features/invoicing/invoice-draft'
 import { waitForPwaCriticalOperations } from './pwa-critical-operations'
 import { PDF_NOTIFICATION_PREFERENCE_KEY } from './notification-preference'
-import { confirmDiscardProfileChanges } from '@/features/settings/unsaved-profile'
+import { confirmDiscardProfileChanges } from '@/features/invoicing/profile-editing'
 import { getCompletedApplicationResetGeneration } from '@/lib/application-reset-generation'
 import * as m from '@/paraglide/messages'
 
