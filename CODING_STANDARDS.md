@@ -80,7 +80,7 @@ Prefer narrowing and explicit contracts over escape hatches. Where an unsafe ass
 - UI design must account for keyboard interaction, focus movement and restoration, accessible feedback, responsive layout, and localization, including non-success states.
 - Distinguish presentation choices from business decisions. Reusing a component or passing an automated accessibility check does not by itself establish an understandable, usable interaction.
 
-Translation contribution details remain in the [language guidance](README.md#languages); mechanical component conventions belong in tooling where reliable enforcement is possible.
+Mechanical component conventions belong in tooling where reliable enforcement is possible.
 
 ## Dependency and feature evolution
 
