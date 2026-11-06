@@ -1,13 +1,9 @@
 name: Setup
-description: Checkout and install the pinned Node/pnpm toolchain with frozen dependencies
+description: Install the pinned Node/pnpm toolchain with frozen dependencies (run after actions/checkout)
 
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-        fetch-depth: 0
     - uses: pnpm/action-setup@v4
       with:
         version: 11.25.0

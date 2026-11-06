@@ -25,6 +25,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup
       - name: Check formatting
         run: pnpm format
@@ -34,6 +38,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup
       - name: Lint
         run: pnpm lint
@@ -43,6 +51,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup
       - name: Typecheck
         run: pnpm typecheck
@@ -53,6 +65,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup
       - name: Reject stale release candidates
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'automation/release'
@@ -69,6 +85,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup
       - name: Unit and module integration coverage without external networking
         run: bash scripts/test-offline.sh pnpm test:coverage
