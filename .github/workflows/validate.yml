@@ -14,43 +14,88 @@ concurrency:
   group: validate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CI: 'true'
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+  PUPPETEER_SKIP_DOWNLOAD: 'true'
+
 jobs:
-  validate:
-    name: Format, lint, types, build, coverage
+  format:
+    name: Format
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: ./.github/actions/setup
+      - name: Check formatting
+        run: pnpm format
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: ./.github/actions/setup
+      - name: Lint
+        run: pnpm lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: ./.github/actions/setup
+      - name: Typecheck
+        run: pnpm typecheck
+
+  build:
+    name: Build
+    needs: [format, lint, typecheck]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      CI: 'true'
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-      PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.25.0
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 26.8.1
-          cache: pnpm
-      - name: Install frozen dependencies (online setup only)
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
       - name: Reject stale release candidates
         if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'automation/release'
         run: node scripts/release-cli.ts check
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_APP_LOGIN: ${{ vars.RELEASE_APP_LOGIN }}
-      - name: Check formatting
-        run: pnpm format
-      - name: Lint
-        run: pnpm lint
-      - name: Typecheck
-        run: pnpm typecheck
       - name: Build without external networking
         run: bash scripts/test-offline.sh pnpm build
+
+  coverage:
+    name: Coverage
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: ./.github/actions/setup
       - name: Unit and module integration coverage without external networking
         run: bash scripts/test-offline.sh pnpm test:coverage
+
+  validation:
+    name: Validation
+    needs: [format, lint, typecheck, build, coverage]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless every validation job succeeded
+        env:
+          FORMAT_RESULT: ${{ needs.format.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+        run: |
+          status=0
+          for result in "$FORMAT_RESULT" "$LINT_RESULT" "$TYPECHECK_RESULT" "$BUILD_RESULT" "$COVERAGE_RESULT"; do
+            echo "Validation job result: $result"
+            if [ "$result" != "success" ]; then
+              status=1
+            fi
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "::error::At least one validation job did not succeed"
+            exit 1
+          fi
