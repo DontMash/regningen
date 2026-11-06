@@ -1,0 +1,66 @@
+name: Prepare Release
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Native changelogen bump mode
+        type: choice
+        options: [auto, major, minor, patch, version]
+        default: auto
+      version:
+        description: Explicit stable version (only for version mode)
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-preparation
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate native release candidate
+        run: |
+          git config user.name "$RELEASE_APP_LOGIN"
+          git config user.email "release-preparation@users.noreply.github.com"
+          node scripts/release-cli.ts prepare
+        env:
+          RELEASE_APP_LOGIN: ${{ vars.RELEASE_APP_LOGIN }}
+          RELEASE_MODE: ${{ inputs.mode }}
+          RELEASE_VERSION: ${{ inputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-preparation
+          overwrite: true
+          path: ${{ runner.temp }}/preparation.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Create or refresh the single release PR
+        run: node scripts/release-cli.ts propose
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          RELEASE_APP_LOGIN: ${{ vars.RELEASE_APP_LOGIN }}

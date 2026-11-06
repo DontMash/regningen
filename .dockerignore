@@ -1,0 +1,4 @@
+# The only build input is the complete, previously validated distribution.
+**
+!.output/
+!.output/**

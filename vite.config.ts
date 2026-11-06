@@ -11,6 +11,8 @@ import { resolve } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import { validateReleaseData } from './src/lib/release-data-validation.ts'
+import { resolveBuildIdentity } from './src/lib/build-identity.ts'
+import packageManifest from './package.json' with { type: 'json' }
 import { readEnvironment } from './src/env.ts'
 import { devtools } from '@tanstack/devtools-vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -231,7 +233,12 @@ const config = defineConfig(({ command, mode }) => {
   // shell values; Nitro's later dev/build loader must not reinterpret them.
   Object.assign(process.env, loadEnv(mode, process.cwd(), ''))
   const environment = readEnvironment(process.env)
+  const buildIdentity = resolveBuildIdentity(
+    packageManifest.version,
+    command === 'build' ? process.env : {},
+  )
   return {
+    define: { __BUILD_IDENTITY__: JSON.stringify(buildIdentity) },
     resolve: { tsconfigPaths: true },
     // Fonts and artwork remain origin-served resources under the enforced CSP.
     build: { assetsInlineLimit: 0 },

@@ -1,0 +1,130 @@
+name: Release
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+jobs:
+  validate:
+    name: Release validation
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'automation/release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      commit: ${{ steps.authorize.outputs.commit }}
+      version: ${{ steps.authorize.outputs.version }}
+    env:
+      PRODUCTION_ORIGIN: ${{ vars.PRODUCTION_ORIGIN }}
+      ORIGIN: ${{ vars.PRODUCTION_ORIGIN }}
+      TRUST_PROXY: ${{ vars.TRUST_PROXY }}
+      HSTS_STAGE: ${{ vars.HSTS_STAGE }}
+      RELEASE_BUILD: 'true'
+      RELEASE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Authorize exact merged candidate
+        id: authorize
+        run: node scripts/release-cli.ts authorize
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_APP_LOGIN: ${{ vars.RELEASE_APP_LOGIN }}
+      - name: Check production configuration
+        run: |
+          node --input-type=module -e '
+            const origin = process.env.PRODUCTION_ORIGIN;
+            if (!origin || new URL(origin).origin !== origin || !origin.startsWith("https://")) throw Error("Configure normalized HTTPS PRODUCTION_ORIGIN");
+            if (!["true", "false"].includes(process.env.TRUST_PROXY)) throw Error("Configure TRUST_PROXY");
+            if (!["off", "one-day", "one-week", "one-year", "reset"].includes(process.env.HSTS_STAGE)) throw Error("Configure HSTS_STAGE");'
+      - name: format
+        run: pnpm format
+      - name: lint
+        run: pnpm lint
+      - name: typecheck
+        run: pnpm typecheck
+      - name: build
+        run: bash scripts/test-offline.sh env ORIGIN="${ORIGIN}" TRUST_PROXY="${TRUST_PROXY}" HSTS_STAGE="${HSTS_STAGE}" RELEASE_BUILD=true RELEASE_COMMIT="${RELEASE_COMMIT}" pnpm build
+      - name: Install release browser dependencies
+        run: pnpm exec playwright install --with-deps chromium
+      - name: test:coverage
+        run: bash scripts/test-offline.sh pnpm test:coverage
+      - name: test:e2e
+        run: bash scripts/test-offline.sh pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-output
+          overwrite: true
+          path: .output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: release-validation-evidence
+          overwrite: true
+          path: |
+            test-results/
+            playwright-report/
+            coverage/
+          retention-days: 14
+  publish:
+    name: Publish and observe
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+    env:
+      PRODUCTION_ORIGIN: ${{ vars.PRODUCTION_ORIGIN }}
+      TRUST_PROXY: ${{ vars.TRUST_PROXY }}
+      HSTS_STAGE: ${{ vars.HSTS_STAGE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-output
+          path: .output/
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish retained image, release, latest; observe HTTPS identity
+        run: node scripts/release-cli.ts publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_APP_LOGIN: ${{ vars.RELEASE_APP_LOGIN }}

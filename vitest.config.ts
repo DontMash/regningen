@@ -14,12 +14,13 @@ export default defineConfig({
     environment: 'node',
     include: [
       'src/**/*.test.{ts,tsx}',
+      'scripts/**/*.test.ts',
       'tests/scenarios/**/*.test.ts',
       'tests/support/playwright/vitals-metrics.test.ts',
     ],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.{ts,tsx}'],
+      include: ['src/**/*.{ts,tsx}', 'scripts/release.ts'],
       exclude: [
         'src/**/*.d.ts',
         'src/**/*.test.{ts,tsx}',

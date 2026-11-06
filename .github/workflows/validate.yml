@@ -1,0 +1,56 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Format, lint, types, build, coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.1
+          cache: pnpm
+      - name: Install frozen dependencies (online setup only)
+        run: pnpm install --frozen-lockfile
+      - name: Reject stale release candidates
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'automation/release'
+        run: node scripts/release-cli.ts check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_APP_LOGIN: ${{ vars.RELEASE_APP_LOGIN }}
+      - name: Check formatting
+        run: pnpm format
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build without external networking
+        run: bash scripts/test-offline.sh pnpm build
+      - name: Unit and module integration coverage without external networking
+        run: bash scripts/test-offline.sh pnpm test:coverage

@@ -10,7 +10,7 @@ This project provides an invoice-generation workflow, not a guarantee of complia
 
 ## Development
 
-Install Node.js and pnpm, then run these commands from the project directory:
+Use the delivery toolchain's pinned Node.js 26.8.1 and pnpm 11.25.0, then run these commands from the project directory:
 
 ```bash
 pnpm install
@@ -26,7 +26,7 @@ pnpm build
 pnpm preview
 ```
 
-Preview is available at <http://127.0.0.1:4173>. For deployment, follow the configuration and security guides linked below rather than treating the development server as production hosting.
+Preview is available at <http://127.0.0.1:4173>. For production, follow the [deployment guide](docs/deployment.md), including its ordered setup, first-release, and recovery checklist. Do not use the development server as production hosting.
 
 ## Verification
 
@@ -49,6 +49,8 @@ pnpm test:e2e
 
 `pnpm format` checks formatting without rewriting files; use `pnpm format:fix` to apply formatting changes. Vitest runs unit and module-level integration tests, and Playwright runs browser-level integration tests. For a Vitest run without coverage, use `pnpm test`.
 
+Ordinary Actions validation runs formatting, lint, types, build, and unit/module coverage without Playwright. The final merged-release gate also requires Chromium browser tests; CI test execution denies non-loopback networking. This does not waive the full local verification sequence above.
+
 See the [testing guide](docs/testing.md) for test architecture and contribution conventions. Optional Lighthouse lab audits run separately with `pnpm test:vitals`; consult the [audit guide](docs/vitals.md) for prerequisites and limitations. These audits replace the local production build output.
 
 ## Documentation
@@ -57,10 +59,11 @@ For contributing and maintaining the project:
 
 - [Coding standards](CODING_STANDARDS.md) — design expectations and engineering guidance.
 - [Glossary](GLOSSARY.md) — shared domain terminology.
-- [Release guide](docs/releasing.md) — preparing local releases.
+- [Release guide](docs/releasing.md) — manually prepared release PRs, publication, and the retained local release tool.
 
 For deployment:
 
+- [Deployment](docs/deployment.md) — public GHCR images, registry-triggered Dokploy Auto Deploy, health observation, and the final operator checklist.
 - [Configuration](docs/configuration.md) — environment settings, modes, and startup.
 - [Public visibility](docs/visibility.md) — public identity, indexing, and proxy handling.
 - [Security](docs/security.md) — browser policies, HTTPS responsibilities, and HSTS rollout.

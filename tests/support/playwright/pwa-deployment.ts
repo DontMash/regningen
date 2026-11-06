@@ -17,6 +17,8 @@ const projectRoot = process.cwd()
 
 type ReleaseName = 'a' | 'b'
 type DeploymentEnvironment = {
+  RELEASE_COMMIT?: string | undefined
+  RELEASE_BUILD?: string | undefined
   ORIGIN?: string | undefined
   TRUST_PROXY?: string | undefined
   HSTS_STAGE?: string | undefined
@@ -459,7 +461,13 @@ async function findAvailablePort() {
 function commandEnvironment(overrides: DeploymentEnvironment) {
   const environment = { ...process.env }
   // The operator's shell must not configure an isolated deployment by accident.
-  for (const name of ['ORIGIN', 'TRUST_PROXY', 'HSTS_STAGE']) {
+  for (const name of [
+    'ORIGIN',
+    'TRUST_PROXY',
+    'HSTS_STAGE',
+    'RELEASE_COMMIT',
+    'RELEASE_BUILD',
+  ]) {
     delete environment[name]
   }
   Object.assign(environment, overrides)

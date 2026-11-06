@@ -2,6 +2,26 @@
 
 This guide is the source of truth for test architecture and contribution. Package scripts and runner configuration remain the source of truth for commands and runner behavior.
 
+## CI and release gates
+
+Ordinary PRs and pushes use `.github/workflows/validate.yml`: `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, and `pnpm test:coverage`. Preserve coverage thresholds and localization prerequisites. Routine validation, including preparation-PR updates, does not install Playwright browsers/system dependencies or run browser tests.
+
+The post-merge `.github/workflows/release.yml` validates the exact authorized merged release commit with those checks **and** `pnpm test:e2e` before any publication. An unrelated failed PR does not block another candidate that passes its own gates. No skip-validation option or production browser suite replaces this release gate. Node 26.8.1 and pnpm 11.25.0 are pinned; dependency installation is frozen. Lighthouse/vitals remains separate, not part of this initial CI gate.
+
+CI test execution denies non-loopback IPv4 and IPv6 networking for Vitest and the release-only browser suite, including child processes, browser/service-worker traffic, and test-owned application servers. Loopback remains available for local harnesses. Isolation must be established and checked observably (loopback success, external denial including spawned processes); inability to establish it fails rather than silently running unrestricted. Dependency/browser/system setup downloads happen before isolation. Container base-image retrieval/publication, GitHub operations, and bounded public HTTPS release observation happen outside test execution.
+
+Tests must not contact production, Dokploy, GHCR, GitHub, or third-party services. Fixtures and resources must already be local. Simulated browser offline mode and selected intercepted requests are not substitutes for process-wide egress denial. Ordinary local test commands remain usable without production credentials; local execution alone does not claim CI network isolation.
+
+All six repository checks remain required after code/tooling changes locally: `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test:coverage`, and `pnpm test:e2e`. Omitting browser tests from routine Actions does not waive contribution verification.
+
+## Release automation evidence
+
+Exercise `scripts/release.ts` through maintainer-facing operations and observable outcomes: preparation candidates, real temporary Git repositories/native changelogen, exact merged-SHA eligibility, ordered publication, identity conflicts, reruns, health observation, and failure outcomes. Replace only external GitHub/registry adapters with deterministic recording/failing test-owned adapters; keep mutations out of the production checkout. Do not duplicate changelogen's bump algorithm or treat workflow-text assertions/private helper snapshots as behavioral proof.
+
+Cover regeneration from fresh unbumped `main`, stale/untrusted candidates, generated-only changes, and no publication after failed validation. Prove versioned-image/public-availability/tag/release ordering before same-digest `latest` promotion, safe partial-completion reuse, and failures without automatic rollback or a new bump. No live GitHub, registry, or Dokploy integration tests are required or permitted.
+
+Reuse the isolated production-build/server HTTP seam for `/healthz`: built identity, uncached JSON, response policy, later-build identity, and inability to relabel an old build through runtime overrides. Test observation locally with deterministic responses/timing, including old-but-healthy responses, malformed data, transport errors, and timeout. Registry event subscription/filtering/fresh pulling on the installed Dokploy platform remain [manual operator acceptance](deployment.md#operator-checklist-setup-first-release-and-recovery), not a mock webhook-server certification. Preserve existing Invoice, Business Profile, release-note, PWA, and security journeys.
+
 ## Test intent and scope
 
 Classify tests by their boundary and purpose. Use Vitest for unit tests and module-level integration tests, including rendered-module tests. Use Playwright for browser-level integration/E2E journeys, including cross-feature workflows; keep Vitest rendering scoped to the module under test.

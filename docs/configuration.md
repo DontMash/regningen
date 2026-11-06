@@ -143,6 +143,27 @@ Application artwork generation and the stable-origin multi-build test harness
 remain application-specific capabilities, not candidates for a larger framework.
 No dependency or distributed-license changes accompany this integration change.
 
+## Release and hosting configuration
+
+Production delivery uses the [release PR flow](releasing.md) and [Dokploy deployment contract](deployment.md). These GitHub Actions inputs are automation configuration, not additional browser/application schema settings:
+
+| Location         | Name                      | Purpose                                                                                 |
+| ---------------- | ------------------------- | --------------------------------------------------------------------------------------- |
+| Actions variable | `RELEASE_APP_ID`          | Repository-scoped preparation App identifier                                            |
+| Actions secret   | `RELEASE_APP_PRIVATE_KEY` | Preparation App private key; trusted `main` execution only                              |
+| Actions variable | `RELEASE_APP_LOGIN`       | Expected preparation bot login, e.g. `app-slug[bot]`                                    |
+| Actions variable | `PRODUCTION_ORIGIN`       | Required bare HTTPS public origin for release build `ORIGIN` and `/healthz` observation |
+| Actions variable | `TRUST_PROXY`             | Release build's proxy setting; use the application contract above                       |
+| Actions variable | `HSTS_STAGE`              | Release build's HSTS stage; start with `off`                                            |
+
+Set matching effective application settings in the separately launched Dokploy container: runtime `ORIGIN` corresponds to Actions `PRODUCTION_ORIGIN`; runtime `TRUST_PROXY` and `HSTS_STAGE` match their release build settings. The workflow observation target is not a runtime identity override. Changing these inputs requires the rebuild/restart discipline above; do not assume an image enforces build/runtime equality.
+
+The release App only prepares PRs and must not have package-publishing or branch-protection bypass permissions. Trusted publication uses its job-scoped `GITHUB_TOKEN`, not a long-lived registry credential. Public GHCR images need no Dokploy pull credential. There is **no Actions Dokploy token or webhook URL**: the generated deployment URL belongs only in administrator-controlled GitHub repository webhook settings and is a secret capability. See the final [operator checklist](deployment.md#operator-checklist-setup-first-release-and-recovery) for setup, package visibility, and recovery.
+
+Release artifact identity is captured at build time from the package/changelog and validated source commit. `/healthz` reports the built version and commit, not a runtime declaration or the newest GitHub release. Development/non-release builds remain usable without fabricated production identity; do not try to relabel an old image through runtime variables.
+
+The CI/container toolchain pins Node 26.8.1 and pnpm 11.25.0 and uses frozen dependency installation. These are delivery-toolchain controls, not application environment inputs.
+
 ## Framework and tooling controls
 
 Listener configuration belongs to Nitro, not the application t3-env schema. For direct Node startup, `NITRO_HOST` and `NITRO_PORT` set the bind host and port; `HOST` and `PORT` are framework aliases. For example:

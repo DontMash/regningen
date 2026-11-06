@@ -27,6 +27,7 @@ export const paraglideOptions = {
   cookieSameSite: 'lax',
   cookieSecure: 'auto',
   routeStrategies: [
+    '/healthz',
     '/robots.txt',
     '/sitemap.xml',
     '/llms.txt',
