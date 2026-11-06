@@ -27,5 +27,5 @@ exec sudo -n unshare --net -- /bin/bash -euc '
       shift 2
       "$node_path" "$probe"
       exec "$@"
-    '\'' offline-user "$4" "$5" "${@:6}"
+    '\'' offline-user "$5" "${@:6}"
 ' offline-root "$(id -u)" "$(id -g)" "$PATH" "$HOME" "$node_path" "$script_dir/offline-probe.mjs" "$@"
