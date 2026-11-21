@@ -199,12 +199,14 @@ export function prepareRelease({
   mode,
   version,
   changelogen = resolve('node_modules/changelogen/dist/cli.mjs'),
+  prettier = resolve('node_modules/prettier/bin/prettier.cjs'),
 }: {
   cwd: string
   base: string
   mode: string
   version?: string
   changelogen?: string
+  prettier?: string
 }): Preparation {
   if (!sha.test(base) || git(cwd, 'rev-parse', 'HEAD') !== base)
     throw new Error('Preparation requires current main')
@@ -229,6 +231,15 @@ export function prepareRelease({
     ],
     { cwd, stdio: 'pipe' },
   )
+  // Changelogen's generated markdown is not prettier-clean (extra blank line
+  // after the version heading). Format it and amend the single generated
+  // commit so the release PR passes `pnpm format`.
+  execFileSync(process.execPath, [prettier, '--write', 'CHANGELOG.md'], {
+    cwd,
+    stdio: 'pipe',
+  })
+  if (git(cwd, 'status', '--porcelain'))
+    git(cwd, 'commit', '--amend', '--no-edit')
   const manifest: { version: string } = JSON.parse(
     readFileSync(join(cwd, 'package.json'), 'utf8'),
   )
