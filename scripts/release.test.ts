@@ -192,6 +192,55 @@ test('maintainer prepares native release metadata without reserving a tag', () =
   )
 })
 
+test('the single generated commit carries the prettier-formatted changelog', () => {
+  const { cwd, git } = repository()
+  const stubDir = mkdtempSync(join(tmpdir(), 'release-changelogen-stub-'))
+  directories.push(stubDir)
+  // Stands in for changelogen's output when no compare link is generated:
+  // an extra blank line after the version heading, committed like changelogen
+  // does, leaving prettier's fix unstaged for the amend.
+  const stub = join(stubDir, 'changelogen-stub.mjs')
+  writeFileSync(
+    stub,
+    [
+      "import { execFileSync } from 'node:child_process'",
+      "import { readFileSync, writeFileSync } from 'node:fs'",
+      'const cwd = process.cwd()',
+      "const pkg = JSON.parse(readFileSync('package.json', 'utf8'))",
+      "const [major, minor, patch] = pkg.version.split('.').map(Number)",
+      'pkg.version = `${major}.${minor}.${patch + 1}`',
+      "writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\\n')",
+      "const previous = readFileSync('CHANGELOG.md', 'utf8')",
+      'const notes = `# Changelog\\n\\n## v${pkg.version}\\n\\n\\n### Fixes\\n\\n- fix: stubbed entry\\n\\n`',
+      "writeFileSync('CHANGELOG.md', notes + previous.slice(previous.indexOf('## v')))",
+      "execFileSync('git', ['add', '-A'], { cwd })",
+      "execFileSync('git', ['commit', '-m', `chore(release): v${pkg.version}`], { cwd })",
+      '',
+    ].join('\n'),
+  )
+  const result = prepareRelease({
+    cwd,
+    base: git('rev-parse', 'HEAD'),
+    mode: 'auto',
+    changelogen: stub,
+    prettier: resolve('node_modules/prettier/bin/prettier.cjs'),
+  })
+  expect(result.version).toBe('1.0.1')
+  expect(git('status', '--porcelain')).toBe('')
+  const committed = execFileSync('git', ['show', 'HEAD:CHANGELOG.md'], {
+    cwd,
+    encoding: 'utf8',
+  })
+  expect(committed).not.toContain('\n\n\n')
+  const proof = join(cwd, 'committed-changelog.md')
+  writeFileSync(proof, committed)
+  execFileSync(
+    process.execPath,
+    [resolve('node_modules/prettier/bin/prettier.cjs'), '--check', proof],
+    { cwd },
+  )
+})
+
 test('refresh starts at unbumped main and native inference incorporates new features', () => {
   const { cwd, git } = repository()
   const base = git('rev-parse', 'HEAD')

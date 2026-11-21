@@ -232,14 +232,19 @@ export function prepareRelease({
     { cwd, stdio: 'pipe' },
   )
   // Changelogen's generated markdown is not prettier-clean (extra blank line
-  // after the version heading). Format it and amend the single generated
-  // commit so the release PR passes `pnpm format`.
+  // after the version heading when no compare link is generated). Format it
+  // and amend the single generated commit so the release PR passes
+  // `pnpm format`. The formatted file must be staged first: changelogen
+  // already committed, so an amend without staging would keep the
+  // unformatted changelog in the pushed commit.
   execFileSync(process.execPath, [prettier, '--write', 'CHANGELOG.md'], {
     cwd,
     stdio: 'pipe',
   })
-  if (git(cwd, 'status', '--porcelain'))
+  if (git(cwd, 'status', '--porcelain')) {
+    git(cwd, 'add', 'CHANGELOG.md')
     git(cwd, 'commit', '--amend', '--no-edit')
+  }
   const manifest: { version: string } = JSON.parse(
     readFileSync(join(cwd, 'package.json'), 'utf8'),
   )
