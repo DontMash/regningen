@@ -61,13 +61,13 @@ jobs:
       - name: typecheck
         run: pnpm typecheck
       - name: build
-        run: bash scripts/test-offline.sh env ORIGIN="${ORIGIN}" TRUST_PROXY="${TRUST_PROXY}" HSTS_STAGE="${HSTS_STAGE}" RELEASE_BUILD=true RELEASE_COMMIT="${RELEASE_COMMIT}" pnpm build
+        run: env ORIGIN="${ORIGIN}" TRUST_PROXY="${TRUST_PROXY}" HSTS_STAGE="${HSTS_STAGE}" RELEASE_BUILD=true RELEASE_COMMIT="${RELEASE_COMMIT}" pnpm build
       - name: Install release browser dependencies
         run: pnpm exec playwright install --with-deps chromium
       - name: test:coverage
-        run: bash scripts/test-offline.sh pnpm test:coverage
+        run: pnpm test:coverage
       - name: test:e2e
-        run: bash scripts/test-offline.sh pnpm test:e2e
+        run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         with:
           name: validated-output

@@ -22,7 +22,7 @@ A matching title, label, or branch name alone is not authorization. Automation v
 - **Release** (`.github/workflows/release.yml`) acts only on a merged trusted preparation PR. It validates the exact merged SHA, including the full Chromium Playwright suite, before publication. It does not substitute a later `main`, accept arbitrary revision dispatches, or deploy ordinary merges, tags, or GitHub Release events.
 - `scripts/release-cli.ts` coordinates `prepare`, `propose`, `check`, `authorize`, and `publish`. Workflows supply their trusted event/configuration context; these are not alternate arbitrary-source deployment entry points.
 
-CI and containers pin Node **26.8.1** and pnpm **11.25.0**, with frozen dependency installation. Test execution denies non-loopback IPv4/IPv6 traffic, including spawned processes and test-owned servers. Setup downloads, image/GitHub operations, and the production observation are separate from isolated test execution. See [testing](testing.md).
+CI and containers pin Node **26.8.1** and pnpm **11.25.0**, with frozen dependency installation. Tests are self-contained and must not contact external services; CI does not enforce network isolation during test execution. See [testing](testing.md).
 
 After validation and container assembly, publication is ordered:
 

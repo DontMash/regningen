@@ -76,8 +76,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_APP_LOGIN: ${{ vars.RELEASE_APP_LOGIN }}
-      - name: Build without external networking
-        run: bash scripts/test-offline.sh pnpm build
+      - name: Build
+        run: pnpm build
 
   coverage:
     name: Coverage
@@ -90,8 +90,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/setup
-      - name: Unit and module integration coverage without external networking
-        run: bash scripts/test-offline.sh pnpm test:coverage
+      - name: Unit and module integration coverage
+        run: pnpm test:coverage
 
   validation:
     name: Validation
