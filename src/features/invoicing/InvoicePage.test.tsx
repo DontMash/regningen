@@ -303,10 +303,22 @@ describe('invoice editor', () => {
     await invoice.expectPdfDisabled()
   })
 
-  it('validates invoice fields, adds and edits positions, calculates VAT, and reindexes after removal', async () => {
+  it('reports a missing Recipient street when invoice fields are touched', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    const scenario = createInvoiceScenario()
+    saveBusinessProfile(createBusinessProfileScenario())
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+
+    await invoice.enterInvoiceNumber(scenario.input.number)
+    await invoice.touchRecipient('street')
+    await invoice.expectMessage('Straße und Hausnummer fehlen.')
+    await invoice.enterRecipient(scenario.input.recipient)
+  })
+
+  it('rejects an incomplete Invoice Position and totals the added position at the chosen VAT rate', async () => {
     const invoice = new InvoiceRobot(userEvent.setup())
     const scenario = createInvoiceScenario({
-      number: '2026-002',
       positions: [{ description: 'Catering', amount: '107,00' }],
       expected: {
         totals: { net: '100,00 €', tax: '7,00 €', gross: '107,00 €' },
@@ -316,11 +328,6 @@ describe('invoice editor', () => {
     await renderAtRoute('/invoice', InvoicePage)
     await invoice.expectReady()
 
-    await invoice.enterInvoiceNumber(scenario.input.number)
-    await invoice.touchRecipient('street')
-    await invoice.expectMessage('Straße und Hausnummer fehlen.')
-    await invoice.enterRecipient(scenario.input.recipient)
-
     await invoice.submitNewPosition()
     await invoice.expectMessage('Positionsbeschreibung fehlt.')
     await invoice.expectMessage('Einen positiven Bruttopreis eingeben.')
@@ -328,11 +335,37 @@ describe('invoice editor', () => {
 
     invoice.expectPositionValues(1, { description: 'Catering' })
     invoice.expectTotals(scenario.expected.totals)
+  })
+
+  it('recalculates totals when the VAT rate changes', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    const scenario = createInvoiceScenario({
+      positions: [{ description: 'Catering', amount: '107,00' }],
+      expected: {
+        totals: { net: '100,00 €', tax: '7,00 €', gross: '107,00 €' },
+      },
+    })
+    saveBusinessProfile(createBusinessProfileScenario())
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+
+    await invoice.addPosition(scenario.input.positions[0])
+    invoice.expectTotals(scenario.expected.totals)
     await invoice.chooseVatRate(19)
     invoice.expectTotals({ net: '89,92 €', tax: '17,08 €' })
     await invoice.chooseVatRate(7)
+    invoice.expectTotals(scenario.expected.totals)
+  })
 
-    await invoice.addPosition({ description: 'Reinigung', amount: '50,00' })
+  it('rejects a non-positive position amount and reindexes positions after removal', async () => {
+    const invoice = new InvoiceRobot(userEvent.setup())
+    const scenario = createInvoiceScenario()
+    saveBusinessProfile(createBusinessProfileScenario())
+    await renderAtRoute('/invoice', InvoicePage)
+    await invoice.expectReady()
+
+    await invoice.addPosition(scenario.input.positions[0])
+    await invoice.addPosition(scenario.input.positions[1])
     await invoice.editPosition(2, { amount: '0' })
     await invoice.blurPositionAmount(2)
     await invoice.expectMessage('Einen positiven Bruttopreis eingeben.')
